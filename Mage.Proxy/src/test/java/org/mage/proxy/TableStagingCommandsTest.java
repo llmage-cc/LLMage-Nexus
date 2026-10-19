@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Cableado de las acciones de staging U4 (swapSeats/startTournament/panel-join) y del replay al re-join. */
+/** Wiring of the staging actions (swapSeats/startTournament/panel-join) and of the replay on re-join. */
 class TableStagingCommandsTest {
 
     private static final UUID ROOM = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -172,6 +172,12 @@ class TableStagingCommandsTest {
         }
 
         @Override
+        public ServerCapabilities capabilities() {
+            return ServerCapabilities.forTest(true, false, true, true, "1.4.62-V1",
+                    java.util.Arrays.asList("HUMAN", "COMPUTER_LLM"));
+        }
+
+        @Override
         public void sendFailure(WebSocket conn, String action, String requestId, long start) {
             gateway.send(conn, ProxyProtocol.resultJson(action, requestId, false, ProxyProtocol.ERR_FAILED, null));
         }
@@ -186,12 +192,35 @@ class TableStagingCommandsTest {
             activeGames.add(gameId);
         }
 
-        final ReplayCache replay = new ReplayCache();
-
         @Override
         public void markGameInactive(UUID gameId) {
             activeGames.remove(gameId);
         }
+
+        @Override
+        public boolean replayActive() {
+            return false;
+        }
+
+        @Override
+        public int replayStateCount() {
+            return -1;
+        }
+
+        @Override
+        public boolean liveGameActive() {
+            return false;
+        }
+
+        @Override
+        public void markReplayActive(UUID gameId) {
+        }
+
+        @Override
+        public void clearReplay() {
+        }
+
+        final ReplayCache replay = new ReplayCache();
 
         @Override
         public ReplayCache.Prompt takePrompt(UUID gameId, boolean onlySelect) {

@@ -5,7 +5,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { daemon, forkPath, isAlive, log, logError, logFileFor, PORTS, readPid, SERVER_ADD_OPENS, stopPid, tailFile, waitForPort, waitForPortDown, buildServerClasspath } from './lib.mjs'
+import { daemon, forkPath, isAlive, log, logError, logFileFor, PORTS, readPid, SERVER_ADD_OPENS, stopPid, tailFile, waitForPort, waitForPortDown, buildServerClasspath, XMAGE_VERSION } from './lib.mjs'
 
 const arg = process.argv[2] ?? 'status'
 const target = process.argv[3] ?? 'all'
@@ -63,7 +63,7 @@ function startServer() {
 }
 
 function startProxy() {
-  const jar = `${import.meta.dirname}/../Mage.Proxy/target/mage-proxy-1.4.62.jar`
+  const jar = `${import.meta.dirname}/../Mage.Proxy/target/mage-proxy-${XMAGE_VERSION}.jar`
   if (!fs.existsSync(jar)) {
     logError(`falta el jar del proxy — ejecuta: node scripts/build.mjs`)
     return false

@@ -1,4 +1,4 @@
-import { getState, setState } from './state'
+import { getState, setState, addLog } from './state'
 import * as cmds from '../net/commands'
 import { cleanMageText } from '../game/gameEventParser'
 import type { ChatMessageEvent, DeckJson, GameView } from '../net/types'
@@ -28,6 +28,58 @@ export function clearError() {
 
 export function setStoreError(error: string) {
   setState({ error })
+}
+
+/**
+ * The message a failed `replayGame` shows the user (list row + banner): the
+ * proxy's own text when it carries one, the generic replay-load copy when the
+ * reply is only a bare code (`ERR_FAILED`, `NOT_CONNECTED`, `TIMEOUT`) — a code
+ * is not copy.
+ */
+export function replayLoadErrorMessage(error: string | null | undefined, fallback: string): string {
+  if (!error) return fallback
+  if (error === 'not connected' || error === 'timeout') return fallback
+  if (/^[A-Z][A-Z0-9_]*$/.test(error)) return fallback
+  return error
+}
+
+/** Toggle the replay play/pause flag (the viewer's step timer). */
+export function setReplayPlaying(playing: boolean) {
+  const s = getState()
+  if (s.replay) setState({ replay: { ...s.replay, playing } })
+}
+
+/**
+ * Choose the replay "view as" seat (a `PlayerView.playerId`), or null for the
+ * automatic default. A no-op outside an open replay — the choice is scoped to
+ * the replay session and dies with it (never persisted).
+ */
+export function setReplayPerspective(playerId: string | null) {
+  const s = getState()
+  if (s.replay) setState({ replay: { ...s.replay, perspectivePlayerId: playerId } })
+}
+
+/** Leave the replay viewer, back to the lobby (the board is a detached frame). */
+export function exitReplay() {
+  const s = getState()
+  if (s.replay?.gameId) void cmds.stopReplay(s.replay.gameId)
+  setState({
+    replay: null,
+    phase: 'lobby',
+    game: null,
+    gameId: null,
+    gameChatId: null,
+    playableIds: [],
+    playableWindow: null,
+    combat: null,
+    feedback: null,
+    gameEnd: null,
+    gameEndLlmSeats: null,
+    // A replay-scoped refusal ("a replay is loaded — player actions are not
+    // available…") is stale the moment the viewer closes: it must not sit over
+    // the lobby once no replay is loaded.
+    error: null,
+  })
 }
 
 /** Cambia la mano visible de la barra propia (Switch Hands / Mindslaver). */
@@ -136,7 +188,7 @@ export function setWatchingTable(table: import('../net/types').TableView | null)
   }
 }
 
-/** Une al chat propio de la mesa (U4-11, paridad con el chatPanel del TableWaitingDialog). */
+/** Joins the table's own chat (parity with the TableWaitingDialog chatPanel). */
 export async function enterTableChat(tableId: string) {
   const s = getState()
   if (s.tableChatTableId === tableId && s.tableChatId) return
@@ -159,7 +211,7 @@ export function exitTableChat() {
   if (s.tableChatId || s.tableChatTableId) setState({ tableChatId: null, tableChatTableId: null })
 }
 
-/** Une al chat propio del torneo (T4, paridad con el chatPanel del TournamentPanel). */
+/** Joins the tournament's own chat (parity with the TournamentPanel chatPanel). */
 export async function enterTournamentChat(tournamentId: string) {
   const s = getState()
   if (s.tournamentChatTournamentId === tournamentId && s.tournamentChatId) return
@@ -338,14 +390,26 @@ export function isRollbackPending(s: Pick<AppState, 'rollbackPendingFor' | 'roll
 export function returnToLobby() {
   const s = getState()
   const gameId = s.gameId
+  const me = s.game?.players?.find((p) => p.controlled)
   clearActiveGame()
   if (gameId) {
-    const me = s.game?.players?.find((p) => p.controlled)
     if (!me) {
       void cmds.stopWatching(gameId)
     } else {
       void cmds.quitMatch(gameId)
     }
+  } else if (!me && s.watchingTable?.games?.length) {
+    // Spectator whose gameId was lost with the on-screen game view: the watched
+    // table is still loading the match's game ids — stop watching the current
+    // one so the server stops sending frames to this session.
+    const games = s.watchingTable.games
+    void cmds.stopWatching(games[games.length - 1])
+  } else if (!me && s.game) {
+    // Game view with no known id and no watched/queued table: this used to
+    // close the menu without sending ANYTHING. Fail fast: leave a log trace
+    // instead of a silent no-op; the id the server needs was never learned by
+    // the client.
+    addLog('error', 'spectator leave: no game id or watched table to disconnect')
   }
   if (s.gameChatId) {
     void cmds.leaveChat(s.gameChatId)
@@ -380,8 +444,10 @@ export function returnToLobby() {
     combat: null,
     feedback: null,
     gameEnd: null,
+    gameEndLlmSeats: null,
     turnRecap: null,
     enteredThisTurn: {},
+    replay: null,
     sideboardScreen: null,
     pendingSideboardScreen: null,
     elimination: null,
@@ -452,7 +518,40 @@ export function applyGameplayPreset(id: GameplayPresetId) {
   void cmds.sendPlayerAction(next.holdPriority ? 'HOLD_PRIORITY' : 'UNHOLD_PRIORITY', s.gameId)
 }
 
-let lastSmartAnswer: GameView | null = null
+/**
+ * Claims the one answer the current priority window admits.
+ *
+ * XMage consumes exactly ONE answer per ask, and an answer that arrives while
+ * the game is not open for one is not discarded: `HumanPlayer.waitResponseOpen`
+ * parks it and the game applies it at the NEXT ask ("server must keep only
+ * latest answer"). A second click on Pass Priority therefore does not repeat
+ * the pass — it silently answers a later window, which is how the stack gets
+ * skipped without the player ever seeing the ask.
+ *
+ * The GAME_SELECT frame that grants priority IS the ask, so its identity marks
+ * the open request (`priorityRequest`). Before a game's first GAME_SELECT there
+ * is no such marker; there the frame being answered stands in for it, so a
+ * repeated click on that same frame is dropped too. A refused answer does not
+ * un-claim: when the game still wants an answer it asks again (a new
+ * GAME_SELECT, a new identity) and the request opens up by itself.
+ */
+export function claimPriorityAnswer(): boolean {
+  const s = getState()
+  const request = s.priorityRequest ?? s.game
+  if (!request || s.gameId == null) return false
+  if (s.priorityAnsweredRequest === request) return false
+  setState({ priorityAnsweredRequest: request, priorityAnsweredSeq: s.priorityAnsweredSeq + 1 })
+  return true
+}
+
+/** True while the last answer this client sent is still the answer to the
+ *  current priority request — the server has not asked again yet. */
+export function priorityAnswerPending(
+  s: Pick<AppState, 'priorityRequest' | 'priorityAnsweredRequest' | 'game'>,
+): boolean {
+  const request = s.priorityRequest ?? s.game
+  return request != null && s.priorityAnsweredRequest === request
+}
 
 export function maybeAutoPass(game: GameView) {
   const s = getState()
@@ -463,9 +562,11 @@ export function maybeAutoPass(game: GameView) {
   if (!me?.hasPriority) return
   if (s.combat && s.combat.selectable.length > 0) return
   const request = s.priorityRequest
-  if (!request || s.game !== request || request === lastSmartAnswer) return
+  // Only the GAME_SELECT frame is a priority request; a state push around it is
+  // not, and answering one would park the answer for the ask that follows.
+  if (!request || s.game !== request) return
   if (meaningfulPlayables(game, s.playableIds).length > 0) return
-  lastSmartAnswer = request
+  if (!claimPriorityAnswer()) return
   void cmds.sendPlayerBoolean(false, s.gameId)
 }
 

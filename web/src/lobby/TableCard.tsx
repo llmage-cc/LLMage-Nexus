@@ -8,6 +8,8 @@ import RankBadge from './RankBadge'
 import { useTranslation, toBcp47Locale } from '../i18n'
 import { clickableProps } from '../ui/clickable'
 import { fallbackActionUser, formatDeckTypeName, formatSeatHistory, formatTimeAgo, getSkillBadge, isMyTable, stateLabel } from './lobbyUtils'
+import { gameTypeLabel, seatTypeLabel } from './CreateTable/constants'
+import { localizeServerTableInfo } from '../game/serverTableTranslation'
 import Button from '../ui/Button'
 import { tableOwnerName } from './TableFilterBar'
 
@@ -124,7 +126,7 @@ export default function TableCard({
         </div>
 
         <div className="table-meta-row">
-          <Chip icon="gamepad" className="table-game-tag">{tTable.gameType}</Chip>
+          <Chip icon="gamepad" className="table-game-tag">{gameTypeLabel(tTable.gameType, t)}</Chip>
           <Chip icon="scrollText" className="table-deck-tag" title={formatDeckTypeName(tTable.deckType).full}>
             {formatDeckTypeName(tTable.deckType).short}
           </Chip>
@@ -160,9 +162,12 @@ export default function TableCard({
         </div>
 
         {tTable.additionalInfoShort && (
-          <div className="table-info-strip" title={tTable.additionalInfoFull || tTable.additionalInfoShort}>
+          <div
+            className="table-info-strip"
+            title={localizeServerTableInfo(tTable.additionalInfoFull || tTable.additionalInfoShort, t)}
+          >
             <span className="info-strip-icon"><Icon name="info" size={12} /></span>
-            <span className="info-strip-text">{tTable.additionalInfoShort}</span>
+            <span className="info-strip-text">{localizeServerTableInfo(tTable.additionalInfoShort, t)}</span>
           </div>
         )}
 
@@ -219,7 +224,7 @@ export default function TableCard({
                       {s.playerName || t('lobby.open_seat')}
                     </span>
                     {isOwner && <Chip tone="gold" icon="crown" className="seat-crown" title={t('lobby.host')}>{t('lobby.host')}</Chip>}
-                    {!isHuman && <Chip icon="bot" className="seat-bot-tag" title={t('lobby.ai')}>{s.playerType || t('lobby.ai')}</Chip>}
+                    {!isHuman && <Chip icon="bot" className="seat-bot-tag" title={t('lobby.ai')}>{seatTypeLabel(s.playerType ?? '', t) || t('lobby.ai')}</Chip>}
                   </div>
 
                   {s.playerName && (rating || historyInfo.short) && (

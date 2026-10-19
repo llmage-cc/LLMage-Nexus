@@ -121,6 +121,10 @@ export type IconName =
   | 'home'
   | 'inbox'
   | 'mountain'
+  | 'agree'
+  | 'clap'
+  | 'question'
+  | 'celebrate'
 
 const LUCIDE_ICONS: Record<string, LucideIcon> = {
   trophy: Trophy,
@@ -438,6 +442,48 @@ export default function Icon({ name, size = 16, className = '', style, ...props 
           <path d="M5 4h4l3 7-2 3-5-2V4z" />
           <path d="M15 4h4v8l-5 2-2-3 3-7z" />
           <path d="M8 18l4 3 4-3-2-2h-4l-2 2z" />
+        </svg>
+      )
+
+    case 'agree':
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={iconStyle} {...props}>
+          <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+          <path d="M7 10v12" />
+        </svg>
+      )
+
+    case 'clap':
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={iconStyle} {...props}>
+          <g transform="translate(-1.2 0.8) scale(0.82)">
+            <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+            <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+            <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+            <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+          </g>
+          <path d="M19 5.6 20.4 4.2" />
+          <path d="M20.8 10.4 22.2 9" />
+          <path d="M20 15 21.4 13.6" />
+        </svg>
+      )
+
+    case 'question':
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={iconStyle} {...props}>
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <path d="M12 17h.01" />
+        </svg>
+      )
+
+    case 'celebrate':
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={iconStyle} {...props}>
+          <path d="M5.6 10.6 2 22l10.4-4.6Z" fill="currentColor" fillOpacity="0.2" />
+          <path d="M13.4 6.2 15.6 4" />
+          <path d="M16.6 10.8 19.4 8" />
+          <path d="M19 15.6 21.2 13.4" />
         </svg>
       )
 

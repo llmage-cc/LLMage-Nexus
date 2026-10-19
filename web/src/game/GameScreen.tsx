@@ -7,7 +7,8 @@ import OpponentSwitcherBar from '../board/OpponentSwitcherBar'
 import { DividerSlotContext } from '../board/BoardShell'
 import TurnOrderRing from '../board/TurnOrderRing'
 import * as cmds from '../net/commands'
-import { isRollbackVoteBlocking, maybeAutoPass, setStoreError, useGame, useSettings, useStore } from '../state/store'
+import { isRollbackVoteBlocking, maybeAutoPass, claimPriorityAnswer, priorityAnswerPending, setStoreError, useGame, useSettings, useStore, clearError } from '../state/store'
+import ErrorBanner from '../ui/ErrorBanner'
 import FeedbackDialog from './FeedbackDialog'
 import UserRequestDialog from './UserRequestDialog'
 import RollbackDialog from './RollbackDialog'
@@ -22,8 +23,10 @@ import PhaseBar, { PhaseName } from './PhaseBar'
 import ActionButton from './ActionButton'
 import GameDock, { PromptSlotProvider, useDockOffset } from './GameDock'
 import GameStrip from './GameStrip'
-import GameDrawer, { DrawerToggles, type DrawerTab } from './GameDrawer'
+import GameDrawer, { DrawerToggles, useLlmTabOffered, type DrawerTab } from './GameDrawer'
+import { effectiveDrawerTab } from './llmTab'
 import StackZone from '../board/StackZone'
+import { isUnplayableHandClick } from './handClick'
 import { targetsStackObject } from './stackTargeting'
 import CombatArrowsOverlay from '../board/CombatArrowsOverlay'
 import FeedbackOverlay from '../board/FeedbackOverlay'
@@ -31,6 +34,7 @@ import ImpactOverlay from '../board/ImpactOverlay'
 import LowLifeVignette from '../board/LowLifeVignette'
 import TurnRecapStrip from './TurnRecapStrip'
 import { useAttentionAlerts } from './attentionAlerts'
+import ReplayControls from './ReplayControls'
 import { identityColors, playmatVars } from '../appearance/playmatIdentity'
 import { CUSTOM_PLAYMAT_ID, effectivePlaymat } from '../appearance/playmats'
 import { useCustomPlaymat } from '../appearance/customPlaymat'
@@ -48,6 +52,7 @@ import { crossZonePlayables } from '../board/crossZone'
 import { resolveTargetHits, targetZoneKindOf } from '../board/targetZones'
 import { combatActorsFrom } from '../state/gameUtils'
 import { effectiveBoardLayout } from '../board/boardLayout'
+import { pickPerspectivePlayer } from '../board/useBoardPresenter'
 import { useTranslation } from '../i18n'
 import { soundManager } from '../audio/soundManager'
 import { inverseZoom } from '../appearance/zoom'
@@ -105,7 +110,15 @@ export default function GameScreen() {
   const feedback = useStore((s) => s.feedback)
   const playableIds = useStore((s) => s.playableIds)
   const combat = useStore((s) => s.combat)
+  const replay = useStore((s) => s.replay)
+  const replayActive = replay != null
+  const username = useStore((s) => s.conn?.username ?? null)
   const rollbackBlocking = useStore((s) => isRollbackVoteBlocking(s.rollbackVote))
+  // Game errors (a send rejected by the server, a network failure on the
+  // send...) live in store.error and the game screen was the ONLY phase that
+  // did not paint it: a rejected play (stale playable marker, lost priority)
+  // sank silently.
+  const storeError = useStore((s) => s.error)
   const gameRootRef = useRef<HTMLDivElement>(null)
   const gameBodyRef = useRef<HTMLDivElement>(null)
   const boardWrapRef = useRef<HTMLDivElement>(null)
@@ -155,7 +168,11 @@ export default function GameScreen() {
     return matKey ? (playmatVars(matKey.split('') as ManaColor[]) as React.CSSProperties) : undefined
   }, [matKey, playmatId, customPlaymat])
 
-  const me = game?.players?.find((p) => p.controlled)
+  const meControlled = game?.players?.find((p) => p.controlled)
+  // Replay viewing perspective: a replay GameView carries no `controlled` seat,
+  // so pick a default seat to render as the player's own side. A live game (or a
+  // spectator of a live game) is untouched — only an open replay gets one.
+  const me = meControlled ?? pickPerspectivePlayer(game?.players ?? [], { replay: replayActive, username, perspectivePlayerId: replay?.perspectivePlayerId ?? null })
   const priorityPlayer = game?.players?.find((p) => p.hasPriority) ?? game?.players?.find((p) => p.isActive)
   const timerSecs = priorityPlayer?.priorityTimeLeftSecs ?? 0
   const isTimerTicking = !!priorityPlayer?.hasPriority
@@ -166,6 +183,10 @@ export default function GameScreen() {
     }
   }, [timerSecs, isTimerTicking])
   const controllingPriority = isControllingPriority(game)
+  // The answer this client sent is still the answer to the open priority
+  // request (the server has not asked again): every pass surface must stay
+  // spent until it does, or a second click lands on a later window.
+  const priorityAnswered = useStore(priorityAnswerPending)
   const canPass =
     !!gameId &&
     (!!me?.hasPriority ||
@@ -178,7 +199,9 @@ export default function GameScreen() {
   const targetIdSet = useMemo(() => new Set(targetIds), [targetIds])
   const targetSourceId = game && feedback?.method === 'GAME_TARGET' ? resolveTargetSourceId(game, feedback.sourceName) : undefined
   const combatActors = useMemo(() => combatActorsFrom(game), [game])
-  useAttentionAlerts(game, gameId, feedback, combat, settings.browserNotifications)
+  // Replay mode: a detached historical view has no "your turn"/"your response" —
+  // suppress attention alerts (title/favicon/notification) for replay frames.
+  useAttentionAlerts(replayActive ? null : game, replayActive ? null : gameId, replayActive ? null : feedback, replayActive ? null : combat, settings.browserNotifications)
 
   // Anti doble-envío del mismo objetivo mientras no llega el eco: el CardSlot
   // cubre las cartas; este ref cubre el resto de superficies (headers, pila...).
@@ -193,7 +216,7 @@ export default function GameScreen() {
   }, [stackTargeted])
 
   const onTargetClick = async (id: string) => {
-    if (!gameId) return
+    if (!gameId || replayActive) return
     if (pendingTargetsRef.current.has(id)) return
     pendingTargetsRef.current.add(id)
     perfMark('click', 'target', undefined, { id })
@@ -205,7 +228,34 @@ export default function GameScreen() {
   }
 
   const onPlayableClick = async (id: string, e?: React.MouseEvent) => {
-    if (!gameId) return
+    if (!gameId || replayActive) return
+    // Sin prompt abierto el clic de mano solo puede ser un play, así que solo
+    // vale si la propia carta está marcada jugable: el clic se descarta antes
+    // del claim (un clic descartado no consume la ventana de prioridad).
+    if (isUnplayableHandClick(!!feedback, playableIdSet, id)) return
+    // An open prompt that is NOT mana/combat consumes the card click
+    // (uuid/string/boolean asks answer through THEIR dialog): the `playable`
+    // marker may be stale (game window closed, old canPlayObjects) and the
+    // server would reject the play anyway — do not send knowingly.
+    // EXCEPTION: in a uuid card choice (hand-pick GAME_TARGET,
+    // GAME_SELECT_CARDS/GAME_CHOOSE_CARDS…) the painted card itself
+    // (`targetable`) IS the answer — the hand is the selector when the grid is
+    // omitted — so the click routes to the same verb the grid uses
+    // (sendPlayerUUID via onTargetClick). Only when the clicked id is a legal
+    // option of the prompt; any other mode still falls through.
+    if (feedback && feedback.mode !== 'mana' && feedback.mode !== 'combat') {
+      if (feedback.mode === 'uuid' && feedback.options.some((option) => option.id === id)) {
+        await onTargetClick(id)
+      }
+      return
+    }
+    // One answer per priority request (2026-10-13 stale-playable-marker): a play
+    // sent while THIS window's answer is already out (a pass, a previous play, a
+    // smart auto-pass) is not a play — `HumanPlayer.waitResponseOpen` parks it and
+    // the engine applies it at the NEXT ask, which is how a land plays a main
+    // phase later or "a click has no effect and no error". The claim is shared
+    // with the pass button and the auto-pass.
+    if (feedback?.mode !== 'mana' && !claimPriorityAnswer()) return
     perfMark('click', feedback?.mode === 'mana' ? 'mana' : 'playable', undefined, { id })
     if (e?.ctrlKey || e?.metaKey || e?.shiftKey) {
       await cmds.sendPlayerAction('HOLD_PRIORITY', gameId)
@@ -217,7 +267,7 @@ export default function GameScreen() {
   const crossZone = crossZonePlayables(game, feedback ?? undefined)
 
   const onCombatClick = async (id: string) => {
-    if (!gameId) return
+    if (!gameId || replayActive) return
     perfMark('click', 'combat', undefined, { id })
     const result = await cmds.sendPlayerUUID(id, gameId)
     if (!result.ok) setStoreError(result.error ?? t('errors', 'send_failed_combat'))
@@ -243,7 +293,11 @@ export default function GameScreen() {
   }
 
   const onResolveClick = useCallback(async () => {
-    if (!gameId || busy) return
+    if (!gameId || busy || replayActive) return
+    // One answer per priority request: a click with nothing left to answer is
+    // dropped here, not sent — the engine would park it and spend it on the
+    // next window (the stack skipping past the player).
+    if (!claimPriorityAnswer()) return
     perfMark('click', 'pass')
     setBusy(true)
     perfMark('ack', 'pass')
@@ -253,7 +307,7 @@ export default function GameScreen() {
     } finally {
       setBusy(false)
     }
-  }, [gameId, busy, t])
+  }, [gameId, busy, t, replayActive])
 
   const pointerFocusRef = useRef(false)
   useEffect(() => {
@@ -282,6 +336,8 @@ export default function GameScreen() {
       if (released) released.blur()
       if (released || !isSpaceShortcutBlocked(e.target)) {
         e.preventDefault()
+        // Replay viewer: Space is Play/Pause (ReplayControls owns it), never pass.
+        if (replayActive) return
         // No enviar pass a ciegas si hay un diálogo de maná o target abierto
         if (feedback && feedback.mode !== 'combat') return
         if (rollbackBlocking) return
@@ -290,12 +346,12 @@ export default function GameScreen() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [canPass, feedback, onResolveClick, rollbackBlocking])
+  }, [canPass, feedback, onResolveClick, rollbackBlocking, replayActive])
 
-  // Skips one-shot estilo desktop (F4/F5/F7/F9/F10/F11) + F3 cancela.
-  // Sin F6: el propio desktop lo tiene desactivado ("Skip action don't used").
+  // Desktop-style one-shot skips. One action is left out: the desktop client
+  // keeps it disabled ("Skip action don't used").
   const sendSkip = useCallback(async (action: string) => {
-    if (!gameId || busy) return
+    if (!gameId || busy || replayActive) return
     perfMark('click', 'skip', undefined, { action })
     setBusy(true)
     perfMark('ack', 'skip', undefined, { action })
@@ -305,7 +361,7 @@ export default function GameScreen() {
     } finally {
       setBusy(false)
     }
-  }, [gameId, busy, t])
+  }, [gameId, busy, t, replayActive])
 
   useEffect(() => {
     const handleSkipKeys = (e: KeyboardEvent) => {
@@ -322,7 +378,7 @@ export default function GameScreen() {
     return () => window.removeEventListener('keydown', handleSkipKeys)
   }, [feedback, sendSkip, rollbackBlocking])
 
-  const opps = game?.players?.filter((p) => !p.controlled) ?? []
+  const opps = game?.players?.filter((p) => !p.controlled && p !== me) ?? []
   const isSpectator = !me
   const topOpps = isSpectator ? (opps.length >= 2 ? opps.slice(0, opps.length - 1) : []) : opps
 
@@ -367,7 +423,14 @@ export default function GameScreen() {
   useDockOffset(boardWrapRef, [effectiveLayout, isSpectator, !!game, game?.turn])
 
   const toggleDrawer = useCallback((tab: DrawerTab) => setDrawerTab((cur) => (cur === tab ? null : tab)), [])
-  const activeDrawerTab = drawerTab === 'commander' && !hasCommanders ? null : drawerTab
+  // A stored tab no longer offered (e.g. the LLM tab's gate flips off) must never
+  // paint: ports RightRail's effectiveRightTab onto the drawer's toggled model.
+  const llmTabOffered = useLlmTabOffered()
+  const offeredDrawerTabs: DrawerTab[] = llmTabOffered
+    ? ['stack', 'log', 'chat', 'tracker', 'commander', 'mechanics', 'llm']
+    : ['stack', 'log', 'chat', 'tracker', 'commander', 'mechanics']
+  let activeDrawerTab = effectiveDrawerTab(drawerTab, offeredDrawerTabs)
+  if (activeDrawerTab === 'commander' && !hasCommanders) activeDrawerTab = null
 
   const strip = (
     <GameStrip
@@ -422,7 +485,7 @@ export default function GameScreen() {
                 onCardClick={onTargetClick}
                 targetIds={new Set(targetIds)}
                 onResolveClick={onResolveClick}
-                canResolve={canPass}
+                canResolve={canPass && !priorityAnswered}
                 players={game?.players}
                 myPlayerId={me?.playerId}
               />
@@ -437,8 +500,17 @@ export default function GameScreen() {
     <PromptSlotProvider value={promptSlot} hand={handPromptSlot} onHandSlot={setHandPromptSlot}>
       <DividerSlotContext.Provider value={setDividerSlot}>
         <div className="game" ref={gameRootRef} style={{ zoom: inverseZoom(settings.uiScale) }}>
+          {storeError && (
+            <ErrorBanner
+              message={storeError}
+              onClose={clearError}
+              className="game-error-banner"
+              testId="game-error"
+            />
+          )}
           {!dividerSlot && <header className="game-top">{strip}</header>}
           {dividerSlot && createPortal(strip, dividerSlot)}
+          <ReplayControls />
           <div className="game-body" ref={gameBodyRef} data-space-passes-priority="true">
             <div className="board-wrap" ref={boardWrapRef} data-playmat={playmatId}>
               {playmatId !== 'classic' && (
@@ -466,6 +538,7 @@ export default function GameScreen() {
                     onPass={onResolveClick}
                     onSkip={sendSkip}
                     busy={busy}
+                    answered={priorityAnswered}
                   />
                 }
               />

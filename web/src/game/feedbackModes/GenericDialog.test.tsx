@@ -8,6 +8,7 @@ function stubForm(prompt: FeedbackPrompt | null): UseFeedbackForm {
   return {
     prompt,
     busy: false,
+    queuedClick: false,
     amount: 0,
     setAmount: () => {},
     selected: [],
@@ -18,6 +19,7 @@ function stubForm(prompt: FeedbackPrompt | null): UseFeedbackForm {
     setTextValue: () => {},
     filteredStringOptions: [],
     send: () => Promise.resolve(),
+    sendWithRetry: () => Promise.resolve(),
     sendNow: () => Promise.resolve(true),
     cancel: () => {},
     finishOptionalTarget: () => {},
@@ -241,7 +243,7 @@ describe('GenericDialog hooks', () => {
     expect(container.querySelector('.cancel-btn')).not.toBeNull()
   })
 
-  it('survives prompt null -> defined -> null without a hooks-order crash (AUDIT-01)', () => {
+  it('survives prompt null -> defined -> null without a hooks-order crash', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const view = render(<GenericDialog form={stubForm(null)} />)
     expect(view.container.innerHTML).toBe('')

@@ -1,20 +1,14 @@
 import type { CardView } from '../net/types'
-import { getCardLanguage } from '../i18n'
 import { extractOwnedKeywords } from '../data/keywordExtractor'
-import { scryfallJson } from './scryfallClient'
 import { cardArtPreference } from './artPreferences'
+import { loadImageIndex, resolveKeyImage } from './offlineIndex'
 import tokenImageData from '../data/tokenImages.generated.json'
 
 const memory = new Map<string, string | null>()
 const inflight = new Map<string, Promise<string | null>>()
 const MAX_MEMORY_ENTRIES = 2000
-const MAX_CONCURRENT_LOADS = 6
-const REQUEST_TIMEOUT_MS = 10000
-const RETRIES = 1
-let activeLoads = 0
-const loadQueue: (() => void)[] = []
 
-/** Card metadata resolved from Scryfall (name, type, mana cost, etc.). */
+/** Card metadata resolved from the offline image index (name + image URL). */
 export interface ScryfallCardInfo {
   name: string
   typeLine: string
@@ -195,13 +189,13 @@ export function cardKey(card: CardView): string | null {
     return `${set}/${num}${backSuffix}`
   }
 
-  // Token with cardNumber=0 — resolve via Scryfall token sets (t-prefixed)
+  // Token with cardNumber=0 — resolve via the token art table (t-set + slug)
   if (isToken) {
     if (!set || set === 'XMAGE') return null
     const name = card.displayName || card.name || ''
     if (!name) return null
     const tokenSet = 't' + set.toLowerCase()
-    // Strip " Token" suffix for Scryfall lookup (e.g. "Goblin Token" → "goblin")
+    // Strip " Token" suffix for the token table lookup (e.g. "Goblin Token" → "goblin")
     const stripped = name.replace(/\s+Token$/i, '')
     const slug = stripped.replace(/\s+/g, '-').toLowerCase()
     return `${tokenSet}/${slug}`
@@ -234,135 +228,9 @@ function scryfallKey(setCode: string, cardNumber: string): string | null {
 }
 
 async function load(key: string): Promise<string | null> {
-  await acquireLoadSlot()
-  try {
-    return await tryFetch(key)
-  } finally {
-    releaseLoadSlot()
-  }
-}
-
-function candidateUrls(key: string): string[] {
-  const cleanKey = key.replace(/#back$/, '')
-  if (cleanKey.startsWith('named:')) {
-    const name = cleanKey.slice(6)
-    return [
-      `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`,
-      `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`,
-      `https://api.scryfall.com/cards/search?q=${encodeURIComponent(name)}+include:extras`,
-      `https://api.scryfall.com/cards/search?q=t:token+name:%22${encodeURIComponent(name)}%22+include:extras`,
-    ]
-  }
-
-  if (cleanKey.startsWith('token:')) {
-    const rawName = cleanKey.slice(6)
-    const clean = rawName.replace(/\s+Token$/i, '')
-    return [
-      `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(clean + ' Token')}`,
-      `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(clean)}`,
-      `https://api.scryfall.com/cards/search?q=t:token+name:%22${encodeURIComponent(clean)}%22+include:extras`,
-      `https://api.scryfall.com/cards/search?q=${encodeURIComponent(clean)}+include:extras`,
-    ]
-  }
-
-  // Token key format like "tgrn/goblin" or "txln/treasure"
-  const tokenMatch = /^t([a-z0-9]+)\/([a-z0-9-]+)$/i.exec(cleanKey)
-  if (tokenMatch) {
-    const [, tokenSet, slug] = tokenMatch
-    const cleanName = slug.replace(/-/g, ' ')
-    return [
-      `https://api.scryfall.com/cards/${cleanKey}?format=json`,
-      `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cleanName + ' Token')}&set=t${tokenSet.toLowerCase()}`,
-      `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cleanName)}&set=t${tokenSet.toLowerCase()}`,
-      `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cleanName + ' Token')}`,
-      `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cleanName)}`,
-    ]
-  }
-
-  // Standard set/number like "LEA/299"
-  const cardLang = getCardLanguage()
-  if (cardLang && cardLang !== 'en') {
-    return [
-      `https://api.scryfall.com/cards/${cleanKey}/${cardLang}?format=json`,
-      `https://api.scryfall.com/cards/${cleanKey}?format=json`,
-    ]
-  }
-
-  return [`https://api.scryfall.com/cards/${cleanKey}?format=json`]
-}
-
-interface ScryfallImagePayload {
-  data?: {
-    image_uris?: { normal?: string; small?: string }
-    card_faces?: { image_uris?: { normal?: string; small?: string } }[]
-  }[]
-  image_uris?: { normal?: string; small?: string }
-  card_faces?: { image_uris?: { normal?: string; small?: string } }[]
-  name?: string
-  type_line?: string
-  mana_cost?: string
-  power?: string
-  toughness?: string
-}
-
-/** Las búsquedas devuelven listas grandes y son solo el último recurso: se
- *  deduplican en memoria pero no se guardan en IndexedDB. */
-function isSearchUrl(url: string): boolean {
-  return url.includes('/cards/search?')
-}
-
-async function tryFetch(key: string): Promise<string | null> {
-  const isBack = key.endsWith('#back')
-  const cleanKey = key.replace(/#back$/, '')
-
-  const urls = candidateUrls(key)
-  for (const url of urls) {
-    for (let attempt = 0; attempt <= RETRIES; attempt++) {
-      const data = await scryfallJson<ScryfallImagePayload>(url, {
-        persist: !isSearchUrl(url),
-        timeoutMs: REQUEST_TIMEOUT_MS,
-      })
-      if (!data) {
-        if (attempt === RETRIES) break
-        await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)))
-        continue
-      }
-
-      // Cache double-faced cards in memory for both front and back
-      const faces = data.card_faces || data.data?.[0]?.card_faces
-      if (faces && faces.length > 1) {
-        const frontUrl = faces[0]?.image_uris?.normal ?? faces[0]?.image_uris?.small ?? null
-        const backUrl = faces[1]?.image_uris?.normal ?? faces[1]?.image_uris?.small ?? null
-        if (frontUrl) memory.set(cleanKey, frontUrl)
-        if (backUrl) memory.set(`${cleanKey}#back`, backUrl)
-      }
-
-      const searchFirst = data.data?.[0]
-      const targetFace = isBack && faces && faces.length > 1 ? faces[1] : faces?.[0]
-
-      const imageUrl =
-        (isBack ? targetFace?.image_uris?.normal ?? targetFace?.image_uris?.small : null) ??
-        data.image_uris?.normal ??
-        data.image_uris?.small ??
-        targetFace?.image_uris?.normal ??
-        targetFace?.image_uris?.small ??
-        searchFirst?.image_uris?.normal ??
-        searchFirst?.image_uris?.small ??
-        null
-
-      const info: ScryfallCardInfo = {
-        name: data.name ?? key,
-        typeLine: data.type_line ?? '',
-        manaCost: data.mana_cost ?? '',
-        power: data.power,
-        toughness: data.toughness,
-        imageUrl,
-      }
-      metaMemory.set(key, info)
-      return imageUrl
-    }
-  }
-  return null
+  const index = await loadImageIndex()
+  const hit = resolveKeyImage(index, key, 'normal')
+  return hit ? hit.url : null
 }
 
 export async function awaitImageUrl(card: CardView): Promise<string | null> {
@@ -419,10 +287,29 @@ export async function awaitCardMeta(setCode: string, cardNumber: string): Promis
   if (!key) return null
   const cached = metaMemory.get(key)
   if (cached) return cached
-  if (metaInflight.has(key)) return metaInflight.get(key)!
-  // Trigger the load
-  await load(key)
-  return metaMemory.get(key) ?? null
+  const pending = metaInflight.get(key)
+  if (pending) return pending
+
+  const p = (async (): Promise<ScryfallCardInfo | null> => {
+    const index = await loadImageIndex()
+    const hit = resolveKeyImage(index, key, 'normal')
+    if (!hit) return null
+    const info: ScryfallCardInfo = {
+      name: hit.name ?? key,
+      typeLine: '',
+      manaCost: '',
+      imageUrl: hit.url,
+    }
+    metaMemory.set(key, info)
+    return info
+  })()
+    .catch(() => null)
+    .finally(() => {
+      if (metaInflight.get(key) === p) metaInflight.delete(key)
+    })
+
+  metaInflight.set(key, p)
+  return p
 }
 
 function remember(key: string, url: string | null) {
@@ -439,20 +326,6 @@ function remember(key: string, url: string | null) {
   }
 }
 
-async function acquireLoadSlot() {
-  if (activeLoads < MAX_CONCURRENT_LOADS) {
-    activeLoads++
-    return
-  }
-  await new Promise<void>((resolve) => loadQueue.push(resolve))
-  activeLoads++
-}
-
-function releaseLoadSlot() {
-  activeLoads = Math.max(0, activeLoads - 1)
-  loadQueue.shift()?.()
-}
-
 /** Solo para tests y para limpiar el estado al desmontar una sesión local. */
 export function resetCardImageCache() {
   memory.clear()
@@ -460,8 +333,6 @@ export function resetCardImageCache() {
   metaMemory.clear()
   metaInflight.clear()
   tokenPins.clear()
-  loadQueue.length = 0
-  activeLoads = 0
 }
 
 export function cardName(card: CardView): string {

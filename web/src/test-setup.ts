@@ -1,6 +1,7 @@
 import { beforeEach } from 'vitest'
 import { ensureLocaleLoaded, setLanguage } from './i18n'
 import { resetScryfallClient, setScryfallPacing } from './cards/scryfallClient'
+import { setBundledCorpusForTests } from './decks/bundledDecks'
 
 // La suite histórica aserta textos de UI en español. El default de la app es
 // inglés (getInitialLanguage), así que los tests parten de español salvo que
@@ -10,6 +11,10 @@ import { resetScryfallClient, setScryfallPacing } from './cards/scryfallClient'
 // el idioma no basta: hay que esperar a que su schema esté en memoria antes de
 // renderizar, o el `t()` cae al inglés y el spec falla por el texto equivocado.
 beforeEach(async () => {
+  // The bundled deck corpus is a module-level lazy singleton: a test that stubs
+  // `fetch` with a never-resolving promise would otherwise poison the cached
+  // load for the rest of the file. Reset it so each test starts unloaded.
+  setBundledCorpusForTests(null)
   setLanguage('es')
   await ensureLocaleLoaded('es')
   resetScryfallClient()

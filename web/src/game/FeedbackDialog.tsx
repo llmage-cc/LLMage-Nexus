@@ -30,7 +30,7 @@ export default function FeedbackDialog() {
 
   return (
     <>
-      {/* P2: marcador para el comprobador de fidelidad (prompt pendiente pintado). */}
+      {/* Fidelity-checker marker (the pending prompt is painted). */}
       <span data-prompt-method={prompt.method} data-prompt-mode={prompt.mode} hidden aria-hidden="true" />
       {renderPrompt(form, handPick !== null, () => setExpandedPrompt(prompt))}
     </>
@@ -38,7 +38,7 @@ export default function FeedbackDialog() {
 }
 
 function renderPrompt(form: UseFeedbackForm, handPick: boolean, onExpandHandPick: () => void) {
-  const { prompt, selected, setSelected, send, sendNow, cancel, busy } = form
+  const { prompt, selected, setSelected, send, sendNow, cancel, busy, queuedClick } = form
 
   if (!prompt) return null
 
@@ -49,7 +49,7 @@ function renderPrompt(form: UseFeedbackForm, handPick: boolean, onExpandHandPick
 
   // ── Mulligan: diálogo dedicado (Keep/Mulligan y London-bottom)
   if (prompt.isMulligan || prompt.isMulliganLondon) {
-    return <MulliganDialog prompt={prompt} send={send} cancel={cancel} busy={busy} />
+    return <MulliganDialog prompt={prompt} send={send} sendWithRetry={form.sendWithRetry} cancel={cancel} busy={busy} queuedClick={queuedClick} />
   }
 
   // ── Voting: diálogo dedicado

@@ -9,6 +9,7 @@ function stubForm(prompt: FeedbackPrompt): UseFeedbackForm {
   return {
     prompt,
     busy: false,
+    queuedClick: false,
     amount: 0,
     setAmount: () => {},
     selected: [],
@@ -19,6 +20,7 @@ function stubForm(prompt: FeedbackPrompt): UseFeedbackForm {
     setTextValue: () => {},
     filteredStringOptions: [],
     send: () => Promise.resolve(),
+    sendWithRetry: () => Promise.resolve(),
     sendNow: () => Promise.resolve(true),
     cancel: () => {},
     finishOptionalTarget: () => {},

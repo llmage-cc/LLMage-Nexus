@@ -30,7 +30,7 @@ lleva más de una hora en pie o acumula 20+ sesiones: ahí el canal de callbacks
 degrada y `verify`/`self-test` fallan con "sin vistas" (el juego se ve congelado en el turno 2
 porque no llega ninguna vista). Eso no es un fallo de código: reinicia el stack y repite.
 
-Fuera del orquestador (capas del CI en `.github/workflows/web-ci.yml`):
+Fuera del orquestador (este repo no trae CI: corre estas capas a mano):
 - MCP: `npm --prefix mcp run typecheck` + `npm --prefix mcp test` (nunca escribe a stdout).
 - Validadores de generados: `mage_validate_generated` / `npm run gen-*:validate` (skill
   `mage-contract-codegen`).

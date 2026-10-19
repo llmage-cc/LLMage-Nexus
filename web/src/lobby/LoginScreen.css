@@ -499,10 +499,44 @@ details.login-network-box .login-network-fields {
   gap: var(--sp-2);
 }
 
-/* U4-2: contraseña deshabilitada en el servidor público (beta) */
+/* A deployment that pins the XMage target shows it read-only instead of
+   the editable network box. */
+.login-pinned-target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-base);
+  background: var(--surface-raised);
+  /* Narrow viewports (390 px): let the target scroll rather than clip. */
+  overflow-x: auto;
+}
 
-/* Movimiento reducido (plan4 §5.7): glows del fondo, logo y spinners infinitos
-   quedan estáticos. Al final del fichero para ganar en orden a sus reglas. */
+.login-pinned-target .pinned-target-label {
+  font-size: var(--fs-sm);
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.login-pinned-target .pinned-target-value {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  /* An address:port must never split mid-token ("127.0.0.1:17 / 181").
+     keep-all + nowrap hold the host whole; the container scrolls instead. */
+  word-break: keep-all;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+
+/* Password disabled on the public server (beta) */
+
+/* Reduced motion: background glows, logo and infinite spinners stay static.
+   At the end of the file so it wins on order against their rules. */
 @media (prefers-reduced-motion: reduce) {
   .login-bg-glow-1,
   .login-bg-glow-2,

@@ -20,6 +20,18 @@ export default function CreateTableDialog({ onClose, onEditDeck }: { onClose: ()
   const form = useCreateTableForm(onClose)
   const { wizardSteps, activeTab, activeIndex, goNext, goPrev, goToStep, isLastStep, isFirstStep } = form
 
+  /**
+   * Cancel discards the unsubmitted form state (parity 2026-10-10 gap 2): the
+   * persisted draft — including an explored Tournament preset — must not
+   * survive a Cancel and preselect the preset on reopen. The discard lives in
+   * the hook (`form.cancel`), which owns the draft persistence effect; every
+   * cancelling exit routes through one handler.
+   */
+  const cancel = () => {
+    form.cancel()
+    onClose()
+  }
+
   return (
     <DialogShell
       labelledBy="create-table-title"
@@ -31,10 +43,10 @@ export default function CreateTableDialog({ onClose, onEditDeck }: { onClose: ()
       title={t('lobby.create_table_btn')}
       message={t('lobby', 'create_header_subtitle')}
       topRight={(
-        <CloseButton variant="plain" size="md" className="create-dialog-close-btn" onClick={onClose} />
+        <CloseButton variant="plain" size="md" className="create-dialog-close-btn" onClick={cancel} />
       )}
-      onBackdropClick={onClose}
-      onEscape={onClose}
+      onBackdropClick={cancel}
+      onEscape={cancel}
     >
         <div className="wizard-progress-track" aria-hidden>
           <div className="wizard-progress-fill" style={{ width: `${((activeIndex + 1) / wizardSteps.length) * 100}%` }} />
@@ -96,7 +108,7 @@ export default function CreateTableDialog({ onClose, onEditDeck }: { onClose: ()
                 {t('lobby','wizard_back')}
               </Button>
             )}
-            <Button onClick={onClose} disabled={form.busy}>
+            <Button onClick={cancel} disabled={form.busy}>
               {t('common','cancel')}
             </Button>
           </div>

@@ -25,6 +25,8 @@ final class AuthorizedConnections {
     static final int LOGIN_BACKLOG_LIMIT = 500;
 
     private final Gateway gateway;
+    /** The capabilities of the session's server, read at connect-result time. */
+    private final java.util.function.Supplier<ServerCapabilities> capabilities;
     private final Set<WebSocket> authorized = Collections.newSetFromMap(new IdentityHashMap<WebSocket, Boolean>());
     /** Every non-lobby frame broadcast, numbered, so a returning connection resumes the stream. */
     private final OutboundLog outbound = new OutboundLog();
@@ -38,8 +40,9 @@ final class AuthorizedConnections {
      */
     private List<String> loginBacklog = null;
 
-    AuthorizedConnections(Gateway gateway) {
+    AuthorizedConnections(Gateway gateway, java.util.function.Supplier<ServerCapabilities> capabilities) {
         this.gateway = gateway;
+        this.capabilities = capabilities;
     }
 
     /**
@@ -140,6 +143,11 @@ final class AuthorizedConnections {
         data.addProperty("streamId", streamId);
         if (resumed != null) {
             data.addProperty("resumed", resumed);
+        }
+        // Present on every successful connect (fresh login and attach); absent on failure.
+        ServerCapabilities caps = capabilities.get();
+        if (caps != null) {
+            caps.addTo(data);
         }
         return data;
     }

@@ -99,6 +99,20 @@ public class Config {
         return get("webDir", "web");
     }
 
+    /** Default directory the proxy lists saved replays from (relative to the process CWD). */
+    public static final String DEFAULT_REPLAY_DIR = "saved";
+
+    /**
+     * Directory the proxy reads saved replay files ({@code <uuid>.game} + {@code <uuid>.json}
+     * sidecars) from, for the {@code getReplayFiles} listing ({@code --replayDir}, default
+     * {@code saved}). Resolved relative to the proxy process CWD, exactly what
+     * {@code GameReplay.loadGame} resolves against the SERVER's CWD, so a proxy sharing the
+     * server's working directory lists its replays with no configuration.
+     */
+    public String getReplayDir() {
+        return get("replayDir", DEFAULT_REPLAY_DIR).trim();
+    }
+
     /**
      * Dirección de bind de ws/http. Por defecto solo loopback (127.0.0.1):
      * local-first seguro. Para exponer el proxy hay que pasarlo explícitamente.
@@ -126,8 +140,44 @@ public class Config {
         return out;
     }
 
+    /** Default model-endpoint allowlist: localhost variants only (local-Ollama workflow). */
+    public static final String DEFAULT_ALLOWED_MODEL_HOSTS = "localhost,127.0.0.1,::1";
+
+    /**
+     * Hosts an LLM seat may point its {@code apiEndpoint} at (comma-separated,
+     * {@code --allowedModelHosts}). An explicit allowlist, not a blocklist: an unlisted host is
+     * rejected outright, so a seat config cannot be used to port-scan loopback or reach
+     * arbitrary internal services. Empty means every endpoint is rejected.
+     */
+    public Set<String> getAllowedModelHosts() {
+        return parseHostSet(get("allowedModelHosts", DEFAULT_ALLOWED_MODEL_HOSTS));
+    }
+
+    static Set<String> parseHostSet(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<String> out = new HashSet<>();
+        for (String part : raw.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                out.add(trimmed);
+            }
+        }
+        return out;
+    }
+
     public String getAdminToken() {
         return get("adminToken", "");
+    }
+
+    /**
+     * Runtime toggle for the {@code /llm-relay} HTTP route ({@code --llmRelayEnabled}, default
+     * FALSE). nexus ships as a single artifact, so the same-origin CORS relay is a knob rather
+     * than a build flavor; when off the route is not registered at all and the path 404s.
+     */
+    public boolean isLlmRelayEnabled() {
+        return "true".equalsIgnoreCase(get("llmRelayEnabled", "false").trim());
     }
 
     public int getMaxMessageBytes() {

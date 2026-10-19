@@ -32,7 +32,7 @@ export default function GameBoard({
   onPlayCrossZone,
   focusedOpponentId,
 }: GameBoardProps) {
-  const { allPlayers } = useBoardPlayers(game, true)
+  const { me, opps, isSpectator, perspective } = useBoardPlayers(game, true)
   const presenter = useBoardPresenter({
     game,
     targetIds,
@@ -50,14 +50,13 @@ export default function GameBoard({
   })
   const { handleCardHover, handleCardClick, targetIdSet, playableIdSet } = presenter
 
-  const me = allPlayers.find((p) => p.controlled)
-  const opps = allPlayers.filter((p) => !p.controlled)
-  const isSpectator = !me
   const oppBottom = isSpectator ? (opps.length >= 2 ? opps[opps.length - 1] : opps[0]) : undefined
   const topOpps = isSpectator ? (opps.length >= 2 ? opps.slice(0, opps.length - 1) : []) : opps
 
-  /** Bottom player hand in spectator mode (revealed or viewed). */
-  const spectatorBottomHand = useSpectatorBottomHand(game, isSpectator, oppBottom)
+  /** Bottom player hand: the spectator's watched hand, or the replay perspective
+   *  seat's visible hand; a controlled live game uses `myHand` (the hand bar). */
+  const bottomSeat = isSpectator ? oppBottom : me
+  const bottomHand = useSpectatorBottomHand(game, isSpectator || perspective, bottomSeat)
   /** Mano ajena bajo control (Switch Hands): sustituye a la propia. */
   const switchedHand = useSwitchedHand(game)
 
@@ -77,13 +76,13 @@ export default function GameBoard({
       className="game-board"
       testId="game-board"
       presenter={presenter}
-      handBar={!isSpectator ? {
+      handBar={isSpectator || perspective ? null : {
         cards: switchedHand ?? game?.myHand ?? {},
         onCardClick: onPlayableClick,
         onHover: (card, rect) => handleCardHover(card, rect, { fromHand: true }),
         playableIds: playableIdSet,
         targetIds: targetIdSet,
-      } : null}
+      }}
     >
       <OpponentZone
         key={currentOpp?.playerId}
@@ -104,7 +103,8 @@ export default function GameBoard({
       <BoardDivider />
       <PlayerZone
         player={isSpectator ? oppBottom : me}
-        hand={isSpectator ? spectatorBottomHand : (game?.myHand ?? {})}
+        hand={perspective || isSpectator ? bottomHand : (game?.myHand ?? {})}
+        isControlled={perspective ? true : undefined}
         onCardClick={handleCardClick}
         onHandCardClick={onPlayableClick}
         onCardHover={handleCardHover}
@@ -117,10 +117,10 @@ export default function GameBoard({
         combatChosen={combatChosen}
         attackingIds={attackingIds}
         blockingIds={blockingIds}
-        crossZonePlayables={isSpectator ? [] : crossZonePlayables}
+        crossZonePlayables={isSpectator && !perspective ? [] : crossZonePlayables}
         onPlayCrossZone={onPlayCrossZone}
         helperEmblems={game?.myHelperEmblems}
-        showHand={isSpectator}
+        showHand={isSpectator || perspective}
       />
     </BoardShell>
   )

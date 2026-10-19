@@ -197,7 +197,14 @@ test('hovering an own hand card grows it in place until legible, without a float
       expect(next.x, 'the right neighbour slides out of the way').toBeGreaterThanOrEqual(grown.x + grown.width * 0.5)
     }
 
-    await page.locator('.board-shell-divider').hover()
+    // Soltar el hover: se saca el puntero de la mano (idioma del propio spec,
+    // líneas 162/174/226/232). NO sirve `.hover()` sobre el divisor de la franja
+    // de control: `.board-shell-divider.has-strip` es `pointer-events: none` a
+    // propósito (BoardShell.css:69, guardado por GameStrip.stacking.test.tsx),
+    // así que el hit-test a su través devuelve el `.board-shell` padre
+    // ('intercepts pointer events') y Playwright reintenta sin fin hasta agotar
+    // el timeout del test (120 s) sin llegar a la aserción de encogimiento.
+    await page.mouse.move(8, 8)
     await expect.poll(async () => (await cardBox(target)).width, { timeout: 5_000 }).toBeLessThan(before.width * 1.1)
     expect(pageErrors).toEqual([])
   })

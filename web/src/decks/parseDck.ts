@@ -4,6 +4,11 @@ import { normalizeBasicLandName } from './deckUtils'
 import { normalizeDeckCard } from './deckNormalize'
 
 const DCK_LINE = /^(SB:\s*)?(\d+)\s*\[([^:\]]+):([^\]]+)\]\s*(.+?)\s*$/
+// Plain-name variant: the mtgtop8 *majors* corpus (and hand-written lists) carry
+// `N CardName` with no `[SET:NUM]`, which DCK_LINE rejects. The printing stays
+// empty here and is resolved by the proxy by name (or, for a basic land, by
+// `normalizeDeckCard`).
+const DCK_PLAIN_LINE = /^(SB:\s*)?(\d+)\s+(?!\[)(.+?)\s*$/
 const NAME_RE = /^NAME:\s*(.*)\s*$/
 const AUTHOR_RE = /^AUTHOR:\s*(.*)\s*$/
 const LAYOUT_RE = /^LAYOUT\s+(MAIN|SIDEBOARD):/
@@ -44,6 +49,20 @@ export function parseDck(text: string, fallbackName = t('decks', 'import_placeho
       if (!rawName) continue
       const cardName = normalizeBasicLandName(rawName) || rawName
       const entry = normalizeDeckCard({ cardName, setCode, cardNumber, amount })
+      if (isSideboard) { sideboard.push(entry); continue }
+      cards.push(entry)
+      if (inCommander) commanders.push(entry)
+      continue
+    }
+
+    const p = line.match(DCK_PLAIN_LINE)
+    if (p) {
+      const isSideboard = !!p[1]
+      const amount = parseInt(p[2], 10) || 1
+      const rawName = p[3].trim()
+      if (!rawName) continue
+      const cardName = normalizeBasicLandName(rawName) || rawName
+      const entry = normalizeDeckCard({ cardName, setCode: '', cardNumber: '', amount })
       if (isSideboard) { sideboard.push(entry); continue }
       cards.push(entry)
       if (inCommander) commanders.push(entry)
@@ -241,9 +260,9 @@ interface MtgjsonBoardEntry {
 }
 
 /**
- * Import mtgjson (.json, paridad con MtgjsonDeckImporter):
- * `{data:{name,code,mainBoard,sideBoard,commander}}` con entradas
- * `{name,setCode,count}`. Commander → principal en cabeza (U7-6).
+ * Import mtgjson (.json, parity with MtgjsonDeckImporter):
+ * `{data:{name,code,mainBoard,sideBoard,commander}}` with entries
+ * `{name,setCode,count}`. Commander → moved to the head of the main board.
  */
 export function parseMtgjson(text: string, fallbackName = t('decks', 'import_placeholder')): Deck | null {
   let json: unknown

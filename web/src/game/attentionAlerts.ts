@@ -4,6 +4,7 @@ import type { FeedbackPrompt } from './feedback'
 import type { CombatState } from '../state/slices/game'
 import { feedbackSignature } from '../audio/promptSound'
 import { loadNotificationAsked, saveNotificationAsked } from '../state/persistence'
+import { useStore } from '../state/store'
 import { useTranslation } from '../i18n'
 
 export type AttentionReason = 'turn' | 'response'
@@ -59,6 +60,7 @@ let pending = 0
 let baseTitle: string | null = null
 let baseIcon: string | null = null
 let lastNotification: Notification | null = null
+let lastAlertLabel: string | null = null
 
 function faviconLink(): HTMLLinkElement | null {
   return document.querySelector<HTMLLinkElement>('link[rel~="icon"]')
@@ -94,6 +96,7 @@ export function clearAttention(): void {
   pending = 0
   if (baseTitle != null) document.title = baseTitle
   baseTitle = null
+  lastAlertLabel = null
   const link = faviconLink()
   if (link && baseIcon != null) link.href = baseIcon
   baseIcon = null
@@ -119,6 +122,7 @@ export function raiseAttention(opts: { label: string; title: string; body: strin
   installClearListeners()
   pending += 1
   if (baseTitle == null) baseTitle = document.title
+  lastAlertLabel = opts.label
   document.title = `(${pending}) ${opts.label} · ${baseTitle}`
   if (pending === 1) paintFaviconBadge()
   if (!opts.notify || !notificationsSupported() || Notification.permission !== 'granted') return
@@ -142,8 +146,24 @@ export function useAttentionAlerts(
 ): void {
   const { t } = useTranslation()
   const prevRef = useRef<AttentionSnapshot | null>(null)
+  const deploymentName = useStore((s) => s.proxyConfig.deploymentName)
   const snapshot = attentionSnapshot(game, gameId, feedback, combat)
   const snapshotKey = snapshot ? `${snapshot.gameId}|${snapshot.turn}|${snapshot.myTurn}|${snapshot.promptSig ?? ''}` : null
+
+  // Branding knob: the base title is the deployment's name. The `/config`
+  // probe resolves asynchronously, so it may land AFTER an alert is already
+  // showing: re-prefix the pending count onto the new base instead of leaving the
+  // stale one in the tab.
+  useEffect(() => {
+    if (!deploymentName) return
+    if (pending > 0 && lastAlertLabel) {
+      baseTitle = deploymentName
+      document.title = `(${pending}) ${lastAlertLabel} · ${deploymentName}`
+    } else if (baseTitle != null) {
+      baseTitle = deploymentName
+      document.title = deploymentName
+    }
+  }, [deploymentName])
 
   useEffect(() => {
     const reason = attentionReason(prevRef.current, snapshot)

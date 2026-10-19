@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { extractLobbyUsers, formatSeatHistory } from './lobbyUtils'
 import type { RoomUsersView, UsersView } from '../net/types'
+import { exitReplay } from '../state/actions'
+import { getState, setState } from '../state/state'
+
+vi.mock('../net/commands', () => ({
+  stopReplay: vi.fn().mockResolvedValue({ ok: true }),
+}))
 
 describe('formatSeatHistory', () => {
   it('formats XMage seat history with quit counts cleanly without truncating', () => {
@@ -42,13 +48,45 @@ describe('formatSeatHistory', () => {
       formatSeatHistory(undefined, 'Matches: 265 (I:3 T:1 Q:13) (6%), Tourneys: 0 (0%), Constructed Rating: 1500')
     ).toEqual({
       short: '265 (6%)',
-      full: 'Matches: 265 (I:3 T:1 Q:13) (6%), Tourneys: 0 (0%), Constructed Rating: 1500',
+      // The raw `UserData.getHistory()` labels ("Matches: …, Tourneys: …,
+      // Constructed Rating: …") must NOT leak into the tooltip: the full string
+      // is rebuilt from the parsed numbers with the localized segments.
+      full: '265 partidas jugadas (13 abandonos, 3 inactivos, 1 timeouts)',
     })
   })
 
   it('handles null and undefined', () => {
     expect(formatSeatHistory(undefined, undefined)).toEqual({ short: null, full: '' })
     expect(formatSeatHistory('', '')).toEqual({ short: null, full: '' })
+  })
+})
+
+describe('lobby error banner lifecycle', () => {
+  it('leaving the replay clears the replay-scoped error that hung over the lobby', () => {
+    setState({
+      phase: 'game',
+      replay: {
+        gameId: 'g-1',
+        frame: null,
+        stateIndex: -1,
+        stateCount: -1,
+        frameCount: 0,
+        playing: true,
+        done: null,
+        llmFrames: [],
+        gameLog: [],
+        hasLlmPlayers: null,
+      },
+      error: 'A replay is loaded — player actions are not available until the replay is stopped',
+    })
+
+    exitReplay()
+
+    expect(getState().replay).toBeNull()
+    expect(getState().phase).toBe('lobby')
+    // The banner the lobby renders reads store.error: a replay-scoped message
+    // must not survive the viewer closing.
+    expect(getState().error).toBeNull()
   })
 })
 

@@ -2,6 +2,8 @@ import { createContext, useContext, useLayoutEffect } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { HandPromptSlotContext } from '../board/BoardShell'
+import { useStore } from '../state/store'
+import { useInfoWindows } from './infoWindowState'
 import './GameDock.css'
 
 const DOCK_GAP = 8
@@ -71,8 +73,24 @@ interface GameDockProps {
 }
 
 export default function GameDock({ action, onPromptSlot }: GameDockProps) {
+  // With a read-only viewer open (card inspector z 12000, stack/revealed/
+  // companion viewers z 100, both in the body-level overlayRoot) the non-modal
+  // confirmation used to paint underneath — and it is the turn's only exit:
+  // with no visible bar the user can neither answer nor close (soft lock).
+  // Every infoWindow viewer paints the same full-screen backdrop
+  // (PileOverlay), companion included, so none is excluded.
+  const inspectedCard = useStore((s) => s.inspectedCard)
+  const viewer = useStore((s) => s.viewer)
+  const infoWindows = useInfoWindows()
+  const hasQuietViewer = !!inspectedCard
+    || !!viewer
+    || infoWindows.windows.open.length > 0
   return (
-    <div className="game-dock" data-testid="game-dock">
+    <div
+      className="game-dock"
+      data-testid="game-dock"
+      data-prompt-above-modal={hasQuietViewer || undefined}
+    >
       <div className="game-dock-prompt" ref={onPromptSlot} />
       {action}
     </div>

@@ -62,6 +62,15 @@ public final class DeckValidation {
         return STATE.get();
     }
 
+    /**
+     * Test seam: force the card-DB state without a real scan, returning the previous value so a
+     * test can restore it. Only the deployment-gating tests need this (they must reach the
+     * pre-dial gates past the warming-up guard without waiting for a ~10 s card scan).
+     */
+    static State setStateForTest(State state) {
+        return STATE.getAndSet(state);
+    }
+
     /** Arranca (una vez) la construcción perezosa de la BD de cartas en segundo plano. */
     public static void ensureCardDatabaseAsync() {
         if (!STATE.compareAndSet(State.NOT_STARTED, State.BUILDING)) {

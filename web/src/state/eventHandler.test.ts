@@ -1,7 +1,8 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { handleMessage } from './eventHandler'
 import { questionLogLine } from './events/prompts'
 import { getState, setState } from './state'
+import { clearSeatKeys, setSeatKey } from '../lobby/CreateTable/llmSeatKeys'
 
 vi.mock('../net/commands', () => ({
   joinGame: vi.fn().mockResolvedValue(null),
@@ -14,7 +15,11 @@ vi.mock('../net/commands', () => ({
   removeTable: vi.fn().mockResolvedValue(null),
   startMatch: vi.fn().mockResolvedValue(null),
   sendPlayerAction: vi.fn().mockResolvedValue(null),
+  llmDecision: vi.fn().mockResolvedValue(null),
+  llmError: vi.fn().mockResolvedValue(null),
 }))
+
+import { llmDecision, llmError } from '../net/commands'
 
 beforeEach(() => {
   setState({ userRequest: null, viewer: null, error: null, game: null, gameId: null })
@@ -143,6 +148,63 @@ describe('eventHandler — callbacks críticos', () => {
     } as never)
     expect(getState().viewer?.title).toBe('Mis Mazos')
     expect(getState().viewer?.cards).toHaveLength(1)
+  })
+})
+
+describe('eventHandler — llm_prompt (client-key bridge)', () => {
+  const frame = (over: Record<string, unknown> = {}) => ({
+    type: 'llm_prompt',
+    requestId: '11111111-1111-4111-8111-111111111111',
+    seatId: 'seat-1',
+    gameId: 'g1',
+    playerName: 'LLM Seat',
+    requestBody: '{}',
+    apiEndpoint: 'https://api.openai.com/v1/chat/completions',
+    stream: false,
+    timeoutSeconds: 600,
+    clientKeyTag: 'tag-1',
+    ...over,
+  })
+
+  beforeEach(() => {
+    vi.mocked(llmDecision).mockClear()
+    vi.mocked(llmError).mockClear()
+    setState({ capabilities: { llm: true } as never, log: [] })
+    setSeatKey('tag-1', 'XXXXXX-not-a-real-key')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200, text: () => Promise.resolve('{}') }))
+  })
+
+  afterEach(() => {
+    clearSeatKeys()
+    vi.unstubAllGlobals()
+  })
+
+  it('without capabilities.llm it drops the frame, logs, and never bridges', () => {
+    setState({ capabilities: null })
+    handleMessage(frame() as never)
+    expect(vi.mocked(llmError)).not.toHaveBeenCalled()
+    expect(vi.mocked(llmDecision)).not.toHaveBeenCalled()
+    const lines = getState().log.map((l) => l.text)
+    expect(lines.some((l) => /llm_prompt|LLM capability/i.test(l))).toBe(true)
+    const entry = getState().log.find((l) => l.from === 'error')
+    expect(entry).toBeDefined()
+  })
+
+  it('with capabilities.llm it invokes the bridge (provider call → llm_decision)', async () => {
+    handleMessage(frame() as never)
+    await vi.waitFor(() => expect(vi.mocked(llmDecision)).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(llmError)).not.toHaveBeenCalled()
+    expect(vi.mocked(llmDecision)).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: '11111111-1111-4111-8111-111111111111', httpStatus: 200 }),
+    )
+  })
+
+  it('a missing key produces an immediate llm_error, not a provider call', async () => {
+    clearSeatKeys()
+    handleMessage(frame() as never)
+    await vi.waitFor(() => expect(vi.mocked(llmError)).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(llmDecision)).not.toHaveBeenCalled()
+    expect(vi.mocked(llmError).mock.calls[0][0]).toMatchObject({ retryable: false })
   })
 })
 

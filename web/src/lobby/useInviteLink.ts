@@ -7,6 +7,7 @@ import type { TableView } from '../net/types'
 import { t as tStatic } from '../i18n'
 import { confirmDialog } from '../ui/confirmDialog'
 import { serverLabel } from './deepLink'
+import { isDeploymentLocked } from '../setup/deploymentLock'
 
 const MAX_RETRIES = 10
 
@@ -40,19 +41,22 @@ export function useInviteLink({ conn, tables, hasLobby, joinHuman, watchTable, s
 
   useEffect(() => {
     if (!pending) return
+    // A locked deployment (VITE_LOCK_DEPLOYMENT ON) ignores the `server=` carried
+    // by an invite: it never offers to switch servers, it just joins on its own.
+    const locked = isDeploymentLocked()
     if (handledRef.current === pending && handledConnRef.current !== conn) {
       handledRef.current = null
       handledConnRef.current = null
     }
     if (handledRef.current === pending) return
-    if (pending.serverRaw && !(pending.serverHost && pending.serverPort)) {
+    if (!locked && pending.serverRaw && !(pending.serverHost && pending.serverPort)) {
       handledRef.current = pending
       handledConnRef.current = conn
       setNotice(tStatic('lobby', 'invite_bad_server', { server: pending.serverRaw }))
       setState({ pendingDeepLink: null })
       return
     }
-    if (pending.serverHost && pending.serverPort && conn
+    if (!locked && pending.serverHost && pending.serverPort && conn
       && (conn.serverHost !== pending.serverHost || conn.port !== pending.serverPort)) {
       handledRef.current = pending
       handledConnRef.current = conn

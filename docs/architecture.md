@@ -1,5 +1,7 @@
 # Architecture — XMage Nexus
 
+> **LLMage Nexus documentation:** for the current guide see [Architecture](developer-guide/architecture.md). This page is inherited from upstream XMage Nexus and may lag behind the client.
+
 ## Three tiers
 
 ```

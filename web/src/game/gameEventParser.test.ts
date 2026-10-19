@@ -264,6 +264,20 @@ describe('gameEventParser', () => {
       'qa-ui-1345 elige que qa-ui-1345 juegue primero'
     )
   })
+
+  it('parses the engine self-choice shape WITHOUT space ("thattake")', () => {
+    // GameImpl.sendStartMessage appends "they" right before an inner " take
+    // the first turn": "X chooses that theytake the first turn". When the web
+    // clicked MY avatar and the log still named the opponent, the divergence
+    // lives in the SERVER's log grammar, not the web mapping — pin both
+    // shapes here so a client-side regression of the mapping is attributable.
+    const res = parsed('qa-ui-1345 chooses that theytake the first turn', 'qa-ui-1345')
+    expect(res.type).toBe('system')
+    expect(res.playerName).toBe('qa-ui-1345')
+    expect(esText('qa-ui-1345 chooses that theytake the first turn', 'qa-ui-1345')).toBe(
+      'qa-ui-1345 elige que qa-ui-1345 juegue primero'
+    )
+  })
   it('parses wins and concessions', () => {
     expect(esText('Alice won the game', 'Alice')).toBe('Alice gana la partida')
     expect(esText('Bob won the match', 'Alice')).toBe('Bob gana el match')

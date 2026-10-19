@@ -143,6 +143,29 @@ describe('flightManager', () => {
     expect(getFlightDiagnostics().some((e) => e.kind === 'chain')).toBe(true)
   })
 
+  it('keeps the chain window at the clone flight time (no cancel while the ghost flies, no chain once it landed)', () => {
+    // La animación del clon la fija el primer vuelo (400 ms) y el encadenado NO
+    // la reinicia: `duration` es la ventana real del fantasma. Re-basarla al
+    // encadenar (0.8 x 400 = 320 ms) cerraba la ventana antes del fin de la
+    // animación y cancelaba un clon que seguía en vuelo.
+    const firstId = startCardFlight(dummyCard, fromRect, toRect, 400)
+    expect(firstId).not.toBeNull()
+    const altDest = { ...toRect, left: 700, top: 100 } as DOMRect
+
+    vi.advanceTimersByTime(50)
+    expect(startCardFlight(dummyCard, fromRect, altDest, 400)).toBe(firstId)
+
+    // edad 385 ms: dentro de la animación de 400 ms -> encadena, no cancela
+    vi.advanceTimersByTime(335)
+    expect(startCardFlight(dummyCard, fromRect, altDest, 400)).toBe(firstId)
+    expect(getFlightDiagnostics().some((e) => e.kind === 'cancel')).toBe(false)
+
+    // edad 600 ms: el clon ya aterrizó -> vuelo nuevo (no encadenar sobre un
+    // fantasma muerto: el movimiento se quedaría sin animación).
+    vi.advanceTimersByTime(215)
+    expect(startCardFlight(dummyCard, fromRect, altDest, 400)).not.toBe(firstId)
+  })
+
   it('replaces (cancels) the flight when the previous one already aged out', () => {
     const firstId = startCardFlight(dummyCard, fromRect, toRect, 100)
     expect(firstId).not.toBeNull()

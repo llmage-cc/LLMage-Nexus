@@ -36,6 +36,7 @@ describe('useInviteLink server switch', () => {
 
   afterEach(() => {
     cleanup()
+    vi.unstubAllEnvs()
   })
 
   it('reanuda la invitación tras aceptar el cambio de servidor (AUDIT bloqueante)', async () => {
@@ -72,7 +73,7 @@ describe('useInviteLink server switch', () => {
     expect(d.watchTable).not.toHaveBeenCalled()
   })
 
-  it('deja rastro visible al cancelar la invitación (C.13-mayores §3)', async () => {
+  it('leaves a visible trace when the invitation is cancelled', async () => {
     vi.mocked(confirmDialog).mockResolvedValue(false)
     await act(async () => {
       setState({ pendingDeepLink: { kind: 'watch', tableId: 't1', serverHost: 'server-b', serverPort: 17172 } } as any)
@@ -84,7 +85,7 @@ describe('useInviteLink server switch', () => {
     expect(String(d.setNotice.mock.calls[0][0])).toMatch(/cancelada/i)
   })
 
-  it('muestra estado pendiente mientras reintenta la mesa ausente (C.13-mayores §3)', async () => {
+  it('shows a pending state while it retries the missing table', async () => {
     await act(async () => {
       setState({ pendingDeepLink: { kind: 'join', tableId: 't-ausente' } } as any)
     })
@@ -96,7 +97,7 @@ describe('useInviteLink server switch', () => {
     expect(String(d.setNotice.mock.calls[0][0])).toMatch(/buscando/i)
   })
 
-  it('avisa al agotar los reintentos de mesa ausente (C.13-mayores §3)', async () => {
+  it('warns when the retries for a missing table run out', async () => {
     vi.useFakeTimers()
     try {
       await act(async () => {
@@ -130,5 +131,34 @@ describe('useInviteLink server switch', () => {
     expect(d.joinHuman).not.toHaveBeenCalled()
     expect(d.setNotice).toHaveBeenCalledTimes(1)
     expect(String(d.setNotice.mock.calls[0][0])).toContain('sin-puerto')
+  })
+
+  it('ignora el servidor del invite cuando el deployment está bloqueado y une en el propio', async () => {
+    vi.stubEnv('VITE_LOCK_DEPLOYMENT', '1')
+    vi.mocked(confirmDialog).mockResolvedValue(true)
+    await act(async () => {
+      setState({ pendingDeepLink: { kind: 'join', tableId: 't1', serverHost: 'server-b', serverPort: 17172 } } as any)
+    })
+    const d = deps({ hasLobby: true, tables: [table] })
+    renderHook((p: any) => useInviteLink(p), { initialProps: d as any })
+    await act(async () => {})
+    // no server-switch dialog, no reconnect, no bad-server notice
+    expect(confirmDialog).not.toHaveBeenCalled()
+    expect(doConnect).not.toHaveBeenCalled()
+    // the invite still resolves against the deployment's own server
+    expect(d.joinHuman).toHaveBeenCalledTimes(1)
+    expect(d.joinHuman).toHaveBeenCalledWith(table, undefined)
+  })
+
+  it('ignora un server= inválido cuando el deployment está bloqueado (sin aviso)', async () => {
+    vi.stubEnv('VITE_LOCK_DEPLOYMENT', '1')
+    await act(async () => {
+      setState({ pendingDeepLink: { kind: 'join', tableId: 't1', serverRaw: 'sin-puerto' } } as any)
+    })
+    const d = deps({ hasLobby: true, tables: [table] })
+    renderHook((p: any) => useInviteLink(p), { initialProps: d as any })
+    await act(async () => {})
+    expect(d.setNotice).not.toHaveBeenCalled()
+    expect(d.joinHuman).toHaveBeenCalledWith(table, undefined)
   })
 })

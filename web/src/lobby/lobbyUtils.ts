@@ -122,7 +122,25 @@ export function formatSeatHistory(sHistory?: string, userHistory?: string): { sh
       short = `${totalMatches} (Q:${quitCount})`
     }
 
-    return { short, full: raw }
+    // `UserData.getHistory()` ships the English labels ("Matches: …, Tourneys: …,
+    // Constructed Rating: …") — an earlier pass saw them in the DE seat tooltip.
+    // Rebuild the tooltip from the same parsed numbers with the localized history
+    // segments instead of returning the raw server string. The ratings are the
+    // RankBadge's data anyway.
+    const parts: string[] = []
+    const iMatch = details.match(/I:(\d+)/i)
+    const tMatch = details.match(/T:(\d+)/i)
+    if (quitCount > 0) parts.push(`${quitCount} ${tStatic('lobby','history_quits')}`)
+    if (iMatch && parseInt(iMatch[1], 10) > 0) parts.push(`${iMatch[1]} ${tStatic('lobby','history_inactives')}`)
+    if (tMatch && parseInt(tMatch[1], 10) > 0) parts.push(`${tMatch[1]} ${tStatic('lobby','history_timeouts')}`)
+
+    let full = `${totalMatches} ${tStatic('lobby','history_matches')}`
+    if (parts.length > 0) {
+      full += ` (${parts.join(', ')})`
+    } else if (details && !/^[qt]:\s*0+$/i.test(details.trim())) {
+      full += ` (${details})`
+    }
+    return { short, full }
   }
 
   if (raw.length <= 14) {

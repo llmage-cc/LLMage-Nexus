@@ -32,7 +32,10 @@
 
 .dlg-panel {
   position: relative;
+  /* Single scroll owner of every dialog: a real bar (stable gutter) and a scroll
+     chain that STOPS here instead of reaching the page/board behind it. */
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding: var(--dlg-padding);
   border: var(--dlg-border);
@@ -46,7 +49,9 @@
 
 .dlg-sm { width: var(--dlg-width-sm); max-height: var(--dlg-max-h); }
 .dlg-md { width: var(--dlg-width-md); max-height: var(--dlg-max-h); }
-.dlg-lg { width: var(--dlg-width-lg); max-height: var(--dlg-max-h); }
+/* The lg cap is viewport-derived (not a blind 90vh): on a short window a 90vh
+   panel sits below the visible top and its own top edge becomes unreachable. */
+.dlg-lg { width: var(--dlg-width-lg); max-height: min(90vh, calc(100dvh - var(--dlg-viewport-gutter))); }
 
 @keyframes dialogIn {
   from {

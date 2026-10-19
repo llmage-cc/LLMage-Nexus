@@ -1,10 +1,12 @@
+import { bundledCorpusDecks, loadBundledCorpus } from '../decks/bundledDecks'
+import { SAMPLE_DECKS_GROUP } from '../decks/deckOrder'
+
 export interface DeckCard {
   cardName: string
   setCode: string
   cardNumber: string
   amount: number
 }
-
 export interface Deck {
   /** Identidad estable del mazo (puede faltar en mazos legacy/bundled). */
   id?: string
@@ -13,6 +15,13 @@ export interface Deck {
   sideboard: DeckCard[]
   /** Comandantes designados por el importador (sección Commander). */
   commanders?: DeckCard[]
+  /**
+   * Source library of a deck from the bundled corpus (e.g. `Legacy`, `Modern`,
+   * `cEDH`, `Decks to Beat`); absent on the player's own decks and on the 9
+   * compiled samples (`SAMPLE_DECKS_GROUP`). This is what groups the deck
+   * pickers (`decks/deckOrder.ts`).
+   */
+  group?: string
 }
 
 export const STABLE_DECK: Deck = {
@@ -161,12 +170,90 @@ export const MUTATE_DECK: Deck = {
 export const DECKS = [DEFAULT_DECK, ADVANCED_DECK, STABLE_DECK, AI_OPPONENT_DECK, COMBAT_OPPONENT_DECK, COMBAT_HUMAN_DECK, COMBAT_BLOCK_SIM_DECK, LANDS_DECK, MUTATE_DECK]
 
 /**
- * Mazos fijos de desarrollo/pruebas: visibles solo en builds dev. En prod
- * la v1 no trae ningún mazo fijo: el usuario aporta los suyos (crear/importar).
- * (El e2e fake/real corre sobre `vite dev`, así que la suite no se ve afectada.)
+ * The curated REAL deck the LLM-vs-LLM preset and the SIM-vs-SIM demo seat:
+ * 'Boros Burn' (GP Birmingham 2017 winner, `majors:Modern/16525_...`), from the
+ * bundled mtgtop8 corpus — 60 main + 15 sideboard, creatures + cheap spells, so
+ * early turns produce visible plays and games end by damage instead of deck-out.
+ *
+ * DEFAULT_DECK ('Mage Web bolt', 56 Mountain + 4 Bolt) is KEPT for the
+ * deterministic e2e interaction harness (ordered skipInitShuffling opening
+ * hand) but must never reach a live LLM/demo table: with real shuffling its
+ * opening hand is all lands ≈60% of the time and the game is unwinnable.
+ *
+ * The deck is resolved FROM the bundled corpus BY NAME at runtime, never
+ * duplicated here. `bundledCorpusDecks()` is empty until the lazy corpus asset
+ * has landed (or when `VITE_BUNDLED_DECKS` disables it), so callers must handle
+ * absence — `submitTable` falls through to the existing no-deck error path,
+ * and `runDemoTable`/tests use the throwing wrapper below (fail-fast).
+ */
+export const PRESET_DEFAULT_DECK_NAME = 'Boros Burn'
+
+/** The bundled corpus deck `PRESET_DEFAULT_DECK_NAME` picks (first match).
+ *  Honours the `VITE_BUNDLED_DECKS` flag exactly like `bundledDecks()`: an
+ *  operator who disabled built-in decks gets none of them as a preset default. */
+export function findPresetDefaultDeck(): Deck | undefined {
+  if (!bundledDecksEnabled()) return undefined
+  return bundledCorpusDecks().find((d) => d.name === PRESET_DEFAULT_DECK_NAME)
+}
+
+/**
+ * Fail-fast resolver: throws (with the deck name in the message) when the
+ * bundled corpus doesn't carry `PRESET_DEFAULT_DECK_NAME`. Callers that run on
+ * UI interaction paths should prefer `findPresetDefaultDeck()` and surface the
+ * existing no-deck error instead of letting this throw.
+ */
+export function presetDefaultDeck(): Deck {
+  const found = findPresetDefaultDeck()
+  if (!found) {
+    throw new Error(`preset default deck '${PRESET_DEFAULT_DECK_NAME}' not found in the bundled corpus (corpus disabled or not yet loaded; VITE_BUNDLED_DECKS must stay on)`)
+  }
+  return found
+}
+
+/**
+ * Built-in decks ship in production builds too. They used to be gated on
+ * `import.meta.env.DEV`, so a `npm run build` artifact shipped none of them and the
+ * Decks Gallery and the Create Table seat-deck dropdown came up empty until the user
+ * imported a deck. The gate is now an explicit build flag instead of the DEV/PROD mode:
+ *
+ *   VITE_BUNDLED_DECKS unset (or '1' / 'true')  => on  (the default: a plain `npm run build`
+ *                                                       ships the decks, and `vite dev` keeps them)
+ *   VITE_BUNDLED_DECKS '0' / 'false'            => off (an operator can build a deployment with
+ *                                                       no built-in decks)
+ *
+ * Keying on an env var rather than `import.meta.env.DEV` also makes the behavior testable
+ * (a vitest run can `vi.stubEnv('VITE_BUNDLED_DECKS', '0')`).
+ */
+export function bundledDecksEnabled(): boolean {
+  const flag = (import.meta.env.VITE_BUNDLED_DECKS as string | undefined)?.trim().toLowerCase()
+  return flag !== '0' && flag !== 'false'
+}
+
+/**
+ * Built-in decks: the 9 sample decks that ship compiled in, plus the lazily
+ * loaded 5,013-deck corpus (mtgtop8 majors + XMage samples — see
+ * `decks/bundledDecks.ts`) once it has arrived. The corpus is empty until its
+ * async load lands, so this stays synchronous and cheap for the login paint.
  */
 export function bundledDecks(): Deck[] {
-  return import.meta.env.DEV ? DECKS : []
+  if (!bundledDecksEnabled()) return []
+  const corpus = bundledCorpusDecks()
+  return corpus.length > 0 ? [...DECKS, ...corpus] : DECKS
+}
+
+/** Kick the lazy corpus load (idempotent, never throws). */
+export async function ensureBundledDecksLoaded(): Promise<void> {
+  if (!bundledDecksEnabled()) return
+  try {
+    await loadBundledCorpus()
+  } catch {
+    // the 9 sample decks still work; the corpus is a convenience
+  }
+}
+
+/** How many corpus decks are in memory right now (0 before the load lands). */
+export function bundledCorpusDeckCount(): number {
+  return bundledCorpusDecks().length
 }
 
 export const CUSTOM_DECKS_STORAGE_KEY = 'mage_custom_decks'
@@ -217,7 +304,11 @@ export function getAllAvailableDecks(): Deck[] {
   // conserva su id y ambos se pueden elegir.
   const v2Names = new Set(v2.map((d) => d.name))
   const decks: Deck[] = []
-  for (const d of bundledDecks()) decks.push({ ...d, id: d.id ?? `precon:${d.name}` })
+  // The compiled sample decks are tagged with the samples group here (the one
+  // place that identifies them as bundled, next to their `precon:` id) so the
+  // deck pickers keep them in their own section instead of mixing them into a
+  // corpus library — see `decks/deckOrder.ts`.
+  for (const d of bundledDecks()) decks.push({ ...d, id: d.id ?? `precon:${d.name}`, group: d.group ?? SAMPLE_DECKS_GROUP })
   const seenLegacy = new Set<string>()
   for (const d of legacy) {
     if (v2Names.has(d.name) || seenLegacy.has(d.name)) continue
@@ -229,5 +320,16 @@ export function getAllAvailableDecks(): Deck[] {
 }
 
 export function getAllAvailableDecksV2Raw(): Deck[] {
+  return getAllAvailableDecks()
+}
+
+/**
+ * Async companion of `getAllAvailableDecks()`: waits for the lazy bundled
+ * corpus, then returns the full list (samples + corpus + the user's decks). The
+ * Create-Table seat picker and the Join dialog call this so the ~5,000 bundled
+ * decks appear once they land instead of being missed by the first synchronous read.
+ */
+export async function getAllAvailableDecksAsync(): Promise<Deck[]> {
+  await ensureBundledDecksLoaded()
   return getAllAvailableDecks()
 }

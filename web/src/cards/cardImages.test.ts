@@ -1,8 +1,38 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { awaitImageUrl, resetCardImageCache, cardKey, hasVigilance, hiddenFaceDownName, largeImageUrl } from './cardImages'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { awaitImageUrl, awaitCardMeta, resetCardImageCache, cardKey, hasVigilance, hiddenFaceDownName, largeImageUrl } from './cardImages'
 import { resetCardArtPreferences, setCardArtPreference } from './artPreferences'
+import { setImageIndexForTests, type ScryfallImageIndex } from './offlineIndex'
 import type { CardView } from '../net/types'
-import { setScryfallPacing } from './scryfallClient'
+
+const UUID_FOREST = '1e6f9b5e-1111-4222-8333-944440555666'
+const UUID_BOLT = '435589bb-27c6-4a6d-9d63-394d5092b9d8'
+const UUID_DELVER = '11bf83bb-c95b-4b4f-9a56-ce7a1816307a'
+const UUID_GOBLIN = 'b27dc0bd-ba46-4a5c-9559-7c11eb4ec37b'
+const UUID_GOBLIN_TSET_MISS = 'aaaabbbb-cccc-4ddd-8eee-ffff00001111'
+
+/** Index fixture mirroring what the builder ships (sampled). */
+function index(): ScryfallImageIndex {
+  return {
+    cards: {
+      Forest: UUID_FOREST,
+      'Lightning Bolt': UUID_BOLT,
+      'Delver of Secrets': UUID_DELVER,
+      'Insectile Aberration': UUID_DELVER,
+      'Goblin Token': UUID_GOBLIN_TSET_MISS,
+    },
+    backs: new Set(['Delver of Secrets']),
+    printings: {
+      'lea/299': [UUID_FOREST, 'Forest'],
+      'm10/146': [UUID_BOLT, 'Lightning Bolt'],
+      'm10/147': [UUID_BOLT, 'Lightning Bolt'],
+      'isd/51': [UUID_DELVER, 'Delver of Secrets'],
+      'tgrn/4': [UUID_GOBLIN, 'Goblin'],
+    },
+    tokenArts: {
+      Goblin: [{ id: UUID_GOBLIN, set: 'tgrn', num: '4', released: '2018-10-05' }],
+    },
+  }
+}
 
 const card = {
   name: 'Forest',
@@ -10,93 +40,71 @@ const card = {
   cardNumber: '299',
 } as CardView
 
-describe('card image cache', () => {
+describe('card image resolution (offline index)', () => {
   beforeEach(() => {
     resetCardImageCache()
+    resetCardArtPreferences()
+    setImageIndexForTests(index())
     vi.restoreAllMocks()
   })
-
-  it('deduplicates concurrent requests and caches the result', async () => {
-    let resolveFetch: ((value: unknown) => void) | undefined
-    const response = new Promise((resolve) => {
-      resolveFetch = resolve
-    })
-    const fetchMock = vi.fn(() => response)
-    vi.stubGlobal('fetch', fetchMock)
-
-    const first = awaitImageUrl(card)
-    const second = awaitImageUrl(card)
-    await new Promise((r) => setTimeout(r, 10))
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    resolveFetch?.({ ok: true, status: 200, json: async () => ({ image_uris: { normal: 'https://img.test/forest.jpg' } }) })
-
-    await expect(first).resolves.toBe('https://img.test/forest.jpg')
-    await expect(second).resolves.toBe('https://img.test/forest.jpg')
-    await expect(awaitImageUrl(card)).resolves.toBe('https://img.test/forest.jpg')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+  afterEach(() => {
+    setImageIndexForTests(null)
   })
 
-  it('reuses the shared Scryfall cache, so reopening a game does not refetch', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ image_uris: { normal: 'https://img.test/forest.jpg' } }),
-      headers: { get: () => null },
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(awaitImageUrl(card)).resolves.toBe('https://img.test/forest.jpg')
-    resetCardImageCache()
-    await expect(awaitImageUrl(card)).resolves.toBe('https://img.test/forest.jpg')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('retries an HTTP failure and clears the in-flight entry', async () => {
+  it('resolves a card through the offline index without any network call', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: false, status: 503 })
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ image_uris: { normal: 'https://img.test/retry.jpg' } }) })
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(awaitImageUrl(card)).resolves.toBe('https://img.test/retry.jpg')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await expect(awaitImageUrl(card)).resolves.toBe(`https://cards.scryfall.io/normal/front/1/e/${UUID_FOREST}.jpg`)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('does not leave a rejected request cached forever', async () => {
-    const fetchMock = vi.fn().mockRejectedValue(new Error('offline'))
+  it('deduplicates concurrent resolutions and caches the result', async () => {
+    const [first, second] = [awaitImageUrl(card), awaitImageUrl(card)]
+    const firstUrl = await first
+    expect(firstUrl).toBeTruthy()
+    await expect(second).resolves.toBe(firstUrl)
+    await expect(awaitImageUrl(card)).resolves.toBe(firstUrl)
+  })
+
+  it('returns null for a map miss instead of hitting the API', async () => {
+    const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
+    const unknown = { name: 'Totally Unknown Card', expansionSetCode: 'ZZZ', cardNumber: '1' } as CardView
 
-    await expect(awaitImageUrl(card)).resolves.toBeNull()
-    const callsAfterFirst = fetchMock.mock.calls.length
-    await expect(awaitImageUrl(card)).resolves.toBeNull()
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(callsAfterFirst)
+    await expect(awaitImageUrl(unknown)).resolves.toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to searching by card name if set/number lookup returns 404', async () => {
-    const bloodCrypt = {
-      name: 'Blood Crypt',
+  it('falls back to the name when the printing is not in the map', async () => {
+    const unknownPrinting = {
+      name: 'Lightning Bolt',
       expansionSetCode: 'UNKNOWN_SET',
       cardNumber: '999',
     } as CardView
 
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: false, status: 404 }) // UNKNOWN_SET/999 -> 404
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ image_uris: { normal: 'https://img.test/blood_crypt.jpg' }, name: 'Blood Crypt' }),
-      })
-    vi.stubGlobal('fetch', fetchMock)
+    await expect(awaitImageUrl(unknownPrinting)).resolves.toBe(`https://cards.scryfall.io/normal/front/4/3/${UUID_BOLT}.jpg`)
+  })
 
-    await expect(awaitImageUrl(bloodCrypt)).resolves.toBe('https://img.test/blood_crypt.jpg')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://api.scryfall.com/cards/UNKNOWN_SET/999?format=json', expect.anything())
-    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://api.scryfall.com/cards/named?exact=Blood%20Crypt', expect.anything())
+  it('resolves card metadata through the index (sideboard names)', async () => {
+    await expect(awaitCardMeta('M10', '146')).resolves.toEqual({
+      name: 'Lightning Bolt',
+      typeLine: '',
+      manaCost: '',
+      imageUrl: `https://cards.scryfall.io/normal/front/4/3/${UUID_BOLT}.jpg`,
+    })
+    await expect(awaitCardMeta('ZZZ', '1')).resolves.toBeNull()
+    await expect(awaitCardMeta('', '146')).resolves.toBeNull()
   })
 })
 
 describe('face-down and engine-owned images', () => {
   beforeEach(() => {
     resetCardImageCache()
+    setImageIndexForTests(index())
+  })
+  afterEach(() => {
+    setImageIndexForTests(null)
   })
 
   const faceDown = (over: Record<string, unknown> = {}) =>
@@ -128,7 +136,11 @@ describe('face-down and engine-owned images', () => {
 describe('token image resolution', () => {
   beforeEach(() => {
     resetCardImageCache()
+    setImageIndexForTests(index())
     vi.restoreAllMocks()
+  })
+  afterEach(() => {
+    setImageIndexForTests(null)
   })
 
   it('resolves a token to the exact Scryfall card from the engine table (set + name)', () => {
@@ -207,43 +219,34 @@ describe('token image resolution', () => {
     expect(cardKey(token)).toBeNull()
   })
 
-  it('fetches token image from Scryfall', async () => {
+  it('resolves the engine-table token through its t-set printing without any network call', async () => {
     const token = { name: 'Goblin Token', expansionSetCode: 'GRN', cardNumber: '0', isToken: true } as CardView
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true, status: 200,
-      json: async () => ({ image_uris: { normal: 'https://img.test/goblin.jpg' }, name: 'Goblin' }),
-    })
+    const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(awaitImageUrl(token)).resolves.toBe('https://img.test/goblin.jpg')
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.scryfall.com/cards/tgrn/4?format=json',
-      expect.anything(),
-    )
+    await expect(awaitImageUrl(token)).resolves.toBe(`https://cards.scryfall.io/normal/front/b/2/${UUID_GOBLIN}.jpg`)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to name without "Token" suffix on 404', async () => {
-    const token = { name: 'Goblin Token', expansionSetCode: 'GRN', cardNumber: '0', isToken: true } as CardView
-    // el token se resuelve por la tabla del motor (tgrn/4) — sin fallback por nombre
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true, status: 200,
-      json: async () => ({ image_uris: { normal: 'https://img.test/goblin.jpg' }, name: 'Goblin' }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
+  it('falls back to the token art table when the t-set printing is unknown', async () => {
+    const token = { name: 'Goblin Token', expansionSetCode: 'ZZZ', cardNumber: '0', isToken: true } as CardView
+    await expect(awaitImageUrl(token)).resolves.toBe(`https://cards.scryfall.io/normal/front/b/2/${UUID_GOBLIN}.jpg`)
+  })
 
-    await expect(awaitImageUrl(token)).resolves.toBe('https://img.test/goblin.jpg')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.scryfall.com/cards/tgrn/4?format=json',
-      expect.anything(),
-    )
+  it('renders no image (placeholder) when neither the printing, the token table nor the name knows the card', async () => {
+    const token = { name: 'Weird Token', expansionSetCode: 'ZZZ', cardNumber: '0', isToken: true } as CardView
+    await expect(awaitImageUrl(token)).resolves.toBeNull()
   })
 })
 
 describe('ability image and metadata resolution', () => {
   beforeEach(() => {
     resetCardImageCache()
+    setImageIndexForTests(index())
     vi.restoreAllMocks()
+  })
+  afterEach(() => {
+    setImageIndexForTests(null)
   })
 
   it('builds named Scryfall key for triggered ability card', () => {
@@ -282,56 +285,26 @@ describe('ability image and metadata resolution', () => {
     const feedCard = { name: 'Lightning Bolt' } as CardView
     expect(cardKey(feedCard)).toBe('named:Lightning Bolt')
   })
-})
 
-describe('Scryfall compliance', () => {
-  beforeEach(() => {
-    resetCardImageCache()
-    vi.restoreAllMocks()
-  })
-
-  it('sends Accept header and spaces Scryfall requests by the shared client pacing', async () => {
-    setScryfallPacing({ spacingMs: 100 })
-    const a = { name: 'Lightning Bolt', expansionSetCode: 'M10', cardNumber: '146' } as CardView
-    const b = { name: 'Counterspell', expansionSetCode: 'MMQ', cardNumber: '67' } as CardView
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true, status: 200,
-      json: async () => ({ image_uris: { normal: 'https://img.test/x.jpg' }, name: 'x' }),
-      headers: { get: () => null },
-    } as unknown as Response)
-    vi.stubGlobal('fetch', fetchMock)
-
-    const t0 = Date.now()
-    await awaitImageUrl(a)
-    await awaitImageUrl(b)
-    const elapsed = Date.now() - t0
-    expect(elapsed).toBeGreaterThanOrEqual(90)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    for (const [, opts] of fetchMock.mock.calls) {
-      expect((opts as RequestInit).headers).toMatchObject({ Accept: 'application/json' })
-    }
-  })
-
-  it('retries after 429 using Retry-After header', async () => {
-    const card429 = { name: 'Forest', expansionSetCode: 'LEA', cardNumber: '299' } as CardView
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: false, status: 429, headers: { get: (k: string) => k === 'Retry-After' ? '0' : null } } as unknown as Response)
-      .mockResolvedValueOnce({
-        ok: true, status: 200,
-        json: async () => ({ image_uris: { normal: 'https://img.test/forest429.jpg' }, name: 'Forest' }),
-        headers: { get: () => null },
-      } as unknown as Response)
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(awaitImageUrl(card429)).resolves.toBe('https://img.test/forest429.jpg')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+  it('resolves an ability image through the source card', async () => {
+    const ability = {
+      name: 'Ability',
+      mageObjectType: 'TRIGGERED_ABILITY',
+      sourceCard: { name: 'Lightning Bolt', expansionSetCode: 'M10', cardNumber: '146' },
+      rules: ['Lightning Bolt deals 3 damage to any target.'],
+    } as unknown as CardView
+    await expect(awaitImageUrl(ability)).resolves.toBe(`https://cards.scryfall.io/normal/front/4/3/${UUID_BOLT}.jpg`)
   })
 })
 
 describe('double-faced and transform card resolution', () => {
   beforeEach(() => {
     resetCardImageCache()
+    setImageIndexForTests(index())
     vi.restoreAllMocks()
+  })
+  afterEach(() => {
+    setImageIndexForTests(null)
   })
 
   it('builds distinct cardKeys for front face and second/back face', () => {
@@ -352,7 +325,7 @@ describe('double-faced and transform card resolution', () => {
     expect(cardKey(back)).toBe('ISD/51#back')
   })
 
-  it('resolves front face and back face image URLs from Scryfall card_faces', async () => {
+  it('resolves front and back face CDN urls from the same uuid', async () => {
     const front = {
       name: 'Delver of Secrets',
       expansionSetCode: 'ISD',
@@ -366,32 +339,12 @@ describe('double-faced and transform card resolution', () => {
       isSecondCardFace: true,
     } as unknown as CardView
 
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        name: 'Delver of Secrets // Insectile Aberration',
-        card_faces: [
-          {
-            name: 'Delver of Secrets',
-            image_uris: { normal: 'https://img.test/delver_front.jpg' },
-          },
-          {
-            name: 'Insectile Aberration',
-            image_uris: { normal: 'https://img.test/delver_back.jpg' },
-          },
-        ],
-      }),
-    })
+    const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    // Request front
-    const frontUrl = await awaitImageUrl(front)
-    expect(frontUrl).toBe('https://img.test/delver_front.jpg')
-
-    // Request back - should use back face image and avoid duplicate network calls
-    const backUrl = await awaitImageUrl(back)
-    expect(backUrl).toBe('https://img.test/delver_back.jpg')
+    await expect(awaitImageUrl(front)).resolves.toBe(`https://cards.scryfall.io/normal/front/1/1/${UUID_DELVER}.jpg`)
+    await expect(awaitImageUrl(back)).resolves.toBe(`https://cards.scryfall.io/normal/back/1/1/${UUID_DELVER}.jpg`)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 
@@ -399,6 +352,10 @@ describe('card art preference', () => {
   beforeEach(() => {
     resetCardImageCache()
     resetCardArtPreferences()
+    setImageIndexForTests(index())
+  })
+  afterEach(() => {
+    setImageIndexForTests(null)
   })
 
   it('la preferencia del jugador gana a la impresión de la vista, también en cartas del rival', () => {
@@ -463,5 +420,3 @@ describe('largeImageUrl', () => {
     expect(largeImageUrl(null)).toBeNull()
   })
 })
-
-

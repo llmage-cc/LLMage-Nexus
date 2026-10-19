@@ -26,6 +26,11 @@ final class ProxyProtocol {
     static final String ERR_SEAT = "SEAT";
     static final String ERR_WARMING_UP = "WARMING_UP";
     static final String ERR_VERSION_MISMATCH = "VERSION_MISMATCH";
+    /**
+     * The request carries LLM wire content (llmConfigs, a COMPUTER_LLM seat) but the connected
+     * XMage server cannot run LLM players: rejected before any server RPC (fail fast).
+     */
+    static final String ERR_CAPABILITY_UNAVAILABLE = "CAPABILITY_UNAVAILABLE";
 
     private ProxyProtocol() {
     }
@@ -56,6 +61,39 @@ final class ProxyProtocol {
                 res.add("data", JsonParser.parseString(JsonUtil.toJson(data)));
             }
         }
+        return res.toString();
+    }
+
+    /**
+     * The connect-rejection frame the browser's connect form consumes: exactly
+     * {@code {"type":"connect_error","message":<msg>}} (no requestId/ok — the form reads the message
+     * and the 4401 close tells it not to auto-reconnect). Used by the deployment gates (bad auth
+     * token, anon name collision) before any session is created.
+     */
+    static String connectErrorJson(String message) {
+        JsonObject res = new JsonObject();
+        res.addProperty("type", "connect_error");
+        res.addProperty("message", message == null ? "" : message);
+        return res.toString();
+    }
+
+    /**
+     * A typed error frame for verbs whose success answer is NOT a {@code result} envelope but a
+     * dedicated frame (the LLM list verbs: {@code models_error} / {@code personalities_error}).
+     * The web consumer clears its loading flag only on a typed reply; a generic {@code error}
+     * would leave it spinning forever, so these verbs never fall back to {@code error}.
+     * Carries the errorCode and the player-facing message.
+     */
+    static String typedErrorJson(String frameType, String action, String requestId, String errorCode, String message) {
+        JsonObject res = new JsonObject();
+        res.addProperty("type", frameType);
+        res.addProperty("action", action);
+        res.addProperty("requestId", requestId == null ? "" : requestId);
+        res.addProperty("ok", false);
+        if (errorCode != null) {
+            res.addProperty("errorCode", errorCode);
+        }
+        res.addProperty("message", message == null ? (errorCode == null ? "Command failed" : errorCode) : message);
         return res.toString();
     }
 }

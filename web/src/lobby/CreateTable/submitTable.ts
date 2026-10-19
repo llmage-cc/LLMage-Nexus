@@ -1,16 +1,21 @@
 import * as cmds from '../../net/commands'
 import { setMyDeck } from '../../state/store'
-import { DEFAULT_DECK, type Deck } from '../decks'
+import { findPresetDefaultDeck, presetDefaultDeck, type Deck } from '../decks'
 import { requestDeckValidation } from '../DeckIssuesDialog'
 import type { useTranslation } from '../../i18n'
 import { prepareDeckForXMage } from '../../decks/deckNormalize'
 import { isLimitedDeckType } from '../../decks/formatRules'
+import { parseAnyDeck } from '../../decks/parseDck'
 import {
   buildLimitedOptions,
   isNativeAiSeatType,
+  isP1SeatType,
+  isSimSeatType,
   normalizeSeatType,
   parseLimitedSetCodes,
+  simSeatsEnabled,
 } from './constants'
+import { llmConfigsForSeats } from './llmConfig'
 import {
   computeTournamentSeats,
   computeMatchSeats,
@@ -23,6 +28,7 @@ import {
 } from './tableKind'
 import { isRandomPacksType } from './RandomPacksSelector'
 import type { CreateTableForm } from './types'
+import type { DeckJson } from '../../net/types'
 
 type Translation = ReturnType<typeof useTranslation>
 
@@ -57,13 +63,35 @@ function discardTable(tableId: string) {
   void cmds.removeTable(tableId)
 }
 
-/** The deck of a bot seat: its own choice, else the default bot deck, else mine, else the bundled one. */
+/**
+ * Raw per-seat llmConfig aligned with `playerTypesFinal` (which may carry a
+ * HUMAN prefix when the human seat is enabled). Index j of playerTypesFinal
+ * maps back to seatConfigs[j - humanOffset]; the prefix and the filler seats
+ * appended by the seat computation have no config.
+ */
+function rawLlmConfigsByFinalSeat(
+  playerTypesFinal: string[],
+  seatConfigs: SubmitTableForm['seatConfigs'],
+  humanSeat: boolean,
+): Array<Record<string, unknown> | null | undefined> {
+  const offset = humanSeat ? 1 : 0
+  return playerTypesFinal.map((_, j) => (j >= offset ? seatConfigs[j - offset]?.llmConfig : undefined))
+}
+
+/**
+ * The deck of a bot seat: its own choice, else the global sim deck, else mine,
+ * else the curated bundled corpus deck — DEFAULT_DECK ('Mage Web bolt', 56
+ * Mountain + 4 Bolt) is the deterministic e2e-harness deck and must NOT seat a
+ * live LLM/bot table (all-land hands ≈60% of games are unwinnable). The chain
+ * returning `undefined` (no deck anywhere) sends the seat down the existing
+ * `create_err_no_deck` error path instead of the lands deck.
+ */
 function resolveSimDeck(f: SubmitTableForm, deckRefValue?: string): Deck | null {
   if (deckRefValue) {
     const found = f.findDeck(deckRefValue)
     if (found) return found
   }
-  return f.simDeck ?? f.myDeck ?? DEFAULT_DECK
+  return f.simDeck ?? f.myDeck ?? findPresetDefaultDeck() ?? null
 }
 
 function botName(counter: number, total: number) {
@@ -160,6 +188,7 @@ async function submitTournament(f: SubmitTableForm, io: SubmitTableIO): Promise<
     draft: isDraftLimited,
     limitedOptions,
     playerTypesFinal,
+    llmConfigs: llmConfigsForSeats(playerTypesFinal, rawLlmConfigsByFinalSeat(playerTypesFinal, seatConfigs, f.humanSeat)),
     password,
     spectatorsAllowed: f.spectatorsAllowed,
     wins: f.wins,
@@ -193,10 +222,18 @@ async function submitTournament(f: SubmitTableForm, io: SubmitTableIO): Promise<
       botCounter++
       let botDeck: Deck | undefined = undefined
       if (!isDraftLimited) {
-        const base = resolveSimDeck(f, bot.cfg?.deckName)
-        if (base) {
-          const fixed = await requestDeckValidation(prepareDeckForXMage(base, deckType, gameType))
-          botDeck = fixed ?? undefined
+        if (bot.cfg && isP1SeatType(bot.cfg.type)) {
+          // COMPUTER_P1: the seat carries the training deck TEXT.
+          // Parse it verbatim and do NOT run the format-fix dialog — a "correction"
+          // could move the list out of the 55-deck pool. The server's
+          // P1DeckRestriction is the authoritative check at join.
+          botDeck = bot.cfg.deckName ? (parseAnyDeck(bot.cfg.deckName, 'P1 training deck') ?? undefined) : undefined
+        } else {
+          const base = resolveSimDeck(f, bot.cfg?.deckName)
+          if (base) {
+            const fixed = await requestDeckValidation(prepareDeckForXMage(base, deckType, gameType))
+            botDeck = fixed ?? undefined
+          }
         }
         if (!botDeck) {
           setError(t('lobby', 'create_err_no_deck'))
@@ -269,9 +306,63 @@ async function submitMatch(f: SubmitTableForm, io: SubmitTableIO): Promise<void>
     finalMyDeck = fixed
   }
 
+  // Fork SIM path (gated by `simSeatsEnabled` — upstream v0.4.7 4fe0f8ab8a
+  // made the proxy-side SIM bot dev-only and the stock client never sends
+  // `simDecks`; the proxy rejects SIM seats without `--sim on`, which
+  // scripts/dev.mjs sets). Where SIM seats still exist (dev channel /
+  // VITE_SIM_SEATS), the per-seat deck chain and the global sim deck fallback
+  // must survive: they keep the demo table and the e2e harness off the
+  // 56-Mountain lands deck.
+  const simSeats = simSeatsEnabled() ? effectiveSeatTypes.filter(isSimSeatType).length : 0
+
+  let finalSimDeck: Deck | null = null
+  if (simSeats > 0) {
+    const base = resolveSimDeck(f)
+    if (!base) {
+      setError(t('lobby', 'create_err_no_deck'))
+      setBusy(false)
+      return
+    }
+    const fixed = await requestDeckValidation(prepareDeckForXMage(base, deckType, gameType))
+    if (!fixed) {
+      setBusy(false)
+      return
+    }
+    finalSimDeck = fixed
+  }
+
+  const simDecksBySeat: DeckJson[] = []
+  if (simSeats > 0 && finalSimDeck) {
+    for (let i = 0; i < effectiveSeatTypes.length; i++) {
+      if (isSimSeatType(effectiveSeatTypes[i])) {
+        const cfg = seatConfigs[i]
+        const deckForSeat = resolveSimDeck(f, cfg?.deckName)
+        if (!deckForSeat) {
+          setError(t('lobby', 'create_err_no_deck'))
+          setBusy(false)
+          return
+        }
+        simDecksBySeat.push(prepareDeckForXMage(deckForSeat, deckType, gameType))
+      }
+    }
+    while (simDecksBySeat.length < simSeats) simDecksBySeat.push(finalSimDeck)
+  }
+
   const nativeBotDecks: Record<number, Deck> = {}
   if (nativeBotSeats.length > 0 && !isLimitedDeckType(deckType)) {
     for (const bot of nativeBotSeats) {
+      if (bot.cfg && isP1SeatType(bot.cfg.type)) {
+        // COMPUTER_P1: the seat carries the training deck TEXT.
+        // Parse verbatim; no format-fix dialog (it could break pool membership).
+        const training = bot.cfg.deckName ? parseAnyDeck(bot.cfg.deckName, 'P1 training deck') : null
+        if (!training) {
+          setError(t('lobby', 'create_err_no_deck'))
+          setBusy(false)
+          return
+        }
+        nativeBotDecks[bot.idx] = training
+        continue
+      }
       const base = resolveSimDeck(f, bot.cfg?.deckName)
       if (!base) {
         setError(t('lobby', 'create_err_no_deck'))
@@ -296,6 +387,7 @@ async function submitMatch(f: SubmitTableForm, io: SubmitTableIO): Promise<void>
     wins: f.wins,
     playerTypesFinal,
     seatSkills,
+    llmConfigs: llmConfigsForSeats(playerTypesFinal, rawLlmConfigsByFinalSeat(playerTypesFinal, seatConfigs, humanSeat)),
     password,
     skillLevel: f.skillLevel,
     rated: f.rated,
@@ -317,6 +409,7 @@ async function submitMatch(f: SubmitTableForm, io: SubmitTableIO): Promise<void>
     customStartHandSizeEnabled: f.customStartHandSizeEnabled,
     customStartHandSize: f.customStartHandSize,
     planeChase: f.planeChase,
+    simDecks: simDecksBySeat,
     skipInitShuffling: f.skipInitShuffling,
     skipStartingPlayerChoice: f.skipStartingPlayerChoice,
     dev: import.meta.env.DEV,
@@ -336,7 +429,9 @@ async function submitMatch(f: SubmitTableForm, io: SubmitTableIO): Promise<void>
     for (const bot of nativeBotSeats) {
       const name = botName(botCounter, nativeBotSeats.length)
       botCounter++
-      const botDeck = nativeBotDecks[bot.idx] ?? finalMyDeck ?? DEFAULT_DECK
+      // No deck anywhere: never fall back to the e2e lands deck on a live
+      // table — surface the no-deck error instead.
+      const botDeck = nativeBotDecks[bot.idx] ?? finalSimDeck ?? finalMyDeck ?? presetDefaultDeck()
       const joinBot = await cmds.joinTable({
         tableId,
         playerName: name,
@@ -380,20 +475,32 @@ async function submitMatch(f: SubmitTableForm, io: SubmitTableIO): Promise<void>
   io.onClose()
 }
 
-/** Dev shortcut: an AI-vs-AI duel that starts at once and is watched. */
+/** Dev shortcut: an AI-vs-AI duel that starts at once and is watched.
+ *  Seats the curated REAL bundled corpus deck (Boros Burn), never DEFAULT_DECK:
+ *  the demo is a live shuffled table and the 56-Mountain bolt deck would
+ *  deck-out/stall unwinnably (see `decks.ts`). If the corpus is not available
+ *  (not yet loaded or `VITE_BUNDLED_DECKS` off) the demo refuses to create a
+ *  table with the wrong deck: it reports the failure on `io` and stays open. */
 export async function runDemoTable(
   opts: { skipInitShuffling: boolean; skipStartingPlayerChoice: boolean },
-  io: Pick<SubmitTableIO, 'setBusy' | 'onClose'>,
+  io: Pick<SubmitTableIO, 'setBusy' | 'onClose'> & { setError?: (v: string | null) => void },
 ): Promise<void> {
   io.setBusy(true)
   try {
+    let deck: Deck
+    try {
+      deck = presetDefaultDeck()
+    } catch (err) {
+      io.setError?.(err instanceof Error ? err.message : String(err))
+      return
+    }
     const res = await cmds.createTable({
       name: 'Demo IA vs IA',
       gameType: 'Two Player Duel',
       deckType: 'Constructed - Modern',
       winsNeeded: 1,
       playerTypes: ['SIM', 'SIM'],
-      simDecks: [DEFAULT_DECK, DEFAULT_DECK],
+      simDecks: [deck, deck],
       skipInitShuffling: opts.skipInitShuffling,
       skipStartingPlayerChoice: opts.skipStartingPlayerChoice,
     })

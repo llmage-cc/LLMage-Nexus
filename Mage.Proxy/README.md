@@ -166,9 +166,37 @@ then) is delivered to the logging-in connection right after its `connect` result
 of ~200 KB shrinks 10–50×). Sends to one connection are serialized on a private
 per-connection lock (`Gateway.send`).
 
+**Server capabilities (LLM-gated features):** every successful `connect` result
+(fresh login and attach) carries `data.capabilities`, probed once per login from
+the server's own `ServerState` — never from assumptions about the target address:
+
+```json
+{"capabilities": {"llm": true, "p1": false, "replayScrubber": true, "replaySidecar": true,
+                  "serverVersion": "1.4.62-V1", "playerTypes": ["HUMAN", "COMPUTER_LLM", ...]}}
+```
+
+`llm` = the server advertises `COMPUTER_LLM`; `p1` = it advertises `COMPUTER_P1`;
+`replayScrubber`/`replaySidecar` ride the `llm` signal (the fork-only
+`Replays.seekTo` and sidecar metadata have no signal of their own in this
+release); `serverVersion` is the server's version text or `"unknown"`. A failed
+connect carries none — a missing block means "old proxy / stock server", and
+every LLM-gated feature stays hidden.
+
+`capabilities.replayScrubber` additionally gates the fork-only `replaySeek` verb
+(see the Replay subsection of the action catalog): it is the server-side signal
+the proxy already probes, and the reflection seam reports the same absence when
+the running `SessionImpl` has no `seekTo`.
+
+**Gated dispatch (Fail Fast):** a request that carries LLM wire content
+(`llmConfigs` entries) or an LLM seat (`COMPUTER_LLM` in `playerTypes` of a
+create, or `playerType: "COMPUTER_LLM"` on join) is rejected with the typed
+`ok:false, errorCode:"CAPABILITY_UNAVAILABLE"` BEFORE any server RPC when the
+connected server reported no `llm` capability. The web hides the controls
+meanwhile (double gating).
+
 | Action | Args | Description |
 |---|---|---|
-| `connect` | `{host, port, username, password, resume?: {streamId, seq}}` | Connect to XMage server. While the proxy builds its card DB on first boot it answers `ok:false, errorCode:"WARMING_UP"` — retry in a few seconds. A server running another XMage release refuses the login with `errorCode:"VERSION_MISMATCH"` (the detail keeps the server's `Your version` / `Server version` text): the proxy has to be rebuilt against that release, no retry helps. Result data: `{attached: boolean, streamId: string, resumed?: boolean}` |
+| `connect` | `{host, port, username, password, resume?: {streamId, seq}}` | Connect to XMage server. While the proxy builds its card DB on first boot it answers `ok:false, errorCode:"WARMING_UP"` — retry in a few seconds. A server running another XMage release refuses the login with `errorCode:"VERSION_MISMATCH"` (the detail keeps the server's `Your version` / `Server version` text): the proxy has to be rebuilt against that release, no retry helps. Result data: `{attached: boolean, streamId: string, resumed?: boolean, capabilities: {...}}` (see "Server capabilities" above) |
 | `disconnect` | `{}` | Disconnect from server |
 | `leaving` | `{}` | The page is closing; no answer. The session then gets the short grace period (`--leaveGraceSecs`) when this was its last connection |
 | `ping` | `{}` | Keepalive and web heartbeat; answered at once on the WebSocket thread (before or after `connect`), never queued behind the session's commands |
@@ -181,14 +209,18 @@ per-connection lock (`Gateway.send`).
 | `getRoomChatId` | `{}` | Chat room ID |
 | `getTables` | `{}` | All tables |
 | `getFinishedMatches` | `{}` | Match history |
+| `getReplayFiles` | `{}` | List the saved replay files in the proxy's replay directory (`--replayDir`, default `saved`, resolved against the proxy process CWD). Result data: `{directory, exists, files:[{gameId, bytes, savedAtMs, meta?}]}` sorted by `gameId`; `meta` is the parsed `<uuid>.json` sidecar verbatim (absent when there is no/unreadable sidecar). Non-UUID `*.game` names are skipped; a missing directory is not an error (`exists:false`, empty list). Reads the PROXY filesystem (not the server), so it carries **no capability gate** — stock-server-compatible. See the Replay section for the full contract. |
+| `getP1Decks` | `{}` | List the P1 (Argentum policy-net) training decks for the New-Game seat picker. Result data: `{decks:[{name, deck}], default}` — the 55 Standard training lists plus the deterministic default name. Gated typed `ok:false, errorCode:"CAPABILITY_UNAVAILABLE"` FIRST when the connected server reported no `capabilities.p1` **or** the running artifacts lack the fork-only `mage.cards.decks.P1DeckPool` (absent in stock 1.4.62). See the Lobby section for the full contract. |
 | `getServerMessages` | `{}` | Server news/messages |
 
 ### Lobby
 
 | Action | Args | Description |
 |---|---|---|
-| `createTable` | `{name, gameType, deckType, winsNeeded, playerTypes, password, ...}` | Create a table |
-| `joinTable` | `{roomId, tableId, playerName, playerType, skill, deck, password}` | Join a table |
+| `createTable` | `{name, gameType, deckType, winsNeeded, playerTypes, password, llmConfigs?, ...}` | Create a table. `llmConfigs` carries one entry per `COMPUTER_LLM` seat in `playerTypes` order (see below); rejected typed when the server lacks `capabilities.llm` |
+| `createTournamentTable` | `{name, tournamentType, matchType, playerTypes, password, llmConfigs?, ...}` | Create a tournament table (same `llmConfigs` contract as `createTable`) |
+| `joinTable` | `{roomId, tableId, playerName, playerType, skill, deck, password}` | Join a table (`playerType: "COMPUTER_LLM"` is rejected typed when the server lacks `capabilities.llm`) |
+| `joinTournamentTable` | `{roomId, tableId, playerName, playerType, skill, deck, password}` | Join a tournament table before the tournament starts (same LLM gate as `joinTable`) |
 | `leaveTable` | `{tableId}` | Leave a table |
 | `removeTable` | `{tableId}` | Remove a table (owner only; a table that no longer exists counts as removed; non-owners get `NOT_AUTHORIZED`) |
 | `startMatch` | `{tableId}` | Start the match |
@@ -201,6 +233,94 @@ per-connection lock (`Gateway.send`).
 | `stopWatching` | `{gameId}` | Stop watching |
 | `joinGame` | `{gameId}` | Join a game (as player) |
 | `quitMatch` | `{tableId}` | Quit the match |
+
+#### Per-seat LLM config (`llmConfigs`)
+
+`createTable` and `createTournamentTable` take an optional `llmConfigs` array with
+**one entry per `COMPUTER_LLM` seat, in `playerTypes` order** (the k-th LLM seat
+consumes the k-th entry; a `null` or absent entry means server defaults for that
+seat). It rides to the server as `MatchOptions.llmPlayerConfigs`, which
+`TableController.wireLlmConfigs` consumes positionally. Every field is optional;
+empty strings and `null` leave the server default, `modelContextWindow: 0` means
+auto-detect, and `reasoningEffort: "default"` is the dialog sentinel (not an
+override):
+
+```json
+"llmConfigs": [{"model": "deepseek-v4", "apiEndpoint": "http://localhost:11434/v1/chat/completions",
+                "reasoningEffort": "high", "thinkingEnabled": true, "maxTokens": 4096, ...},
+               null]
+```
+
+Fields: `model`, `apiEndpoint`, `apiKey`, `useClientKey`, `clientKeyTag`,
+`reasoningEffort`, `reasoningEffortLevels`, `thinkingEnabled`, `temperature`,
+`temperatureEnabled`, `maxTokens`, `timeoutSeconds`, `streamingEnabled`,
+`verboseLogging`, `deckAssessmentEnabled`, `concedeEnabled`, `askReason`,
+`transcriptDir`, `personalityEnabled`, `personalityName`, `botName`,
+`conversationMaxExchanges`, `conversationMaxHistoryChars`,
+`conversationThinkCharsPerMsg`, `summarizeTriggerChars`, `summarizeContextRatio`,
+`modelContextWindow`, `summarizeTargetChars`, `summarizeTargetRatio`,
+`summarizeKeepExchanges`.
+
+Validated at the protocol edge, Fail Fast, answered `ok:false,
+errorCode:"INVALID_ARGUMENT"` with the real reason BEFORE any server RPC:
+
+- `apiEndpoint` must be `http`/`https` and its host must pass the explicit
+  `--allowedModelHosts` allowlist (comma-separated; default `localhost,127.0.0.1,::1`;
+  an empty value rejects every endpoint). Not a blocklist: an unlisted host is
+  refused outright, so a seat config cannot port-scan loopback or reach internal
+  services. Cloud metadata hosts (`169.254.169.254`, `169.254.170.2`,
+  `metadata.google.internal`) are refused too.
+- `apiKey` and `useClientKey: true` are mutually exclusive (ambiguous about which
+  key the provider call would use). `useClientKey: true` requires a non-empty
+  `clientKeyTag` — the browser tags every client-key seat so the server can name
+  which locally-stored key to use; the key itself never travels.
+- Wrong field types are rejected with the field name (`llmConfigs[<seat>].<field>`).
+
+#### LLM model / personality lists (`fetchModels` / `fetchPersonalities`)
+
+The per-seat LLM config form fills its Model and Personality fields from two list
+verbs instead of free text. Both are gated on `capabilities.llm` and answer a
+**typed** error frame — never the generic `error` frame, whose consumer would
+leave the form's loading flag stuck.
+
+| Action | Args | Description |
+|---|---|---|
+| `fetchModels` | `{apiEndpoint}` | List the models an OpenAI-compatible endpoint serves. Success: a plain `result` with `data.models: string[]` (and `data.endpoint` echoing the validated endpoint). The endpoint goes through the SAME policy as `llmConfigs` (`http`/`https` only, cloud-metadata hosts blocked, host on `--allowedModelHosts`) BEFORE any network call; the call runs on a bounded background pool so a slow provider does not stall the session. Ported model-list logic: derives the base URL from the chat-completions URL, probes Ollama `/api/tags` when the endpoint looks like Ollama, then falls back to the OpenAI-compatible `/v1/models` (`data[].id`). |
+| `fetchPersonalities` | `{}` | List the engine's personality registry (`mage.players.Personality.allNames()`). Pure in-memory read, answered inline: a plain `result` with `data.personalities: string[]`. |
+
+Errors are typed frames, never `result`/`error`:
+
+- `models_error` `{action:"fetchModels", requestId, ok:false, errorCode, message}` —
+  every `fetchModels` failure (gate, endpoint validation, no endpoint, provider
+  error, empty list, pool saturated).
+- `personalities_error` `{action:"fetchPersonalities", requestId, ok:false, errorCode, message}` —
+  every `fetchPersonalities` failure.
+
+`errorCode` is `CAPABILITY_UNAVAILABLE` when the connected server reported no
+`capabilities.llm` (rejected FIRST, before any work) or `INVALID_ARGUMENT` for an
+endpoint off the allowlist / a non-http(s) scheme / a blocked metadata host / a
+missing endpoint; a provider-side failure is `FAILED`. The allowlist is the same
+`--allowedModelHosts` used for seat `apiEndpoint`s; the player-facing `message`
+names the offending host but never the operator flag.
+
+#### Client-key prompt bridge (`llm_decision` / `llm_error`)
+
+A client-key LLM seat (see `useClientKey` above) keeps its API key in the browser: the server
+builds the exact provider request body and hands it to the proxy as the fork-only `LLM_PROMPT`
+callback, which the proxy forwards as the typed `llm_prompt` frame (see the Events section). The
+browser attaches its own key, POSTs to the provider (directly, or via `/llm-relay`), and returns
+the outcome through these two verbs. The key NEVER travels in either direction.
+
+| Action | Args | Description |
+|---|---|---|
+| `llm_decision` | `{requestId, rawResponse, thinking?, httpStatus?}` | The provider's raw response body for a pending `llm_prompt`. `requestId` must be a UUID (else `INVALID_ARGUMENT`); an empty `rawResponse` is `INVALID_ARGUMENT`. Forwarded to the server through the cached reflection seam (`LlmDecisionSupport`) → `SessionImpl.llmDecision`. |
+| `llm_error` | `{requestId, message, retryable, httpStatus?}` | The browser's provider call failed (HTTP error, network error, CORS refusal). `requestId` must be a UUID. Forwarded to `SessionImpl.llmError`. |
+
+Both are gated typed `errorCode:"CAPABILITY_UNAVAILABLE"` (before any RPC) when the connected
+server reported no `capabilities.llm`, **or** when the running `SessionImpl` lacks the fork-only
+`llmDecision`/`llmError` methods (the same reflection-seam pattern as `replaySeek`). A call that
+returns `false` answers `ok:false, errorCode:"FAILED"`. Both are high-frequency `Activity.QUIET`
+actions (counted, not logged).
 
 ### Deck Management
 
@@ -326,6 +446,69 @@ empty.
 | `updatePreferences` | `{phases?, confirmEmptyManaPool?}` | Sync user prefs to server (`UserData`, applied live via in-place `update()`): phase-stop matrix and/or empty-mana-pool pass confirm (`HumanPlayer.passWithManaPoolCheck`) |
 | `cheatSetup` | `{gameId, playerId, zones:{hand?, battlefield?, library?, graveyard?, exile?}}` | **Test only**: place named cards into zones (P1; requires fork server with `testMode=true`, else `ok:false`; unknown card/zone/player → `ok:false`). Call once the game has processed ≥1 normal action (e.g. after the first land drop) — on the very first priority of turn 1 it freezes the game loop (runs off the game thread while still starting up) |
 
+### Replay
+
+Server-side replays exist only on LLMage servers (the fork persists the game plus its sidecar
+metadata). The server→browser frames (`REPLAY_GAME`/`REPLAY_INIT`/`REPLAY_UPDATE`/`REPLAY_DONE`)
+ride the ordinary `event` envelope and need no proxy work: `data` is the full `GameView`
+serialized by `JsonUtil` reflection, so it already carries `replayStateIndex`, `replayStateCount`,
+`replayLLMBuckets`, `replayHasLlmPlayers`, `gameLog` and `gameLogCount` when the running artifacts
+provide them. See the Replay events subsection below for the frame shapes.
+
+Every replay verb carries `gameId` (`requiresGameId`) and is a high-frequency action
+(`Activity.QUIET`): counted, not logged.
+
+| Action | Args | Description |
+|---|---|---|
+| `replayGame` | `{gameId}` | Load a replay into the session (`ReplaySession`). Refused with `ok:false, errorCode:"FAILED"` while a live game is being played or watched for this session — stop watching/playing first. On success a `REPLAY_GAME` event arrives and the player-action gate opens |
+| `startReplay` | `{gameId}` | Start playback of the loaded replay (first frame = `REPLAY_INIT`) |
+| `stopReplay` | `{gameId}` | Stop the replay (ends the server-side `ReplaySession`; a `REPLAY_DONE` follows). Closes the player-action gate |
+| `replayNext` | `{gameId}` | Step one play forward (`REPLAY_UPDATE`; a boundary yields `REPLAY_DONE`) |
+| `replayPrevious` | `{gameId}` | Step one play back |
+| `replaySkipForward` | `{gameId, moves}` | Jump `moves` plays forward (the fork clamps at its own maximum) |
+| `replaySeek` | `{gameId, stateIndex}` | **Fork-only scrubber.** Jump to an absolute state index. Result `{ok}`; typed `errorCode:"CAPABILITY_UNAVAILABLE"` when the connected server reported no `capabilities.replayScrubber` **or** the running `SessionImpl` has no fork-only `seekTo`, and typed `errorCode:"INVALID_ARGUMENT"` when `stateIndex` is missing/negative or is `>= replayStateCount` from the last forwarded replay frame. The call itself goes through a cached reflection seam (`ReplaySeekSupport`), never a hard compile-time call |
+
+`stateIndex` is a zero-based index into the replay's state track (`0..replayStateCount-1`); the
+range check only runs once a `replayStateCount` is known, otherwise the index is forwarded and the
+server's own semantics decide (an out-of-range seek makes the server throw with no answer, so the
+local check exists to keep the scrubber from hanging a round-trip).
+
+While a replay is loaded or playing, the player-action verbs (`sendPlayerAction`, `sendPlayerUUID`,
+`sendPlayerBoolean`, `sendPlayerInteger`, `sendPlayerString`, `sendPlayerManaType`, and the
+test-only `cheatSetup`) are refused with the typed `ok:false,
+errorCode:"CAPABILITY_UNAVAILABLE"` before any server RPC: a replay carries no seat, and this is
+the Fail Fast counterpart of the web client's spectator gate. The gate opens when a replay is
+loaded/started and closes on `stopReplay` or on a non-boundary `REPLAY_DONE` (a boundary
+`"end of replay"` keeps the session alive so the user can still step back).
+
+#### Saved replay file listing (`getReplayFiles`)
+
+`getReplayFiles` lists the `saved/` directory the PROXY reads replays from — the saved-replay
+**file browser** of the History panel. It reads the proxy filesystem, never the server, so it is
+stock-server-compatible and **not** gated on `capabilities.replayScrubber`; the fork-only part is
+only the load/navigate flow above.
+
+```json
+{"action":"getReplayFiles","requestId":"1","args":{}}
+→ {"type":"result","action":"getReplayFiles","requestId":"1","ok":true,
+   "data":{"directory":"/srv/xmage/saved","exists":true,
+           "files":[{"gameId":"<uuid>","bytes":1048576,"savedAtMs":1699999999999,
+                     "meta":{"winner":"Alice","turns":12,"tableName":"…","players":[…]}}]}}
+```
+
+- `directory` is the ABSOLUTE path actually read: `--replayDir` (default `saved`) resolved against
+  the proxy process CWD, exactly what `GameReplay.loadGame` resolves against the SERVER's CWD — so
+  a proxy sharing the server's working directory lists its replays with no configuration. A
+  differing working directory is then immediately visible instead of silently listing nothing.
+- `files` is sorted by `gameId` ascending. Each row carries `bytes` (file length) and `savedAtMs`
+  (last modified), always.
+- `meta` is the parsed `<uuid>.json` sidecar **verbatim** (the server writes it at save time); the
+  key is ABSENT when there is no sidecar or it is unreadable. A torn sidecar degrades the row to a
+  legacy row — it never removes a loadable replay.
+- A non-UUID `*.game` name is SKIPPED (logged): the desktop client only accepts `<uuid>.game`
+  (`replayInit` takes a UUID), so listing it would offer a guaranteed failure.
+- A missing directory is NOT an error: `exists:false` and an empty `files` list (a warning names
+  the absolute path). The caller sees `ok:true` either way.
 ### Reports
 
 | Action | Args | Description |
@@ -358,6 +541,20 @@ empty.
 | `lobby` | Lobby state (tables, users) — broadcast every ~2s |
 | `result` | Response to an action (`ok: true/false`) |
 | `event` | Server callback (game events, chat, etc.) |
+| `llm_prompt` | **Typed frame** for the fork-only client-key bridge (see below) — NOT an `event` |
+
+### Client-key prompt (`llm_prompt`)
+
+The fork-only `LLM_PROMPT` callback is forwarded as this TYPED frame instead of the generic `event`
+envelope (compared by method name, so the proxy still compiles against a stock build that lacks the
+constant). The payload (`mage.interfaces.LLMPromptPayload`) is read by reflection; it carries **no
+key** — the browser attaches its own and answers with `llm_decision` / `llm_error`.
+
+```json
+{"type":"llm_prompt","requestId":"<uuid>","seatId":"<uuid>","gameId":"<uuid>",
+ "playerName":"…","requestBody":"{…provider request…}","apiEndpoint":"https://…","stream":false,
+ "timeoutSeconds":30,"clientKeyTag":"…"}
+```
 
 ### Game Events (forwarded from XMage server)
 
@@ -382,6 +579,19 @@ These are the core events the web client must handle. Every event has:
 |---|---|---|
 | `GAME_UPDATE` | `{gameView: GameView}` | State changed (card moved, phase changed, etc.) |
 | `GAME_UPDATE_AND_INFORM` | `{gameView: GameView, message}` | State changed + info message |
+
+#### Replay
+
+Forwarded as ordinary `event` frames (same envelope as above). `data` is the full `GameView`; the
+replay-specific fields it may carry are all optional and only present on servers whose artifacts
+expose them.
+
+| Event | Data | When |
+|---|---|---|
+| `REPLAY_GAME` | `{gameId}` (in the envelope `objectId`) | The replay session was created server-side (after `replayGame`) |
+| `REPLAY_INIT` | `{gameView: GameView}` | First frame of playback (after `startReplay`) |
+| `REPLAY_UPDATE` | `{gameView: GameView}` | One navigation step (next/previous/skip/seek) |
+| `REPLAY_DONE` | result string (`"stopped replay"` \| `"end of replay"` \| a corrupt-file message) | Playback stopped, hit a boundary, or failed. The web classifies the reason from the string: `"end of replay"` is a boundary (keep the board, allow stepping back), `"stopped replay"` ends the viewer |
 
 #### Player Interaction (must respond)
 
@@ -459,7 +669,8 @@ when Java view classes change, then regenerate.
    - Add a `case` in the domain class (`InfoCommands` / `TableCommands` /
      `TournamentCommands` / `GameCommands`), reachable from the
      from the `ProxyClient.handleCommand` router; add to `requiresGameId` in
-     `ProxyClient.java` if the action is game-scoped
+     `ProxyClient.java` if the action is game-scoped (the replay verbs all carry
+     `gameId`, so they are listed there)
    - Add the TypeScript type in `types.ts` if needed
 
 ## What's NOT Supported (and Why)
@@ -468,8 +679,8 @@ when Java view classes change, then regenerate.
 |---|---|---|
 | Card images | Binary data not serialized through JsonUtil | Cosmetic — can load from Scryfall API |
 | Deck editor | Pure UI, no protocol gap | Build in TypeScript |
-| Tournament support | Protocol events exist, UI not implemented | Build in TypeScript |
-| Replay system | Server doesn't persist replays | Would need server modification |
+| Tournament UI | Protocol actions (`createTournamentTable`, `joinTournament`, `joinDraft`, …) exist, web UI partial | Build in TypeScript |
+| Replay system | Load/start/stop/step/seek and the saved-replay **file browser** (`getReplayFiles`: a `saved/*.game` listing + sidecar metadata on the proxy's filesystem) are implemented | Against LLMage servers (gated by `capabilities.replayScrubber`) the whole flow works — `replayGame`/`startReplay`/`replayNext`/`replayPrevious`/`replaySkipForward`/`replaySeek`; stock servers do not persist replays, but the file listing still works (it reads the proxy filesystem) |
 | Admin tools | Proxy doesn't expose admin actions | Would need proxy modification |
 
 **Key insight**: The proxy is a thin bridge. If the Java server sends it, the proxy
@@ -505,6 +716,12 @@ session end is printed to stdout as `[activity] <ISO time> <event> user=… ip=�
 High-frequency game input and polling actions are counted but not logged. Passwords, chat text and deck contents are
 never recorded. The client IP comes from `X-Forwarded-For` when present (reverse proxy), else the socket address.
 
+The high-frequency (counted, not logged) set includes the replay verbs — `replayGame`, `startReplay`,
+`stopReplay`, `replayNext`, `replayPrevious`, `replaySkipForward`, `replaySeek` — plus the
+`sendPlayer*` input and the lobby/chat polling actions. The `replayGame`/`startReplay`/`stopReplay`
+lifecycle transitions are still visible game-side through the `[activity]` game lines
+(`replayStates`/`replayPrompts` in `/admin/status`).
+
 With `--adminToken <secret>` (Docker: `ADMIN_TOKEN`), `GET /admin/status` on the HTTP port returns JSON — uptime,
 open connections, live sessions, connected users (server, ip, windows, actions, last action) and the last 500 events.
 Send `Authorization: Bearer <secret>` (header only — a `?token=` query string was removed: it landed in the access
@@ -524,9 +741,117 @@ Both are unauthenticated, carry no session data, and answer on the HTTP port:
 {"ok":true,"liveness":false,"ready":true,"cardDb":"READY","sessions":3,"threads":41,"uptimeSeconds":3600}
 ```
 
+### Replay file download (`GET /replay-file/<uuid>.game`)
+
+Serves a saved replay's BYTES from the same `--replayDir` the `getReplayFiles` listing reads:
+`Content-Type: application/octet-stream`, `Content-Disposition: attachment; filename="<uuid>.game"`,
+`Content-Length` from the file size, `Cache-Control: no-store`. Gate decision:
+**no additional capability gate** — the listing already exposes the same game ids to the same
+clients, and the deployment's own access control (bind address, access key, reverse proxy) is
+what decides who reaches the proxy at all.
+
+Hardening is in the URL contract, not per-client state: the path's stem must be exactly 36
+hex/dash characters followed by `.game` (the listing's own UUID shape), the file is resolved
+under the canonical replay dir and refused if a per-file symlink escapes it (a symlinked
+replay *directory* still serves — the rig's server/proxy sharing convention is exactly that),
+and anything else (non-GET, bad name, traversal, missing file/dir) is a bare `404` (`405`
+non-GET). The web's `ReplayFilesPanel` renders a per-row Download anchor to
+`/replay-file/<uuid>.game` when the listing shows a save on disk — a real browser download
+(not fetch + blob) so a large save never materialises in the JS heap; pinned by
+`ReplayFileDownloadTest` (proxy) and the `llmage-replay-files` e2e.
+
 The static file server sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and a
 `Content-Security-Policy`; fingerprinted `assets/*` (`name-<8 char base64url hash>.ext`) are cached for a year,
 everything else is `no-cache` so a deploy does not keep serving the old client.
+
+## Deployment config (`GET /config`)
+
+Hosted deployments need three knobs the localhost defaults keep as no-ops. The web reads them from
+`GET /config` before it renders the connect form; the WebSocket gate and the HTTP probe share one
+resolved config, so they can never disagree.
+
+- `--authToken <t>` (env fallback `MAGEPROXY_AUTH_TOKEN`, used only when the flag is absent — a
+  `-D`/`--flag` puts the secret in `/proc/<pid>/cmdline`). When set, **every** `connect` must carry
+  `args.authToken` equal to it; attach does **not** bypass (the token is presented on every connect,
+  including a reload's auto-attach). A missing/wrong token answers the typed
+  `{type:"connect_error", message:"Bad or missing auth token"}` **and** closes the socket with
+  code **4401** (`"Auth token required"`) — the browser will not retry while the socket is open, so
+  the close is mandatory. Empty = OPEN (localhost dev unchanged).
+- `--pinnedXmageTarget host:port` + `--hideServerTarget` (default `false`). `hideServerTarget=true`
+  **requires** a pinned target: the proxy refuses to start otherwise (fail fast — without a pin the
+  browser has no target to fall back to). A malformed pin also refuses to start. When pinned, the
+  proxy **forces** that target on every connect and ignores the client's host/port — for the **dial**
+  as well as for the account key and the attach match, so a client cannot bypass the pin by sending
+  another target (one deployment, one effective target; unpinned, the client's values are dialed
+  unchanged).
+- `--deploymentName <name>` (default `"XMage Nexus"`) — the branding string the web puts in the page
+  title (base, before the attention-alert prefix). No fork-hardcoded branding.
+
+`GET /config` is **always served** (never admin-gated; the pre-connect probe has no token),
+`Cache-Control: no-store`, `GET` only:
+
+```json
+{"authRequired":false,"hideServerTarget":false,"pinnedTarget":null,
+ "deploymentName":"XMage Nexus","llmRelay":false}
+```
+
+`authRequired` = a token is configured; `pinnedTarget` = the raw `host:port` string or JSON `null`;
+`llmRelay` = the `--llmRelayEnabled` toggle from the section below.
+
+### Anon same-name guard
+
+The XMage server runs anon mode with `ANON_IDENTIFY_BY_HOST=true`: a connect with an existing anon
+name from the **same host** silently kills the older session. Every browser dialed through one proxy
+appears at the server under the proxy's own host, so any two webui users who pick the same anon name
+kick each other in a ping-fail/reconnect loop. The proxy is the only component that sees both the
+anon name and the per-browser `browserId` (`web:<username>:<uuid>`, sent on `connect` as
+`args.browserId`), so the guard lives here.
+
+A connect whose anon name is already held at that `host:port` by a **different** non-empty
+`browserId` is refused **before the dial** with the typed
+`{type:"connect_error", message:"This name is already in use on that server — pick another name or wait"}`
+and a **4401** close — the older session is never touched. A same-`browserId` retake is the legitimate
+reconnect-takeover path → allowed, replacing the entry. Both `browserId`s empty (old clients, direct
+WS probes) do **not** block — the old behaviour. The registration is released on **every** teardown
+path (failed dial, WS close, rejection close), identity-checked so a name re-registered by another
+browser after the holder died is never dropped. The scope is per `host:port` — a multi-server proxy
+does not block "Bob" on server A because "Bob" is on server B — and case-insensitive.
+
+### `userIdStr` (shared-IP discrimination)
+
+The `connect`'s `browserId` is set as `Connection.userIdStr` (the server's admin/shared-IP
+discrimination), so the server sees a real per-browser id instead of the host proxy's for every
+player behind it. Absent `browserId` (old clients) keeps a sane fallback built from the proxy
+process's own identity, exactly as before.
+
+## Same-origin LLM relay (`/llm-relay`)
+
+With `--llmRelayEnabled true` (default **false**), the proxy registers `POST|GET|OPTIONS
+/llm-relay?url=<absolute provider URL>` on the HTTP port. It is a **dumb byte relay** for client-key
+LLM calls to providers without CORS support: the browser POSTs same-origin (no CORS applies), the
+relay echoes the request to the provider and returns the upstream status, Content-Type (default
+`application/json`) and body with `Access-Control-Allow-Origin: *`. When the knob is off the path is
+not registered at all, so it 404s.
+
+Security rules (ported exactly from the LLMage Jetty relay — do not loosen):
+
+- It never reads, parses, logs or stores the `Authorization` header or any body: the key transits
+  in-memory bytes only and is never persisted.
+- Only these request headers are forwarded upstream: `authorization`, `content-type`, `accept`,
+  `x-api-key`, `anthropic-version`, `anthropic-dangerous-direct-browser-access`,
+  `x-opencode-session` (never cookies, never `Origin`, never arbitrary client headers).
+- The target scheme must be `https`, or `http` **only** for `localhost` / `127.0.0.1` / `::1` /
+  `0.0.0.0` (relayed bodies carry the user's key, which must never cross the wire in cleartext).
+- Cloud-metadata hosts `169.254.169.254`, `169.254.170.2`, `metadata.google.internal` are blocked.
+- The host must pass the **same allowlist** as the seat endpoints (`--allowedModelHosts`, default
+  `localhost,127.0.0.1,::1`).
+- Redirects are **not** followed (a `Location` target was never validated); request body cap 4 MiB,
+  response cap 16 MiB; connect timeout 30 s, read timeout 600 s.
+
+Answers: a missing `url` → `400`; a malformed URL → `400`; a policy rejection → `403` with the
+reason text. A preflight `OPTIONS` answers `200` with `Access-Control-Allow-Methods: POST, GET,
+OPTIONS`, `Access-Control-Allow-Headers: authorization, content-type, accept, x-opencode-session`,
+`Access-Control-Max-Age: 600` and an empty body.
 
 ## Watchdog
 

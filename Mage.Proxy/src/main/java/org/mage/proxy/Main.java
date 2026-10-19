@@ -25,6 +25,12 @@ public class Main {
     public static void main(String[] args) throws Exception {
         Config config = Config.parse(args);
 
+        // Fail fast on a broken deployment config: hideServerTarget without a
+        // pin would boot a proxy whose connect form has no target to fall back to. Refuse before
+        // anything binds.
+        DeploymentConfig deployment = DeploymentConfig.from(config);
+        deployment.validate();
+
         Gateway gateway = new Gateway(config);
         gateway.start();
 
@@ -40,8 +46,15 @@ public class Main {
         System.out.println("[proxy]   test page         : http://" + config.getBindAddress() + ":" + config.getHttpPort() + "/index.html");
         System.out.println("[proxy]   protocol version  : " + Config.PROTOCOL_VERSION);
         System.out.println("[proxy]   multi-tenant     : each WebSocket connection = its own XMage session");
+        if (deployment.authRequired()) {
+            System.out.println("[proxy]   auth token       : REQUIRED (every connect must present it)");
+        }
+        if (deployment.pinned()) {
+            System.out.println("[proxy]   pinned target    : " + deployment.pinnedTarget()
+                    + (deployment.hideServerTarget() ? " (hidden from clients)" : ""));
+        }
 
-        startHttpServer(config, gateway);
+        startHttpServer(config, gateway, deployment);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             for (ProxyClient pc : gateway.getSessions()) {
@@ -54,7 +67,7 @@ public class Main {
         }));
     }
 
-    private static void startHttpServer(Config config, Gateway gateway) throws IOException {
+    private static void startHttpServer(Config config, Gateway gateway, DeploymentConfig deployment) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(config.getBindAddress(), config.getHttpPort()), 0);
         // Without an executor the JDK uses a single-threaded dispatcher, so one slow
         // /admin/status (it serialises 500 events) or one large static file blocked every other
@@ -67,9 +80,24 @@ public class Main {
         server.createContext("/", exchange -> serveFile(exchange, config.getWebDir()));
         server.createContext("/health", exchange -> serveHealth(exchange, true));
         server.createContext("/ready", exchange -> serveHealth(exchange, false));
+        // GET /config — the web's pre-connect probe. ALWAYS served, never
+        // admin-gated: the connect form reads it before it renders (auth field, hidden target,
+        // deployment name). Cache-Control: no-store so a restarted proxy's new config is never
+        // served stale from a browser cache.
+        server.createContext("/config", exchange -> serveConfig(exchange, deployment));
         if (!config.getAdminToken().isEmpty()) {
             server.createContext("/admin/status", exchange -> serveAdmin(exchange, gateway, config.getAdminToken()));
         }
+        // Same-origin CORS relay for client-key LLM calls: registered ONLY when --llmRelayEnabled
+        // is true, so when off the path 404s (the knob must be removable). The host allowlist
+        // is the SAME one the seat endpoints use, passed in from Config (never a static).
+        if (config.isLlmRelayEnabled()) {
+            server.createContext("/llm-relay", LlmRelay.handler(config.getAllowedModelHosts()));
+        }
+        // GET /replay-file/<uuid>.game — download a saved replay's bytes from --replayDir
+        // (gated like the getReplayFiles listing: no additional gate — the deployment's access
+        // control is the gate). Strict UUID-name allowlist + canonical containment, see ReplayFileDownload.
+        server.createContext(ReplayFileDownload.ROUTE_PREFIX, new ReplayFileDownload(config.getReplayDir()));
         server.start();
     }
 
@@ -103,6 +131,33 @@ public class Main {
 
     private static String quote(String s) {
         return "\"" + s + "\"";
+    }
+
+    /**
+     * {@code GET /config} — the deployment config the web reads before it renders the connect
+     * form. ALWAYS served (never admin-gated; the pre-connect probe has no
+     * token), {@code Cache-Control: no-store}. Body:
+     * {@code {"authRequired", "hideServerTarget", "pinnedTarget"|null, "deploymentName", "llmRelay"}}.
+     * Only GET is accepted.
+     */
+    static void serveConfig(HttpExchange exchange, DeploymentConfig deployment) {
+        try {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                exchange.close();
+                return;
+            }
+            byte[] bytes = (deployment.configJson() + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
+            exchange.getResponseHeaders().add("Cache-Control", "no-store");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+        } catch (IOException ignored) {
+        } finally {
+            exchange.close();
+        }
     }
 
     /**

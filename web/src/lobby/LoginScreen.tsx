@@ -3,6 +3,7 @@ import Tabs from '../ui/Tabs'
 import IconButton from '../ui/IconButton'
 import CloseButton from '../ui/CloseButton'
 import { clearError, doConnect, useStore, loadConn, clearActiveGame, clearActiveDraft, isSameAccount } from '../state/store'
+import { getState } from '../state/state'
 import CountryFlag from './CountryFlag'
 import AvatarImage from './AvatarImage'
 import AvatarPickerModal from './AvatarPickerModal'
@@ -15,7 +16,9 @@ import Icon from '../ui/Icon'
 import { clickableProps } from '../ui/clickable'
 import { useTranslation } from '../i18n'
 import { SETUP_CONN_EVENT, openSetupWizard } from '../setup/setupFlag'
+import { isDeploymentLocked } from '../setup/deploymentLock'
 import { parseAutoConnect } from './autoConnect'
+import { setAuthToken as rememberAuthToken, getAuthToken } from '../net/authToken'
 import type { ConnectionInfo } from '../state/persistence'
 import './LoginScreen.css'
 
@@ -43,41 +46,68 @@ const REMOTE_PROXY = !!BAKED_PROXY_HOST && !isLoopbackHost(BAKED_PROXY_HOST)
 const presetOf = (host: string): ServerPreset =>
   host === 'beta.xmage.today' ? 'official' : host === XDHS_SERVER_HOST ? 'xdhs' : isLoopbackHost(host) ? 'local' : 'custom'
 
+// The port of the deployment's baked target (see BAKED_SERVER_HOST). A locked
+// deployment always connects to the baked host+port.
+const BAKED_SERVER_PORT = (import.meta.env.VITE_DEFAULT_SERVER_PORT as string | undefined) ?? '17171'
+
 export default function LoginScreen() {
   const { t, tError, lang } = useTranslation()
+  // A deployment locked to its own server (VITE_LOCK_DEPLOYMENT ON) drops the
+  // server-target choice entirely and always connects to the baked target: a
+  // `?server=` deep-link override and any stale saved/foreign connection are
+  // ignored. `hideServerTarget` (proxy /config) stays orthogonal — the lock
+  // removes the *choice*, hideServerTarget hides the editable *fields*.
+  const locked = isDeploymentLocked()
   const phase = useStore((s) => s.phase)
   const error = useStore((s) => s.error)
   const [proxyHost, setProxyHost] = useState(import.meta.env.VITE_DEFAULT_PROXY_HOST ?? 'localhost')
   const [proxyPort, setProxyPort] = useState(Number(import.meta.env.VITE_DEFAULT_PROXY_PORT) || 8787)
   const [serverHost, setServerHost] = useState(BAKED_SERVER_HOST)
   const [port, setPort] = useState(import.meta.env.VITE_DEFAULT_SERVER_PORT ?? '17171')
-  const [username, setUsername] = useState(import.meta.env.DEV ? 'player1' : '')
+  const [username, setUsername] = useState(() => getState().conn?.username ?? (import.meta.env.DEV ? 'player1' : ''))
   const [password, setPassword] = useState(import.meta.env.DEV ? 'password' : '')
   const [flagName, setFlagName] = useState(() => loadConn()?.flagName ?? guessDefaultFlag())
   const [avatarId, setAvatarId] = useState(10)
+  // The form unmounts while `phase === 'connecting'` (the App splash) and
+  // remounts on failure, so seed the token from this tab's stored value to keep a
+  // plain failed attempt from wiping it (only a logout / 4401 clears it). A page
+  // reload re-seeds it from sessionStorage, so the token field comes back filled.
+  const [authToken, setAuthToken] = useState(() => getAuthToken())
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
   const { unseen: unseenNews, refresh: refreshNews } = useNewsBadge()
-  const [preset, setPreset] = useState<ServerPreset>(() => presetOf(BAKED_SERVER_HOST))
+  const [preset, setPreset] = useState<ServerPreset>(() => (locked ? 'local' : presetOf(BAKED_SERVER_HOST)))
   const pendingDeepLink = useStore((s) => s.pendingDeepLink)
+  // Deployment gating: the proxy's /config probe decides whether the token
+  // field shows and whether the XMage target is pinned/hidden.
+  const proxyConfig = useStore((s) => s.proxyConfig)
+  const proxyReject = useStore((s) => s.proxyReject)
 
   useEffect(() => {
     const url = parseAutoConnect(window.location.search)
+    // A locked deployment ignores a `?server=` / `?serverPort=` override: the
+    // connect always uses its baked target. (Read here, not from render state,
+    // so this mount-only effect has no dependency on the flag.)
+    const locked = isDeploymentLocked()
+    if (locked) {
+      delete url.serverHost
+      delete url.serverPort
+    }
     const saved = loadConn()
     const staleLocalConn = !!saved && REMOTE_PROXY && isLoopbackHost(saved.wsHost)
     if (saved && !staleLocalConn) {
       const sameUser = !url.username || url.username === saved.username
       setProxyHost(url.proxyHost ?? saved.wsHost)
       setProxyPort(url.proxyPort ?? saved.proxyPort)
-      setServerHost(url.serverHost ?? saved.serverHost)
-      setPort(String(url.serverPort ?? saved.port))
+      setServerHost(locked ? BAKED_SERVER_HOST : url.serverHost ?? saved.serverHost)
+      setPort(locked ? BAKED_SERVER_PORT : String(url.serverPort ?? saved.port))
       setUsername(url.username ?? saved.username)
       setPassword(sameUser ? saved.password : '')
       if (saved.flagName) setFlagName(saved.flagName)
       if (saved.avatarId) setAvatarId(saved.avatarId)
 
-      const target = url.serverHost ?? saved.serverHost
+      const target = locked ? BAKED_SERVER_HOST : url.serverHost ?? saved.serverHost
       if (target === 'beta.xmage.today') {
         setPreset('official')
       } else if (target === XDHS_SERVER_HOST) {
@@ -90,12 +120,12 @@ export default function LoginScreen() {
     } else {
       if (url.proxyHost) setProxyHost(url.proxyHost)
       if (url.proxyPort != null) setProxyPort(url.proxyPort)
-      if (url.serverHost) setServerHost(url.serverHost)
-      if (url.serverPort != null) setPort(String(url.serverPort))
+      if (!locked && url.serverHost) setServerHost(url.serverHost)
+      if (!locked && url.serverPort != null) setPort(String(url.serverPort))
       if (url.username) setUsername(url.username)
-      if (url.serverHost === 'beta.xmage.today') setPreset('official')
-      else if (url.serverHost === XDHS_SERVER_HOST) setPreset('xdhs')
-      else if (url.proxyHost || url.serverHost) setPreset('custom')
+      if (!locked && url.serverHost === 'beta.xmage.today') setPreset('official')
+      else if (!locked && url.serverHost === XDHS_SERVER_HOST) setPreset('xdhs')
+      else if (!locked && (url.proxyHost || url.serverHost)) setPreset('custom')
     }
     const applySetupConn = (e: Event) => {
       const conn = (e as CustomEvent<ConnectionInfo>).detail
@@ -104,8 +134,8 @@ export default function LoginScreen() {
       // un ?proxyPort= explícito en la URL SIEMPRE gana (lo fijan los e2e para
       // el FixtureServer; el wizard/defaults no debe pisarlo)
       setProxyPort(urlProxyPort() ?? conn.proxyPort)
-      setServerHost(conn.serverHost)
-      setPort(String(conn.port))
+      setServerHost(locked ? BAKED_SERVER_HOST : conn.serverHost)
+      setPort(locked ? BAKED_SERVER_PORT : String(conn.port))
       setUsername(conn.username)
       setPassword(conn.password)
       if (conn.flagName) setFlagName(conn.flagName)
@@ -145,8 +175,8 @@ export default function LoginScreen() {
   }
 
   const busy = phase === 'connecting'
-  // U4-2: el servidor público (beta) no comprueba contraseñas (authenticationActivated=false):
-  // el campo se deshabilita y no se envía nada.
+  // The public server (beta) does not check passwords (authenticationActivated=false):
+  // the field is disabled and nothing is sent.
   const passwordDisabledOnBeta = serverHost.trim() === 'beta.xmage.today'
   const passwordValue = passwordDisabledOnBeta ? '' : password
 
@@ -162,6 +192,10 @@ export default function LoginScreen() {
       clearActiveGame()
       clearActiveDraft()
     }
+    // The token is per-tab: kept in memory and sessionStorage for the
+    // reconnect/relogin paths (a reload re-attaches with it); never localStorage,
+    // a cookie or an URL.
+    rememberAuthToken(authToken)
     void doConnect(
       proxyHost.trim(),
       proxyPort,
@@ -171,6 +205,7 @@ export default function LoginScreen() {
       passwordValue,
       flagName,
       avatarId,
+      authToken || undefined,
     )
   }
 
@@ -197,8 +232,9 @@ export default function LoginScreen() {
       <div className="login-bg-glow login-bg-glow-2" />
 
       <form className="login-card panel" onSubmit={submit}>
+        {/* Deployment branding: use the configured name as the logo alt when set. */}
         <div className="login-header">
-          <img src="/logo.jpeg" alt="XMage Nexus" className="login-logo-img" />
+          <img src="/logo.jpeg" alt={proxyConfig.deploymentName} className="login-logo-img" />
           <p className="subtitle">{t('login.subtitle')}</p>
         </div>
 
@@ -209,22 +245,34 @@ export default function LoginScreen() {
           </div>
         )}
 
-        {/* Server Preset Selector */}
-        <div className="login-presets-container">
-          <span className="login-presets-title">{t('login.server_target')}</span>
-          <Tabs
-            variant="segmented"
-            className="login-presets-row"
-            value={preset}
-            onChange={handleSelectPreset}
-            items={[
-              { id: 'local', icon: 'home', label: t('login.server_local'), title: t('login.server_local') },
-              { id: 'official', icon: 'globe', label: t('login.server_official'), title: t('login.server_official') },
-              { id: 'xdhs', icon: 'users', label: t('login.server_xdhs'), title: t('login.server_xdhs') },
-              { id: 'custom', icon: 'settings', label: t('login.server_custom'), title: t('login.server_custom') },
-            ]}
-          />
-        </div>
+        {proxyReject && (
+          <div className="error-box" role="alert" data-testid="login-proxy-reject">
+            <span className="error-icon"><Icon name="alert" size={14} /></span>
+            <span className="error-msg">
+              {t('errors', 'proxy_rejected', { reason: proxyReject })}
+            </span>
+          </div>
+        )}
+
+        {/* Server Preset Selector — hidden when the deployment pins its target
+            (hideServerTarget) or is locked to its own server (LOCK). */}
+        {!locked && !proxyConfig.hideServerTarget && (
+          <div className="login-presets-container">
+            <span className="login-presets-title">{t('login.server_target')}</span>
+            <Tabs
+              variant="segmented"
+              className="login-presets-row"
+              value={preset}
+              onChange={handleSelectPreset}
+              items={[
+                { id: 'local', icon: 'home', label: t('login.server_local'), title: t('login.server_local') },
+                { id: 'official', icon: 'globe', label: t('login.server_official'), title: t('login.server_official') },
+                { id: 'xdhs', icon: 'users', label: t('login.server_xdhs'), title: t('login.server_xdhs') },
+                { id: 'custom', icon: 'settings', label: t('login.server_custom'), title: t('login.server_custom') },
+              ]}
+            />
+          </div>
+        )}
 
         {/* User Identity Section */}
         <div className="login-user-section">
@@ -273,65 +321,92 @@ export default function LoginScreen() {
                 data-testid="login-password"
               />
             </Field>
+            {proxyConfig.authRequired && (
+              <Field label={t('login.auth_token')}>
+                <input
+                  value={authToken}
+                  // Mirror every keystroke into module memory so the token is
+                  // available to *any* component (e.g. the setup wizard's Enter)
+                  // as soon as it is typed — not only after this form's submit().
+                  // Per-tab: `rememberAuthToken` also mirrors it into
+                  // sessionStorage (never localStorage / cookie / URL).
+                  onChange={(e) => { setAuthToken(e.target.value); rememberAuthToken(e.target.value) }}
+                  type="password"
+                  placeholder={t('login', 'auth_token_placeholder')}
+                  autoComplete="off"
+                  data-testid="login-auth-token"
+                />
+              </Field>
+            )}
           </div>
         </div>
 
-        {/* Network Connection Configuration Box */}
-        <details className="login-network-box">
-          <summary className="login-network-header">
-            <span className="network-box-title" title={t('login.network_config')}>{t('login.network_config')}</span>
-            <span className="network-box-hint">{serverHost}:{port}</span>
-          </summary>
-          <div className="login-network-fields">
-            <div className="network-field-row">
-              <Field className="network-field-proxy" label={t('login.proxy')}>
-                <input
-                  value={proxyHost}
-                  onChange={(e) => {
-                    setProxyHost(e.target.value)
-                    setPreset('custom')
-                  }}
-                />
-              </Field>
-              <Field className="network-field-port" label={t('login.proxy_port')}>
-                <input
-                  value={proxyPort}
-                  onChange={(e) => {
-                    setProxyPort(Number(e.target.value) || 8787)
-                    setPreset('custom')
-                  }}
-                  type="number"
-                />
-              </Field>
-            </div>
-            <div className="network-field-row">
-              <Field className="network-field-host" label={t('login.xmage_server')}>
-                <input
-                  value={serverHost}
-                  onChange={(e) => {
-                    setServerHost(e.target.value)
-                    setPreset('custom')
-                  }}
-                />
-              </Field>
-              <Field className="network-field-port" label={t('login.port')}>
-                <input
-                  value={port}
-                  onChange={(e) => {
-                    setPort(e.target.value)
-                    setPreset('custom')
-                  }}
-                  type="number"
-                />
-              </Field>
-            </div>
+        {/* Network Connection Configuration Box — hidden when the deployment pins its target
+            (hideServerTarget) OR the build is locked to its own server (VITE_LOCK_DEPLOYMENT) —
+            a locked deployment must never expose editable Server/Port even if the proxy omits
+            hideServerTarget; the pinned target is shown read-only instead. */}
+        {locked || proxyConfig.hideServerTarget ? (
+          <div className="login-pinned-target" data-testid="login-pinned-target">
+            <span className="pinned-target-label">{t('login.pinned_target')}</span>
+            <span className="pinned-target-value">{proxyConfig.pinnedTarget ?? `${serverHost}:${port}`}</span>
           </div>
-        </details>
+        ) : (
+          <details className="login-network-box">
+            <summary className="login-network-header">
+              <span className="network-box-title" title={t('login.network_config')}>{t('login.network_config')}</span>
+              <span className="network-box-hint">{serverHost}:{port}</span>
+            </summary>
+            <div className="login-network-fields">
+              <div className="network-field-row">
+                <Field className="network-field-proxy" label={t('login.proxy')}>
+                  <input
+                    value={proxyHost}
+                    onChange={(e) => {
+                      setProxyHost(e.target.value)
+                      setPreset('custom')
+                    }}
+                  />
+                </Field>
+                <Field className="network-field-port" label={t('login.proxy_port')}>
+                  <input
+                    value={proxyPort}
+                    onChange={(e) => {
+                      setProxyPort(Number(e.target.value) || 8787)
+                      setPreset('custom')
+                    }}
+                    type="number"
+                  />
+                </Field>
+              </div>
+              <div className="network-field-row">
+                <Field className="network-field-host" label={t('login.xmage_server')}>
+                  <input
+                    value={serverHost}
+                    onChange={(e) => {
+                      setServerHost(e.target.value)
+                      setPreset('custom')
+                    }}
+                  />
+                </Field>
+                <Field className="network-field-port" label={t('login.port')}>
+                  <input
+                    value={port}
+                    onChange={(e) => {
+                      setPort(e.target.value)
+                      setPreset('custom')
+                    }}
+                    type="number"
+                  />
+                </Field>
+              </div>
+            </div>
+          </details>
+        )}
 
         {error && (
           <div className="error-box">
             <span className="error-icon"><Icon name="alert" size={14} /></span>
-            <span className="error-msg">{tError(error)}</span>
+            <span className="error-msg">{tError(error, 'login')}</span>
             <CloseButton variant="plain" size="sm" onClick={clearError} />
           </div>
         )}

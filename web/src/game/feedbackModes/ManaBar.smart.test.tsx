@@ -34,6 +34,7 @@ function form(p: FeedbackPrompt, busy = false): UseFeedbackForm {
   return {
     prompt: p,
     busy,
+    queuedClick: false,
     amount: 0,
     setAmount: () => {},
     selected: [],
@@ -44,6 +45,7 @@ function form(p: FeedbackPrompt, busy = false): UseFeedbackForm {
     setTextValue: () => {},
     filteredStringOptions: [],
     send: () => Promise.resolve(),
+    sendWithRetry: () => Promise.resolve(),
     sendNow: () => Promise.resolve(true),
     cancel: () => {},
     finishOptionalTarget: () => {},

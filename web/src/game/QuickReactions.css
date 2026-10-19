@@ -15,8 +15,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--fs-base);
-  line-height: 1;
+  color: var(--fg-2);
   border: none;
   border-radius: var(--r-sm);
   background: transparent;
@@ -26,6 +25,7 @@
 
 .quick-reaction-btn:hover:not(:disabled) {
   background: var(--ink-3);
+  color: var(--fg-1);
   transform: scale(1.08);
 }
 

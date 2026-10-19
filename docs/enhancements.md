@@ -1,5 +1,7 @@
 # Enhancements — open client-only specs
 
+> **LLMage Nexus documentation:** for the current guides see [Overview](getting-started/overview.md) and [Lobby](player-guide/lobby.md). This page is inherited from upstream XMage Nexus and may lag behind the client.
+
 > All ideas here are **client-only**: they read the existing JSON event flow and
 > need no server or rules-engine change. The full historic catalog (built and
 > dropped ideas with rationale) is archived in

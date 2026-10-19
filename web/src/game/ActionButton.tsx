@@ -19,6 +19,9 @@ interface ActionButtonProps {
   onPass: () => void
   onSkip: (action: string) => void
   busy?: boolean
+  /** The pass this client already sent is still the answer to the open
+   *  priority request: the button is spent until the server asks again. */
+  answered?: boolean
 }
 
 const SHORTCUT_HINT = /\s*[(（][^)）]*[)）]\s*$/
@@ -55,13 +58,24 @@ export default function ActionButton({
   onPass,
   onSkip,
   busy = false,
+  answered = false,
 }: ActionButtonProps) {
   const { t } = useTranslation()
   const [menuOpen, setMenuOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const me = game?.players?.find((p) => p.controlled)
   const waitingFor = useStore((s) => s.waitingFor)
+  const answeredSeq = useStore((s) => s.priorityAnsweredSeq)
   const waiting = waitingState(game, feedback, waitingFor)
+  // The answer is on the wire and the server has not asked again: show the wait
+  // with a clock of its own (keyed on the claim) instead of a live-looking
+  // button that would park a second answer on the next window.
+  const passSent: WaitingState | null =
+    answered && !waiting
+      ? { playerId: '', name: '', timeLeftSecs: null, key: `pass|${answeredSeq}`, preGame: false }
+      : null
+  // The clock of whichever wait is on screen: the server's, or our own pass.
+  const waitClock: WaitingState | null = waiting ?? passSent
   const stackItems = Object.keys(game?.stack ?? {}).length
   const activeSkip = activeSkipOf(me)
   const control = controlInfo(game)
@@ -94,6 +108,10 @@ export default function ActionButton({
     modeIcon = 'hourglass'
   } else if (waiting) {
     label = t('game', 'waiting_for', { name: waiting.name })
+    modeClass = 'action-waiting'
+    modeIcon = 'hourglass'
+  } else if (passSent) {
+    label = t('game', 'pass_sent')
     modeClass = 'action-waiting'
     modeIcon = 'hourglass'
   } else if (stackItems > 0) {
@@ -131,7 +149,7 @@ export default function ActionButton({
     sublabel = t('game', 'skip_active_to', { dest: t('game', activeSkip.labelKey) })
   }
 
-  const isInteractive = canPass && !busy && modeClass !== 'action-waiting'
+  const isInteractive = canPass && !busy && !answered && modeClass !== 'action-waiting'
 
   return (
     <div className="action-button-container" ref={containerRef}>
@@ -150,7 +168,7 @@ export default function ActionButton({
               {busy ? t('game', 'action_sending') : label}
             </span>
             {sublabel && !busy && <span className="action-btn-sublabel">{sublabel}</span>}
-            {waiting && !busy && <WaitingClock waiting={waiting} />}
+            {waitClock && !busy && <WaitingClock waiting={waitClock} />}
           </div>
           <kbd className="action-btn-shortcut">{t('wiki', 'shortcuts_space').split(':')[0]}</kbd>
         </button>

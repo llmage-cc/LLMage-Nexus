@@ -42,7 +42,10 @@ function renderDialog(prompt: FeedbackPrompt, busy = false) {
   const send = vi.fn(async (action: () => Promise<{ ok: boolean; error?: string }>) => {
     await action()
   })
-  render(<MulliganDialog prompt={prompt} send={send} cancel={vi.fn()} busy={busy} />)
+  const sendWithRetry = vi.fn(async (action: () => Promise<{ ok: boolean; error?: string }>) => {
+    await action()
+  })
+  render(<MulliganDialog prompt={prompt} send={send} sendWithRetry={sendWithRetry} cancel={vi.fn()} busy={busy} />)
   return send
 }
 

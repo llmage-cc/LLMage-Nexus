@@ -13,6 +13,11 @@ export interface FlightRecord {
   /** Selector del destino real: permite re-medir en vuelo si el layout se mueve. */
   toSelector?: string
   startTime: number
+  /** Duración efectiva de la animación del clon (fxDuration de la rama), fijada
+   *  al crearlo. El encadenado NO la reinicia —el overlay solo re-ancla el tramo
+   *  final vía `toSelector`—, así que es también la ventana en la que el
+   *  fantasma sigue en vuelo: fuera de ella, un movimiento nuevo empieza vuelo
+   *  propio en vez de encadenar. */
   duration: number
   /** El origen era una carta girada 90° (tapped): el clon debe partir rotado. */
   rotated90?: boolean
@@ -137,8 +142,8 @@ export function isCompactTarget(selector: string | undefined): boolean {
   }
 }
 
-// ── Diagnóstico de vuelos (F0 animaciones): cada skip silencioso deja una
-// entrada con su motivo para poder cazar "a veces no va" en E2E/real. ──
+// ── Flight diagnostics: every silent skip leaves an entry with its reason, so
+// an intermittent "sometimes it doesn't run" can be chased in E2E/real. ──
 export type FlightSkipReason =
   | 'zero-rect'
   | 'fx-off'
@@ -247,12 +252,18 @@ export function startCardFlight(
         // Ráfaga: redirigir el fantasma en vuelo en vez de cancelarlo. El
         // overlay re-ancla el tramo final vía toSelector en cada frame, así
         // que la curva se dobla suavemente al nuevo destino sin parpadeo.
+        // La ventana es la animación REAL del clon — `duration`, fijada al
+        // crearlo y que el encadenado NO reinicia (el overlay solo re-ancla el
+        // tramo final). Re-basarla aquí (0.8 x la duración de la rama nueva)
+        // cerraba la ventana antes de que la animación terminase y cancelaba
+        // un fantasma que seguía en vuelo: medido un cancel con edad 346 ms
+        // sobre una animación de 380 ms, con el clon en `running` y opacidad
+        // 0.95 en esas edades.
         existing.toRect = to.rect
         existing.toSelector = toSelector ?? existing.toSelector
         existing.toCompact = toCompact || undefined
         existing.card = card
         if (options?.variant) existing.variant = options.variant
-        existing.duration = Math.min(age + Math.round(scaledDuration * 0.8), age + 1200)
         existing.timers?.forEach((t) => clearTimeout(t))
         existing.timers = scheduleFlightTimers(existing)
         activeFlights = [...activeFlights]

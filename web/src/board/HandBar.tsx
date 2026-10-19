@@ -16,7 +16,8 @@ import {
   HAND_BAR_PADDING_Y,
 } from './handSizing'
 import { handDropIndex, moveHandCard, reconcileHandOrder } from './handOrder'
-import { useSettings } from '../state/store'
+import { useSettings, useStore } from '../state/store'
+import { isUnplayableHandClick } from '../game/handClick'
 import './HandBar.css'
 
 const HAND_DRAG_THRESHOLD_PX = 8
@@ -64,6 +65,11 @@ export default function HandBar({
 }: HandBarProps) {
   const { showHandCost: showHandCostSetting, cardRender } = useSettings()
   const showHandCost = showHandCostSetting && cardRender !== 'rendered'
+  /** Un prompt abierto deja la mano entera interactiva (maná/combate siguen
+   *  jugando sobre la barra y una elección uuid usa la carta pintada como
+   *  selector): sólo sin prompt la falta de marcador convierte el hueco en
+   *  inerte. Mismo predicado que la puerta del clic (game/handClick). */
+  const hasOpenPrompt = useStore((s) => !!s.feedback)
   const serverIds = Object.keys(cards)
   const [order, setOrder] = useState<string[]>(serverIds)
   const orderedIds = reconcileHandOrder(order, serverIds)
@@ -178,6 +184,9 @@ export default function HandBar({
         const arc = arcEntries[i] ?? { rot: 0, rise: 0 }
         const isInteractive = playableIds.has(id) || targetIds.has(id)
         const rise = arc.rise + (isInteractive ? HAND_ARC_PLAYABLE_RISE_PX : 0)
+        /** El hueco no anuncia un clic que la puerta descarta: sin `clickable`
+         *  no hay `cursor: pointer`, ni `role=button`, ni parada de foco. */
+        const clickable = !!onCardClick && !isUnplayableHandClick(hasOpenPrompt, playableIds, id)
         return (
           <div
             key={id}
@@ -195,10 +204,10 @@ export default function HandBar({
               cardId={id}
               card={card}
               onClick={
-                onCardClick
+                clickable
                   ? () => {
                       if (suppressClickRef.current) return
-                      onCardClick(id)
+                      onCardClick!(id)
                     }
                   : undefined
               }

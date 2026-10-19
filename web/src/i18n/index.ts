@@ -235,7 +235,8 @@ export function t(
 
 /**
  * Automatically translates known backend/gateway error phrases or keys to the active language.
- * @param action - originating gateway action (joinTable, createTable, etc) to pick the right FAILED fallback
+ * @param action - originating gateway action (joinTable, createTable, etc) or surface ('login')
+ *                 to pick the right FAILED fallback
  */
 export function translateError(error: string | null | undefined, action?: string, errorCode?: string): string {
   if (!error && !errorCode) return ''
@@ -331,6 +332,9 @@ export function translateError(error: string | null | undefined, action?: string
     if (action === 'joinTable' || action === 'joinTournamentTable' || action === 'joinTournament' || action === 'joinDraft') return t('errors.join_table_failed')
     if (action === 'watchTable' || action === 'watchTournamentTable') return t('errors.table_not_found')
     if (action === 'startMatch' || action === 'startTournament') return t('errors.start_game_failed')
+    // la superficie de login no crea mesas: un FAILED sin mapear ahí es un login rechazado
+    // (el proxy contesta así, p. ej. un rechazo de versión que no llega como VERSION_MISMATCH)
+    if (action === 'login') return t('errors.login_failed')
     return t('errors.create_table_failed')
   }
 

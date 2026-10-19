@@ -6,6 +6,8 @@ import {
   MAX_DRAFT_PLAYERS,
   MAX_TOURNAMENT_PLAYERS,
   HUMAN_SEAT,
+  SIM_SEAT,
+  simSeatsEnabled,
   isConstructedTournamentType,
   isDraftTournamentType,
   isHumanSeatType,
@@ -57,10 +59,7 @@ export function resolveTableKind(inputs: TableKindInputs): TableKindResolution {
     (inputs.tableCategory === 'tourney' && inputs.tournamentCategory === 'limited') ||
     (isLimitedDeckType(inputs.deckType) && inputs.useDraftTournament)
   const isConstructedTournament =
-    (inputs.tableCategory === 'tourney' && inputs.tournamentCategory === 'constructed') ||
-    (isConstructedTournamentType(normalizedTournamentType) &&
-      !inputs.useDraftTournament &&
-      !isLimitedDeckType(inputs.deckType))
+    inputs.tableCategory === 'tourney' && inputs.tournamentCategory === 'constructed'
   const isTournament =
     inputs.tableCategory === 'tourney' || isDraftLimited || isConstructedTournament
   const base = { isDraftLimited, isConstructedTournament, isTournament, normalizedTournamentType }
@@ -94,10 +93,14 @@ export function clampNumPlayers(
   return numPlayers
 }
 
-export function defaultSeatTypeFor(_draft: boolean): string {
-  // Extra seats wait for a human rival by default; bots (including the draftbot,
-  // which cannot play a limited round anyway) are opt-in via the seat controls.
-  return HUMAN_SEAT
+export function defaultSeatTypeFor(draft: boolean): string {
+  // Upstream v0.4.7 (4fe0f8ab8a): extra seats wait for a human rival by
+  // default and bots are opt-in — the SIM bot is dev-only (proxy `--sim on`).
+  // Where the fork's SIM channel is enabled (`simSeatsEnabled`: dev stacks and
+  // the demo/e2e flows), SIM stays the default filler and the SIM-deck
+  // fallback chain keeps it off the 56-Mountain lands deck.
+  if (!simSeatsEnabled()) return HUMAN_SEAT
+  return draft ? 'COMPUTER_DRAFT_BOT' : SIM_SEAT
 }
 
 export interface SeatConfigInput {
@@ -121,7 +124,9 @@ export function computeTournamentSeats(args: {
       : fallbackTypes.slice(0, Math.max(0, args.numPlayers - (args.humanSeat ? 1 : 0)))
   const playerTypesFinal = args.humanSeat ? [HUMAN_SEAT, ...effectiveSeatTypes] : effectiveSeatTypes
   while (playerTypesFinal.length < args.numPlayers) {
-    playerTypesFinal.push(HUMAN_SEAT)
+    // Draft tourneys fill with waiting humans (a bot cannot play its limited
+    // round); constructed matches fill with the default bot seat.
+    playerTypesFinal.push(args.draft ? HUMAN_SEAT : defaultSeatTypeFor(false))
   }
   while (playerTypesFinal.length > args.numPlayers) playerTypesFinal.pop()
   return { playerTypesFinal, effectiveSeatTypes }
@@ -134,13 +139,13 @@ export function computeMatchSeats(args: {
   humanSeat: boolean
 }): { playerTypesFinal: string[]; effectiveSeatTypes: string[] } {
   const seatTypes = args.seatConfigs.map((s) => normalizeSeatType(s.type))
-  const fallbackTypes = (args.playerTypesSel.length ? args.playerTypesSel : [HUMAN_SEAT]).map(normalizeSeatType)
+  const fallbackTypes = (args.playerTypesSel.length ? args.playerTypesSel : [defaultSeatTypeFor(false)]).map(normalizeSeatType)
   const effectiveSeatTypes =
     seatTypes.length > 0
       ? seatTypes
       : fallbackTypes.slice(0, Math.max(0, args.numPlayers - (args.humanSeat ? 1 : 0)))
   const playerTypesFinal = args.humanSeat ? [HUMAN_SEAT, ...effectiveSeatTypes] : effectiveSeatTypes
-  while (playerTypesFinal.length < args.numPlayers) playerTypesFinal.push(HUMAN_SEAT)
+  while (playerTypesFinal.length < args.numPlayers) playerTypesFinal.push(defaultSeatTypeFor(false))
   while (playerTypesFinal.length > args.numPlayers) playerTypesFinal.pop()
   return { playerTypesFinal, effectiveSeatTypes }
 }
@@ -204,6 +209,8 @@ export interface TournamentArgsInput {
   draft: boolean
   limitedOptions?: ReturnType<typeof buildLimitedOptions>
   playerTypesFinal: string[]
+  /** One entry per COMPUTER_LLM seat in playerTypesFinal order (see llmConfigsForSeats). */
+  llmConfigs?: (Record<string, unknown> | null)[] | undefined
   password: string
   spectatorsAllowed: boolean
   wins: number
@@ -232,6 +239,7 @@ export function buildCreateTournamentArgs(a: TournamentArgsInput): Record<string
     limited: a.draft,
     ...(a.limitedOptions ? { limitedOptions: a.limitedOptions } : {}),
     playerTypes: a.playerTypesFinal.length > 0 ? a.playerTypesFinal : ['HUMAN'],
+    ...(a.llmConfigs && a.llmConfigs.length > 0 ? { llmConfigs: a.llmConfigs } : {}),
     password: a.password.trim() || undefined,
     watchingAllowed: a.spectatorsAllowed,
     spectatorsAllowed: a.spectatorsAllowed,
@@ -257,6 +265,8 @@ export interface MatchArgsInput {
   wins: number
   playerTypesFinal: string[]
   seatSkills: number[]
+  /** One entry per COMPUTER_LLM seat in playerTypesFinal order (see llmConfigsForSeats). */
+  llmConfigs?: (Record<string, unknown> | null)[] | undefined
   password: string
   skillLevel: 'BEGINNER' | 'CASUAL' | 'SERIOUS'
   rated: boolean
@@ -295,6 +305,7 @@ export function buildCreateMatchArgs(a: MatchArgsInput): CreateTableArgs {
     deckType: a.deckType,
     winsNeeded: a.wins,
     playerTypes: a.playerTypesFinal,
+    ...(a.llmConfigs && a.llmConfigs.length > 0 ? { llmConfigs: a.llmConfigs } : {}),
     password: a.password.trim() || undefined,
     skillLevel: a.skillLevel,
     rated: a.rated,

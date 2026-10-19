@@ -1,7 +1,10 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import GameDrawer, { DrawerToggles, type DrawerTab } from './GameDrawer'
 import { setState } from '../state/store'
+import { makeGameView, makePlayer } from '../__fixtures__/gameViews'
 import { useState } from 'react'
 
 function Harness({ commanders = false, mechanics = false, stackCount = 0 }: { commanders?: boolean; mechanics?: boolean; stackCount?: number }) {
@@ -90,5 +93,76 @@ describe('GameDrawer', () => {
     const { queryByTestId } = render(<Harness />)
     act(() => setState({ log: [{ id: 1, time: 0, from: 'partida', text: 'Turno 3', channel: 'game' as const }] }))
     expect(queryByTestId('chat-unread')).toBeNull()
+  })
+
+  it('la pestaña LLM solo existe con capabilities.llm y jugadores LLM', () => {
+    const noLlm = render(<Harness />)
+    expect(noLlm.queryByTestId('drawer-tab-llm')).toBeNull()
+    noLlm.unmount()
+
+    const caps = { llm: true, p1: false, replayScrubber: true, replaySidecar: true, serverVersion: 'x', playerTypes: [] }
+    act(() => setState({ capabilities: caps, game: null, replay: null }))
+    const noPlayers = render(<Harness />)
+    expect(noPlayers.queryByTestId('drawer-tab-llm')).toBeNull()
+    noPlayers.unmount()
+
+    const gv = makeGameView({
+      players: [makePlayer({ playerId: 'me', name: 'Me', controlled: true })],
+      myPlayerId: 'me',
+      llmDebug: [
+        { playerName: 'Me', modelName: 'm', exchangeCount: 1, totalContextChars: 0, modelContextWindow: 0, streaming: false, streamingStartedAt: 0, messages: [] },
+      ],
+    })
+    act(() => setState({ capabilities: caps, game: gv, replay: null }))
+    const withLlm = render(<Harness />)
+    expect(withLlm.getByTestId('drawer-tab-llm')).not.toBeNull()
+    act(() => setState({ capabilities: null, game: null }))
+  })
+
+  it('el conmutador LLM abre su panel', () => {
+    const caps = { llm: true, p1: false, replayScrubber: true, replaySidecar: true, serverVersion: 'x', playerTypes: [] }
+    const gv = makeGameView({
+      players: [makePlayer({ playerId: 'me', name: 'Me', controlled: true })],
+      myPlayerId: 'me',
+      llmDebug: [
+        { playerName: 'Me', modelName: 'm', exchangeCount: 1, totalContextChars: 0, modelContextWindow: 0, streaming: false, streamingStartedAt: 0, messages: [] },
+      ],
+    })
+    act(() => setState({ capabilities: caps, game: gv, replay: null }))
+    const { getByTestId } = render(<Harness />)
+    fireEvent.click(getByTestId('drawer-tab-llm'))
+    expect(getByTestId('game-drawer').getAttribute('data-tab')).toBe('llm')
+  })
+})
+
+/* jsdom no tiene motor de maquetación: el contrato del cajón se fija sobre su CSS
+   de origen (mismo criterio que CreateTable/createTableScroll.test.ts). */
+const drawerCss = readFileSync(join(__dirname, 'GameDrawer.css'), 'utf8')
+
+function squeezedRule(selector: string, css: string): string {
+  const at = css.indexOf(`${selector} {`)
+  expect(at, `falta la regla ${selector} en el css de origen`).toBeGreaterThanOrEqual(0)
+  const open = css.indexOf('{', at)
+  const close = css.indexOf('}', open)
+  return [...css.slice(open + 1, close)].filter((c) => c.charCodeAt(0) >= 33).join('')
+}
+
+describe('GameDrawer — cajón acotado al alto visible y con el borde inferior como clip duro', () => {
+  it('el alto sale de la franja pero nunca rebasa el viewport visible', () => {
+    const drawer = squeezedRule('.game-drawer', drawerCss)
+    expect(drawer).toContain('--dd-cap:min(var(--dd-max,420px),calc(100dvh-var(--sp-4h)))')
+    expect(drawer).toContain('height:var(--dd-cap)')
+    expect(drawer, 'un hijo no puede pintar fuera del borde inferior, o el clic cae al tablero')
+      .toContain('overflow:hidden')
+  })
+
+  it('la pestaña de la pila comparte el mismo tope', () => {
+    expect(squeezedRule(".game-drawer[data-tab='stack']", drawerCss)).toContain('max-height:var(--dd-cap)')
+  })
+
+  it('la zona de contenido no desborda: recorta en el borde del cajón', () => {
+    const content = squeezedRule('.game-drawer-content', drawerCss)
+    expect(content).toContain('overflow:hidden')
+    expect(content).toContain('min-height:0')
   })
 })

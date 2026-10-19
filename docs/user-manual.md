@@ -1,5 +1,7 @@
 # User manual — playing on XMage Nexus
 
+> **LLMage Nexus documentation:** for the current guides see [Lobby](player-guide/lobby.md) and [Board and controls](player-guide/board-and-controls.md). This page is inherited from upstream XMage Nexus and may lag behind the client.
+
 The web client implements the full XMage experience in the browser: no install, one link, same rules engine as desktop.
 
 ## Login

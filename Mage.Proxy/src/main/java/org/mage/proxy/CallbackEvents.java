@@ -36,6 +36,31 @@ final class CallbackEvents {
                 || m == ClientCallbackMethod.GAME_INIT;
     }
 
+    /** The four replay callbacks (they are not part of the SessionGames game-event path). */
+    static boolean isReplayEvent(ClientCallbackMethod m) {
+        return m == ClientCallbackMethod.REPLAY_GAME
+                || m == ClientCallbackMethod.REPLAY_INIT
+                || m == ClientCallbackMethod.REPLAY_UPDATE
+                || m == ClientCallbackMethod.REPLAY_DONE;
+    }
+
+    /**
+     * The replay track length a {@code REPLAY_INIT}/{@code REPLAY_UPDATE} payload carries, via
+     * the fork-only getter (reflection: stock 1.4.62 has no replay view), or {@code -1} when the
+     * running class does not carry it.
+     */
+    static int replayStateCount(Object data) {
+        if (data == null) {
+            return -1;
+        }
+        try {
+            Object value = data.getClass().getMethod("getReplayStateCount").invoke(data);
+            return value instanceof Number ? ((Number) value).intValue() : -1;
+        } catch (ReflectiveOperationException | RuntimeException ex) {
+            return -1;
+        }
+    }
+
     static boolean endsGame(ClientCallbackMethod m) {
         return m == ClientCallbackMethod.GAME_OVER || m == ClientCallbackMethod.END_GAME_INFO;
     }

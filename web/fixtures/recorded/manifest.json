@@ -4,840 +4,840 @@
     "mechanic": "mutate",
     "kind": "game",
     "assert": "hasMutatedPermanent",
-    "note": "Elvish Mystic + Gemrazer apilados vía mutate (mutateView con 2 partes)."
+    "note": "Elvish Mystic + Gemrazer stacked via mutate (mutateView with 2 parts)."
   },
   {
     "file": "creature.json",
     "mechanic": "creature",
     "kind": "game",
     "assert": "hasNonMutatedCreature",
-    "note": "Criatura normal en el battlefield del humano (sin mutate)."
+    "note": "Normal creature on the human's battlefield (no mutate)."
   },
   {
     "file": "combat.json",
     "mechanic": "combat",
     "kind": "game",
     "assert": "hasAttackingTappedCreature",
-    "note": "Ataque declarado (Raging Goblin haste): grupo de combate con atacante girado (tapped) tanto en el battlefield como embebido en combat.attackers."
+    "note": "Attack declared (Raging Goblin haste): combat group with a tapped attacker both on the battlefield and embedded in combat.attackers."
   },
   {
     "file": "sealed-pool.json",
     "mechanic": "sealed-pool",
     "kind": "construct",
     "assert": "hasConstructPool",
-    "note": "CONSTRUCT real de sellado 6xM20 (driver sealed-pool): pool de 90 en deck.sideboard, cards vacío, time>0. Las cartas del pool no traen name (solo id/expansionSetCode/cardNumber)."
+    "note": "Real CONSTRUCT from a 6xM20 sealed pool (sealed-pool driver): pool of 90 in deck.sideboard, empty cards, time>0. The pool cards carry no name (only id/expansionSetCode/cardNumber)."
   },
   {
     "file": "tournament-end.json",
     "mechanic": "tournament-end",
     "kind": "tournament",
     "assert": "tournamentFinished",
-    "note": "getTournament tras concesión en la final (driver tournament-end): tournamentState Finished, un jugador 'Finished (Winner)' con 3pts y ronda 1 con result 'is the winner'."
+    "note": "getTournament after a concession in the final (tournament-end driver): tournamentState Finished, one player 'Finished (Winner)' with 3pts and round 1 with result 'is the winner'."
   },
   {
     "file": "counterspell.json",
     "mechanic": "counterspell",
     "kind": "game",
     "assert": "hasCounterOnStack",
-    "note": "Counterspell propio contrarrestando Lightning Bolt del SIM (driver counterspell con cheatSetup: counter en mano + 2 Islas al campo en T1; pila con ambos hechizos y objetivos cruzados)."
+    "note": "Our own Counterspell countering the SIM's Lightning Bolt (counterspell driver with cheatSetup: counter in hand + 2 Islands on the battlefield on T1; stack with both spells and crossed targets)."
   },
   {
     "file": "aura.json",
     "mechanic": "aura",
     "kind": "game",
     "assert": "hasAttachedAura",
-    "note": "Rancor sobre Elvish Mystic propio (driver aura con cheatSetup: Mystic 3/1 con attachments=[Rancor], Rancor con attachedTo; pago solo con Bosques — el Mystic mareado rompía el pago por defecto)."
+    "note": "Rancor on our own Elvish Mystic (aura driver with cheatSetup: Mystic 3/1 with attachments=[Rancor], Rancor with attachedTo; payment with Forests only — the summoning-sick Mystic broke the default payment)."
   },
   {
     "file": "tokens.json",
     "mechanic": "tokens",
     "kind": "game",
     "assert": "hasTokens",
-    "note": "Dragon Fodder → 2 Goblin Token 1/1 (driver tokens con cheatSetup; isToken=true, set WAR, cardNumber vacío)."
+    "note": "Dragon Fodder → 2 Goblin Token 1/1 (tokens driver with cheatSetup; isToken=true, set WAR, empty cardNumber)."
   },
   {
     "file": "modal.json",
     "mechanic": "modal",
     "kind": "game",
     "assert": "hasModalOnStack",
-    "note": "Boros Charm en modo daño contra el rival (driver modal con cheatSetup; modo elegido por texto vía GAME_CHOOSE_ABILITY — los modos son habilidades, no CHOICE; pago {R}{W} con la tierra del color pedido)."
+    "note": "Boros Charm in damage mode against the opponent (modal driver with cheatSetup; mode chosen by text via GAME_CHOOSE_ABILITY — the modes are abilities, not CHOICE; {R}{W} paid with the land of the requested color)."
   },
   {
     "file": "xcosts.json",
     "mechanic": "xcosts",
     "kind": "game",
     "assert": "hasXCostCounters",
-    "note": "Walking Ballista con X=2 (driver xcosts con cheatSetup: 2/2 con 2 contadores +1/+1, coste {X}{X}; el max del prompt es INT_MAX — el servidor no acota)."
+    "note": "Walking Ballista with X=2 (xcosts driver with cheatSetup: 2/2 with 2 +1/+1 counters, cost {X}{X}; the prompt's max is INT_MAX — the server does not clamp it)."
   },
   {
     "file": "response.json",
     "mechanic": "response",
     "kind": "game",
     "assert": "hasStackResponse",
-    "note": "Giant Growth en respuesta a Hornet Sting propio sobre el Mystic (driver response con cheatSetup; pila LIFO con ambos al mismo objetivo). El SIM retiene su Bolt con criaturas fuera (108 turnos sin lanzarlo) — la respuesta se monta sobre hechizo propio."
+    "note": "Giant Growth in response to our own Hornet Sting on the Mystic (response driver with cheatSetup; LIFO stack with both on the same target). The SIM holds back its Bolt with creatures out (108 turns without casting it) — the response is stacked on top of our own spell."
   },
   {
     "file": "trigger-order.json",
     "mechanic": "trigger-order",
     "kind": "game",
     "assert": "hasDoubleTrigger",
-    "note": "2 Soul Warden + Mystic → vidas 22 (driver trigger-order con cheatSetup; SIN diálogo de orden: el motor auto-ordena 2 triggers del mismo controlador)."
+    "note": "2 Soul Warden + Mystic → life 22 (trigger-order driver with cheatSetup; NO ordering dialog: the engine auto-orders 2 triggers from the same controller)."
   },
   {
     "file": "may-trigger.json",
     "mechanic": "may-trigger",
     "kind": "game",
     "assert": "hasSolemn",
-    "note": "Solemn en campo tras may→SÍ + búsqueda de Bosque (GAME_ASK + GAME_TARGET con options.possibleTargets; driver may-trigger con cheatSetup)."
+    "note": "Solemn on the battlefield after may→YES + Forest search (GAME_ASK + GAME_TARGET with options.possibleTargets; may-trigger driver with cheatSetup)."
   },
   {
     "file": "convoke.json",
     "mechanic": "convoke",
     "kind": "game",
     "assert": "hasConvoke",
-    "note": "Chord of Calling X=1 pagado por convoke (driver convoke con cheatSetup: 3 Mystics girados + Bosque para el {1}; los taps van como PLAY_MANA con UUID — el mareo no estorba; con X=0 no hay objetivo legal). Chord en cementerio + 4º Mystic tutoreado."
+    "note": "Chord of Calling X=1 paid by convoke (convoke driver with cheatSetup: 3 tapped Mystics + Forest for the {1}; the taps go as PLAY_MANA with a UUID — summoning sickness does not get in the way; with X=0 there is no legal target). Chord in graveyard + 4th Mystic tutored."
   },
   {
     "file": "flashback.json",
     "mechanic": "flashback",
     "kind": "game",
     "assert": "hasFlashback",
-    "note": "Faithless Looting lanzado por flashback desde el cementerio (driver flashback con cheatSetup: roba 2, descarta 2 Montañas — un UUID por prompt con memoria — y acaba exiliado)."
+    "note": "Faithless Looting cast via flashback from the graveyard (flashback driver with cheatSetup: draws 2, discards 2 Mountains — one UUID per prompt with memory — and ends up exiled)."
   },
   {
     "file": "delve.json",
     "mechanic": "delve",
     "kind": "game",
     "assert": "hasDelve",
-    "note": "Treasure Cruise ({7}{U}) pagado con delve: {U} con Isla + 7 exilios del cementerio vía botón 'special' (responder sendPlayerString 'special' al PLAY_MANA abre la acción especial; los UUIDs del cementerio directos se ignoran). Hallazgo harnés: tras cheatSetup hay que responder el SELECT pendiente (auto-pass en rec-lib) o el hilo queda mudo."
+    "note": "Treasure Cruise ({7}{U}) paid with delve: {U} with an Island + 7 graveyard exiles via the 'special' button (answering sendPlayerString 'special' to the PLAY_MANA opens the special action; direct graveyard UUIDs are ignored). Harness finding: after cheatSetup you must answer the pending SELECT (auto-pass in rec-lib) or the thread goes silent."
   },
   {
     "file": "scry.json",
     "mechanic": "scry",
     "kind": "game",
     "assert": "hasScry",
-    "note": "Opt ({U}): scry 1 como GAME_TARGET 'Select up to one card to PUT on the BOTTOM (Scry)' (UUID=abajo, declinar=arriba) + robar. Driver scry con cheatSetup."
+    "note": "Opt ({U}): scry 1 as GAME_TARGET 'Select up to one card to PUT on the BOTTOM (Scry)' (UUID=bottom, decline=top) + draw. scry driver with cheatSetup."
   },
   {
     "file": "overload.json",
     "mechanic": "overload",
     "kind": "game",
     "assert": "hasOverload",
-    "note": "Cyclonic Rift pagado por overload {6}{U} (7 Islas giradas, Rift en pila). Overload es una spell ability separada (OverloadAbility): el driver la elige por texto en basicCastAbilities (el UUID de la carta ya iba a overload por defecto en 1.4.61)."
+    "note": "Cyclonic Rift paid by overload {6}{U} (7 tapped Islands, Rift on the stack). Overload is a separate spell ability (OverloadAbility): the driver picks it by text in basicCastAbilities (the card's UUID already went to overload by default in 1.4.61)."
   },
   {
     "file": "gang-block.json",
     "mechanic": "block",
     "kind": "game",
     "assert": "hasBlock",
-    "note": "Combate SIN cheat (el cheat de campo es el que congela): mazos ordenados, el SIM lanza Mystics (tryCast) y bloquea solo (primer bloqueador). 1 atacante nuestro girado + 1 bloqueador SIM. El gang 2v1 no sale porque el SIM ataca con todo (no reserva 2 bloqueadores); sigue R por sesión 09-12."
+    "note": "Combat WITHOUT cheat (the battlefield cheat is the one that freezes): ordered decks, the SIM casts Mystics (tryCast) and blocks by itself (first blocker). 1 of our attackers tapped + 1 SIM blocker. The 2v1 gang block does not come out because the SIM attacks with everything (it does not hold back 2 blockers); still R per session 09-12."
   },
   {
     "file": "kicker.json",
     "mechanic": "kicker",
     "kind": "game",
     "assert": "hasKicker",
-    "note": "Goblin Bushwhacker con kicker {R} pagado (ASK 'Pay Kicker {R}?' → SÍ; 2 Montañas giradas = base+kicker). Driver kicker con cheatSetup."
+    "note": "Goblin Bushwhacker with kicker {R} paid (ASK 'Pay Kicker {R}?' → YES; 2 tapped Mountains = base+kicker). kicker driver with cheatSetup."
   },
   {
     "file": "evoke.json",
     "mechanic": "evoke",
     "kind": "game",
     "assert": "hasEvoke",
-    "note": "Solitude por evoke (CHOOSE_CHOICE explícito): Swords exiliada (coste), Mystic del SIM exiliado (ETB), Solitude sacrificada. El orden de triggers ('Pick triggered ability') se responde con los ability-UUID de cardsView1 (el sourceId no vale: el flag de macro lo desactiva). SIM con Mystics (sin cheat al rival: congela)."
+    "note": "Solitude via evoke (explicit CHOOSE_CHOICE): Swords exiled (cost), SIM's Mystic exiled (ETB), Solitude sacrificed. The trigger order ('Pick triggered ability') is answered with the ability-UUIDs from cardsView1 (the sourceId does not work: the macro flag disables it). SIM with Mystics (no cheat on the opponent: freezes)."
   },
   {
     "file": "clones.json",
     "mechanic": "clone",
     "kind": "game",
     "assert": "hasClone",
-    "note": "Phantasmal Image entra como copia del Mystic del SIM (copy:true). La copia es ASK 'Use effect of Phantasmal Image?' → SÍ + TARGET. Lanzamiento diferido hasta que el SIM tenga criatura (sin objetivo es 0/0)."
+    "note": "Phantasmal Image enters as a copy of the SIM's Mystic (copy:true). The copy is ASK 'Use effect of Phantasmal Image?' → YES + TARGET. Cast deferred until the SIM has a creature (with no target it is 0/0)."
   },
   {
     "file": "treason.json",
     "mechanic": "threaten",
     "kind": "game",
     "assert": "hasThreaten",
-    "note": "Act of Treason ({2}{R}) roba el Elvish Mystic del SIM; la captura es el RETORNO de fin de turno: el Mystic vuelve al campo del SIM (ya no bajo nuestro control) con Act of Treason en nuestro cementerio (plan4 §3.10: antes se capturaba el robo sin probar el retorno). Driver treason con cheatSetup."
+    "note": "Act of Treason ({2}{R}) steals the SIM's Elvish Mystic; the capture is the END-OF-TURN RETURN: the Mystic goes back to the SIM's battlefield (no longer under our control) with Act of Treason in our graveyard (previously the steal was captured without proving the return). treason driver with cheatSetup."
   },
   {
     "file": "dfc.json",
     "mechanic": "transform",
     "kind": "game",
     "assert": "hasTransform",
-    "note": "Moonmist transforma al Delver of Secrets en Insectile Aberration (cara trasera en el campo). Driver dfc con cheatSetup."
+    "note": "Moonmist transforms Delver of Secrets into Insectile Aberration (back face on the battlefield). dfc driver with cheatSetup."
   },
   {
     "file": "adventure.json",
     "mechanic": "adventure",
     "kind": "game",
     "assert": "hasAdventure",
-    "note": "Stomp (aventura) a la cara del rival → Giant exiliado → criatura lanzada desde el exilio. La aventura sale por canPlayObjects (valor con el nombre de la carta). Driver adventure con cheatSetup."
+    "note": "Stomp (adventure) to the opponent's face → Giant exiled → creature cast from exile. The adventure shows up via canPlayObjects (value with the card's name). adventure driver with cheatSetup."
   },
   {
     "file": "split.json",
     "mechanic": "split-damage",
     "kind": "game",
     "assert": "hasSplit",
-    "note": "Arc Trail ({1}{R}): 2 daños a un objetivo + 1 a otro (Mystic SIM + cara del rival con fallback; el segundo TARGET no puede repetir el primero). Driver split con cheatSetup."
+    "note": "Arc Trail ({1}{R}): 2 damage to one target + 1 to another (SIM's Mystic + opponent's face with fallback; the second TARGET cannot repeat the first). split driver with cheatSetup."
   },
   {
     "file": "seize.json",
     "mechanic": "discard-reveal",
     "kind": "game",
     "assert": "hasSeize",
-    "note": "Thoughtseize: TARGET 'Select a player' (playerId) + carta de la mano rival (primera opción) → Mystic descartado. Hallazgo harnés: el ASK de maná flotante ('Pass anyway?') va al default (true)."
+    "note": "Thoughtseize: TARGET 'Select a player' (playerId) + a card from the opponent's hand (first option) → Mystic discarded. Harness finding: the floating-mana ASK ('Pass anyway?') goes to the default (true)."
   },
   {
     "file": "tutor.json",
     "mechanic": "tutor",
     "kind": "game",
     "assert": "hasTutor",
-    "note": "Demonic Tutor trae carta a la mano (TARGET 'Select a card', primera opción). El decline (false) NO falla la búsqueda (re-pregunta en bucle): 'fail to find' sigue S. Driver tutor con cheatSetup."
+    "note": "Demonic Tutor brings a card to hand (TARGET 'Select a card', first option). Declining (false) does NOT fail the search (it re-asks in a loop): 'fail to find' stays S. tutor driver with cheatSetup."
   },
   {
     "file": "dismember.json",
     "mechanic": "phyrexian",
     "kind": "game",
     "assert": "hasPhyrexian",
-    "note": "Dismember pagado con 4 vidas (ASK 'Pay 2 life instead of {B}?' ×2 → SÍ; vida 16) matando al Mystic del SIM. Driver dismember con cheatSetup."
+    "note": "Dismember paid with 4 life (ASK 'Pay 2 life instead of {B}?' ×2 → YES; life 16) killing the SIM's Mystic. dismember driver with cheatSetup."
   },
   {
     "file": "snow.json",
     "mechanic": "snow-fight",
     "kind": "game",
     "assert": "hasSnowFight",
-    "note": "Blizzard Brawl con Snow-Covered Forest (pelea Oso vs Mystic SIM). Nombres de cheat válidos: 'Snow-Covered Forest', 'Runeclaw Bear'. Driver snow con cheatSetup."
+    "note": "Blizzard Brawl with Snow-Covered Forest (fight: Bear vs SIM's Mystic). Valid cheat names: 'Snow-Covered Forest', 'Runeclaw Bear'. snow driver with cheatSetup."
   },
   {
     "file": "madness.json",
     "mechanic": "madness",
     "kind": "game",
     "assert": "hasMadness",
-    "note": "Looting descarta Fiery Temper → ASK 'you may cast it by paying {R}' → SÍ → 3 daños al rival (vida 17). Driver madness con cheatSetup."
+    "note": "Looting discards Fiery Temper → ASK 'you may cast it by paying {R}' → YES → 3 damage to the opponent (life 17). madness driver with cheatSetup."
   },
   {
     "file": "shock.json",
     "mechanic": "split-second",
     "kind": "game",
     "assert": "hasSplitSecond",
-    "note": "Sudden Shock (split second) en la pila CON prioridad nuestra (tras pasar el SIM) y Lightning Bolt + 6 Montañas en mano: el servidor solo ofrece las Montañas como habilidad de maná (split second permite maná) y nunca el Bolt; la UI marca las fuentes y no el Bolt. Driver shock con cheatSetup."
+    "note": "Sudden Shock (split second) on the stack WITH our priority (after the SIM passes) and Lightning Bolt + 6 Mountains in hand: the server only offers the Mountains as mana abilities (split second allows mana) and never the Bolt; the UI marks the sources and not the Bolt. shock driver with cheatSetup."
   },
   {
     "file": "cascade.json",
     "mechanic": "cascade",
     "kind": "game",
     "assert": "hasCascade",
-    "note": "Bloodbraid Elf → cascade encuentra el Bolt de la cima (putOnTop de 1) → ASK lanzarlo SÍ → 3 daños al rival. Driver cascade con cheatSetup."
+    "note": "Bloodbraid Elf → cascade finds the Bolt on top (putOnTop of 1) → ASK to cast it YES → 3 damage to the opponent. cascade driver with cheatSetup."
   },
   {
     "file": "vote.json",
     "mechanic": "vote",
     "kind": "game",
     "assert": "hasVote",
-    "note": "Council's Judgment: el voto llega como GAME_TARGET (no GAME_CHOOSE_CHOICE) sobre el único permanente sin tierras que no controlamos → Mystic del rival exiliado. Driver vote con cheatSetup en dos pasos encadenados (mano propia + Mystic votable al rival, sin el cual el voto no tiene candidato y el hechizo fizzlea). Hallazgo de motor: el rival cheateado terminó con 2 Mystics exiliados (uno propio del mazo simDeck) en vez de 1 — posible bug de voto que deja votar por permanentes propios cuando el rival no tiene ninguno ajeno."
+    "note": "Council's Judgment: the vote arrives as GAME_TARGET (not GAME_CHOOSE_CHOICE) on the only nonland permanent we do not control → opponent's Mystic exiled. vote driver with cheatSetup in two chained steps (our own hand + a votable Mystic for the opponent, without which the vote has no candidate and the spell fizzles). Engine finding: the cheated opponent ended up with 2 exiled Mystics (one of its own from the simDeck) instead of 1 — a possible vote bug that lets you vote for your own permanents when the opponent has none of yours."
   },
   {
     "file": "warp.json",
     "mechanic": "extra-turn",
     "kind": "game",
     "assert": "hasExtraTurn",
-    "note": "Time Warp ('Target player takes an extra turn after this one.', sin exilio ni robo — el comentario original del driver decía lo contrario) → TARGET 'Select a player' → uno mismo → carta en el cementerio. Driver warp con cheatSetup; el TARGET también recibe el descarte de limpieza si se tarda, hay que discriminar por el texto de la pregunta."
+    "note": "Time Warp ('Target player takes an extra turn after this one.', no exile or draw — the driver's original comment said otherwise) → TARGET 'Select a player' → yourself → card in graveyard. warp driver with cheatSetup; the TARGET also receives the cleanup discard if you take too long, so you must discriminate by the question text."
   },
   {
     "file": "hybrid.json",
     "mechanic": "hybrid",
     "kind": "game",
     "assert": "hasHybrid",
-    "note": "Kitchen Finks ({1}{G/W}{G/W}) lanzado con 3 Bosques (el híbrido se paga con verde): 3/2 con persist en el campo. Driver hybrid con cheatSetup."
+    "note": "Kitchen Finks ({1}{G/W}{G/W}) cast with 3 Forests (the hybrid is paid with green): 3/2 with persist on the battlefield. hybrid driver with cheatSetup."
   },
   {
     "file": "anycolor.json",
     "mechanic": "any-color-mana",
     "kind": "game",
     "assert": "hasAnyColor",
-    "note": "Birds of Paradise paga el {U} de Opt (AddManaOfAnyColorEffect): el servidor pregunta la fuente (PLAY_MANA) y auto-resuelve el color cuando solo uno es pagable — no hubo GAME_CHOOSE_CHOICE de color (hallazgo de motor). Captura: Birds 0/1 en el campo + Opt en el cementerio. Driver anycolor con cheatSetup."
+    "note": "Birds of Paradise pays the {U} for Opt (AddManaOfAnyColorEffect): the server asks for the source (PLAY_MANA) and auto-resolves the color when only one is payable — there was no color GAME_CHOOSE_CHOICE (engine finding). Capture: Birds 0/1 on the battlefield + Opt in the graveyard. anycolor driver with cheatSetup."
   },
   {
     "file": "planeswalker.json",
     "mechanic": "planeswalker",
     "kind": "game",
     "assert": "hasPlaneswalker",
-    "note": "Teferi, Hero of Dominaria lanzado ({3}{W}{U}) y su lealtad +1 (robar) activada: 4→5 contadores (campo loyalty '5' y counters loyalty:5). Hallazgo del harnés: enviar el UUID de la habilidad no activa nada (game.getObject no lo resuelve); hay que hacer clic en el permanente y responder GAME_CHOOSE_ABILITY. Driver planeswalker con cheatSetup."
+    "note": "Teferi, Hero of Dominaria cast ({3}{W}{U}) and its +1 loyalty (draw) activated: 4→5 counters (loyalty field '5' and counters loyalty:5). Harness finding: sending the ability's UUID activates nothing (game.getObject does not resolve it); you must click the permanent and answer GAME_CHOOSE_ABILITY. planeswalker driver with cheatSetup."
   },
   {
     "file": "saga.json",
     "mechanic": "saga",
     "kind": "game",
     "assert": "hasSaga",
-    "note": "History of Benalia ({1}{W}{W}): capítulo I al entrar — contador lore:1 y ficha Knight Token 2/2 con vigilancia. Driver saga con cheatSetup."
+    "note": "History of Benalia ({1}{W}{W}): chapter I on entry — lore:1 counter and a 2/2 Knight Token with vigilance. saga driver with cheatSetup."
   },
   {
     "file": "morph.json",
     "mechanic": "face-down",
     "kind": "game",
     "assert": "hasFaceDown",
-    "note": "Den Protector lanzado boca abajo por morph ({3}): permanente 'Morph: Den Protector' 2/2 faceDown en el campo. El clic en la carta abre GAME_CHOOSE_ABILITY (lanzamiento normal vs Megamorph) y se elige morph por texto; la habilidad va a la bolsa `other` (SpellAbilityType.BASE_ALTERNATE), no a basicCastAbilities. Driver morph con cheatSetup."
+    "note": "Den Protector cast face down via morph ({3}): permanent 'Morph: Den Protector' 2/2 faceDown on the battlefield. Clicking the card opens GAME_CHOOSE_ABILITY (normal cast vs Megamorph) and morph is chosen by text; the ability goes into the `other` bucket (SpellAbilityType.BASE_ALTERNATE), not into basicCastAbilities. morph driver with cheatSetup."
   },
   {
     "file": "ward.json",
     "mechanic": "ward",
     "kind": "game",
     "assert": "hasWard",
-    "note": "Lightning Bolt contra Sythis, Harvest's Hand (Ward {1}) en el campo del rival: el Ward dispara GAME_ASK 'pay ... Ward'; se paga (sin default de motor para esta pregunta, hay que responder true explícito) y el Bolt sigue su curso — Sythis (1/3) muere al cementerio del rival. Driver ward con cheatSetup (Sythis sin ETB, para no arrastrar otro prompt)."
+    "note": "Lightning Bolt against Sythis, Harvest's Hand (Ward {1}) on the opponent's battlefield: the Ward triggers GAME_ASK 'pay ... Ward'; it is paid (no engine default for this question, you must answer true explicitly) and the Bolt continues — Sythis (1/3) dies to the opponent's graveyard. ward driver with cheatSetup (Sythis without ETB, so as not to drag in another prompt)."
   },
   {
     "file": "illegal-target.json",
     "mechanic": "illegal-target",
     "kind": "game",
     "assert": "hasIllegalTargetFizzle",
-    "note": "Lightning Bolt propio a nuestro Elvish Mystic; en la misma ventana de prioridad (antes de pasar) se activa Viscera Seer para sacrificar ese mismo Mystic — el Bolt se queda sin objetivo legal y se retira de la pila sin efecto al intentar resolver. Captura: Mystic + Bolt en el propio cementerio, pila vacía, vida sin cambios. Driver illegal-target con cheatSetup."
+    "note": "Our own Lightning Bolt at our Elvish Mystic; in the same priority window (before passing) Viscera Seer is activated to sacrifice that same Mystic — the Bolt is left with no legal target and is removed from the stack with no effect when it tries to resolve. Capture: Mystic + Bolt in our own graveyard, empty stack, life unchanged. illegal-target driver with cheatSetup."
   },
   {
     "file": "upto-zero.json",
     "mechanic": "upto-zero",
     "kind": "game",
     "assert": "hasUpToZeroTargets",
-    "note": "Frost Breath ('Tap up to two target creatures... Scry 1') declinando el objetivo (0 de un máximo de 2, con un Elvish Mystic rival legal disponible vía cheatSetup) y el scry (declinar = arriba). Captura: Frost Breath en el propio cementerio y el Mystic rival sigue sin tocar (untapped) — prueba que se resolvió sin objetivos pese a haber uno legal. Driver upto-zero con cheatSetup."
+    "note": "Frost Breath ('Tap up to two target creatures... Scry 1') declining the target (0 out of a maximum of 2, with a legal opponent Elvish Mystic available via cheatSetup) and the scry (decline = top). Capture: Frost Breath in our own graveyard and the opponent's Mystic still untouched (untapped) — proof that it resolved with no targets despite there being a legal one. upto-zero driver with cheatSetup."
   },
   {
     "file": "redirect.json",
     "mechanic": "redirect",
     "kind": "game",
     "assert": "hasRedirect",
-    "note": "Lightning Bolt a la cara del rival + Redirect sobre el propio Bolt en la pila. Hallazgo de motor: con un solo hechizo legal en la pila, Redirect auto-resuelve su objetivo (mismo patrón que any-color-mana) — en vez de un segundo GAME_TARGET llega un GAME_ASK 'Change this 1 of 1 target: ...?' (sin default de motor, hay que responder true) y luego sí un GAME_TARGET para el nuevo objetivo del Bolt, que redirigimos a nosotros mismos. Captura: Bolt + Redirect en el propio cementerio, vida 20→17 propia y rival intacto — prueba que el daño se redirigió. Driver redirect con cheatSetup."
+    "note": "Lightning Bolt at the opponent's face + Redirect on our own Bolt on the stack. Engine finding: with only one legal spell on the stack, Redirect auto-resolves its target (same pattern as any-color-mana) — instead of a second GAME_TARGET there is a GAME_ASK 'Change this 1 of 1 target: ...?' (no engine default, you must answer true) and then indeed a GAME_TARGET for the Bolt's new target, which we redirect to ourselves. Capture: Bolt + Redirect in our own graveyard, our life 20→17 and the opponent untouched — proof that the damage was redirected. redirect driver with cheatSetup."
   },
   {
     "file": "big-stack.json",
     "mechanic": "big-stack",
     "kind": "game",
     "assert": "hasBigStack",
-    "note": "10x Opt lanzados sin pasar prioridad entre medias (Opt no pide objetivo al lanzarse, solo al resolver — scry/draw son parte de la resolución) hasta que la pila tiene 10 hechizos: prueba scroll/legibilidad de una pila grande en la UI. Driver big-stack con cheatSetup (10 Opt en mano + 10 Islas)."
+    "note": "10x Opt cast without passing priority in between (Opt asks for no target when cast, only on resolution — scry/draw are part of the resolution) until the stack has 10 spells: tests scroll/readability of a big stack in the UI. big-stack driver with cheatSetup (10 Opt in hand + 10 Islands)."
   },
   {
     "file": "menace.json",
     "mechanic": "menace",
     "kind": "game",
     "assert": "hasMenaceUnblocked",
-    "note": "Ripscale Predator (6/5 Menace) propio ataca con un único Grizzly Bears (2/2 vanilla) disponible en el campo rival vía cheatSetup: con menace el atacante solo puede ser bloqueado por 2+ criaturas, así que con un único bloqueador posible el servidor no ofrece ninguna configuración de bloqueo legal — no depende de que la IA \"quiera\" bloquear, es una restricción de regla. Captura: combate resuelto con blockers:{} pese al Grizzly Bears rival intacto (vivo, sin tocar) y su vida 20→14 (6 de daño directo). Driver menace con cheatSetup."
+    "note": "Our own Ripscale Predator (6/5 Menace) attacks with a single Grizzly Bears (2/2 vanilla) available on the opponent's battlefield via cheatSetup: with menace the attacker can only be blocked by 2+ creatures, so with only one possible blocker the server offers no legal blocking configuration — it does not depend on the AI \"wanting\" to block, it is a rule restriction. Capture: combat resolved with blockers:{} despite the opponent's intact Grizzly Bears (alive, untouched) and their life 20→14 (6 direct damage). menace driver with cheatSetup."
   },
   {
     "file": "jump-start.json",
     "mechanic": "jump-start",
     "kind": "game",
     "assert": "hasJumpStart",
-    "note": "Radical Idea lanzada desde el cementerio por jump-start ({1}{U} + coste adicional de descartar una Isla, GAME_TARGET de descarte respondido con el possibleTargets real): al resolver roba 1 y se exilia en vez de ir al cementerio (JumpStartReplacementEffect), mientras la Isla descartada queda en el cementerio. Driver jump-start con cheatSetup."
+    "note": "Radical Idea cast from the graveyard via jump-start ({1}{U} + additional cost of discarding an Island, discard GAME_TARGET answered with the real possibleTargets): on resolution it draws 1 and is exiled instead of going to the graveyard (JumpStartReplacementEffect), while the discarded Island stays in the graveyard. jump-start driver with cheatSetup."
   },
   {
     "file": "surveil.json",
     "mechanic": "surveil",
     "kind": "game",
     "assert": "hasSurveil",
-    "note": "Consider ({U}) resuelto: surveil 1 llega como GAME_TARGET \"Select up to one card to PUT into your GRAVEYARD (Surveil)\" (misma forma que el scry de Opt, filtro distinto: devolver el UUID de la top = cementerio, declinar = dejar arriba) y después roba. La Montaña vigilada acaba en el cementerio junto a Consider (la carta lanzada). Driver surveil con cheatSetup."
+    "note": "Consider ({U}) resolved: surveil 1 arrives as GAME_TARGET \"Select up to one card to PUT into your GRAVEYARD (Surveil)\" (same shape as Opt's scry, different filter: returning the top UUID = graveyard, declining = leave on top) and then it draws. The surveilled Mountain ends up in the graveyard next to Consider (the spell cast). surveil driver with cheatSetup."
   },
   {
     "file": "vigilance.json",
     "mechanic": "vigilance",
     "kind": "game",
     "assert": "hasVigilance",
-    "note": "Vanguard of Brimaz ({W}{W} 2/2 con vigilancia) al campo propio vía cheatSetup (T1, tras jugar la primera tierra; el permanente cheateado entra con summoningSickness:false y puede atacar el mismo turno); ataca contra el SIM pasivo (mazo de tierras) y la captura llega en el GAME_UPDATE de DECLARE_ATTACKERS: el atacante está en gv.combat[].attackers con tapped:false y cardIcons ABILITY_VIGILANCE — contraste directo con combat.json (atacante vanilla tapped:true). Driver vigilance con cheatSetup."
+    "note": "Vanguard of Brimaz ({W}{W} 2/2 with vigilance) onto our battlefield via cheatSetup (T1, after playing the first land; the cheated permanent enters with summoningSickness:false and can attack the same turn); it attacks against the passive SIM (land deck) and the capture comes in the GAME_UPDATE of DECLARE_ATTACKERS: the attacker is in gv.combat[].attackers with tapped:false and cardIcons ABILITY_VIGILANCE — direct contrast with combat.json (vanilla attacker tapped:true). vigilance driver with cheatSetup."
   },
   {
     "file": "dash.json",
     "mechanic": "dash",
     "kind": "game",
     "assert": "hasDash",
-    "note": "Lightning Berserker (DTK 146, {R} 1/1, Dash {R}) lanzado por su coste de dash (chooser GAME_CHOOSE_CHOICE \"Cast with Dash alternative cost: {R}\" vs \"Cast with no alternative cost: {R}\"; se elige dash por texto) y atacando el mismo turno: entrar con prisa es la prueba del dash (la carta no tiene prisa impresa, así que un 1/1 recién entrado no podría ser atacante). Mazo apilado con skipInitShuffling (Berserker primero) — sin cheatSetup, sin carrera de cheat. Captura: combat con el Berserker como atacante (tapped) en gv.combat; su CardView lleva la regla Dash impresa."
+    "note": "Lightning Berserker (DTK 146, {R} 1/1, Dash {R}) cast for its dash cost (chooser GAME_CHOOSE_CHOICE \"Cast with Dash alternative cost: {R}\" vs \"Cast with no alternative cost: {R}\"; dash is chosen by text) and attacking the same turn: entering with haste is the proof of dash (the card has no printed haste, so a freshly-entered 1/1 could not be an attacker). Deck stacked with skipInitShuffling (Berserker first) — no cheatSetup, no cheat race. Capture: combat with the Berserker as attacker (tapped) in gv.combat; its CardView carries the printed Dash rule."
   },
   {
     "file": "suspend.json",
     "mechanic": "suspend",
     "kind": "game",
     "assert": "hasSuspend",
-    "note": "Rift Bolt (TSP 176, {2}{R}, Suspend 1—{R}) suspendido en el turno propio: clic en la carta en mano resuelve la SpecialAction de suspend (única acción jugable con 1 maná; sin picker), se paga {R} y la carta va al exilio propio con 1 contador de tiempo (zona \"Suspended cards of <jugador>\"; el PlayerView.exile agrega todas las zonas de exilio del dueño). Mazo apilado con skipInitShuffling (Rift Bolt primero) — sin cheatSetup. Captura: Rift Bolt en me.exile con counters time>=1 (CardView de no-permanente sí serializa counters). La resolución gratis (upkeep siguiente: quitar el contador y lanzarlo sin pagar) se dispara después, pero el frame de la suspensión es el que firma la mecánica."
+    "note": "Rift Bolt (TSP 176, {2}{R}, Suspend 1—{R}) suspended on our turn: clicking the card in hand resolves the suspend SpecialAction (the only playable action with 1 mana; no picker), {R} is paid and the card goes to our exile with 1 time counter (zone \"Suspended cards of <player>\"; PlayerView.exile aggregates all of the owner's exile zones). Deck stacked with skipInitShuffling (Rift Bolt first) — no cheatSetup. Capture: Rift Bolt in me.exile with counters time>=1 (a non-permanent CardView does serialize counters). The free resolution (next upkeep: remove the counter and cast it without paying) fires later, but the suspension frame is the one that signs the mechanic."
   },
   {
     "file": "first-strike.json",
     "mechanic": "first-strike",
     "kind": "game",
     "assert": "hasFirstStrike",
-    "note": "Precinct Captain ({W}{W} 2/2 con daño primero) propio ataca en su T1 y el Grizzly Bears (2/2 vanilla) del rival lo bloquea. Cheats con send crudo y la main abierta hasta que ambos están aplicados: Captain propio + Grizzly rival (800 ms entre cheats por el CME del servidor); el ataque debe salir en el MISMO turno del cheat porque el SIM del proxy ataca con todo en su turno (el Grizzly quedaría girado y no podría bloquear en T3+). El permanente cheateado entra con summoningSickness:false y el SIM bloquea con el primer possible blocker (determinista). Captura en el GAME_UPDATE del paso FIRST_COMBAT_DAMAGE (enum real; el host web comprueba por error FIRST_STRIKE_DAMAGE): el Grizzly está en el cementerio rival, el Captain sigue en gv.combat[].attackers con tapped:true y damage 0. Driver first-strike con cheatSetup."
+    "note": "Our own Precinct Captain ({W}{W} 2/2 with first strike) attacks on its T1 and the opponent's Grizzly Bears (2/2 vanilla) blocks it. Cheats with raw send and the main phase kept open until both are applied: our Captain + opponent's Grizzly (800 ms between cheats because of the server's CME); the attack must go out on the SAME turn as the cheat because the proxy's SIM attacks with everything on its turn (the Grizzly would be tapped and could not block on T3+). The cheated permanent enters with summoningSickness:false and the SIM blocks with the first possible blocker (deterministic). Capture in the GAME_UPDATE of the FIRST_COMBAT_DAMAGE step (real enum; the web host mistakenly checks FIRST_STRIKE_DAMAGE): the Grizzly is in the opponent's graveyard, the Captain is still in gv.combat[].attackers with tapped:true and damage 0. first-strike driver with cheatSetup."
   },
   {
     "file": "escape.json",
     "mechanic": "escape",
     "kind": "game",
     "assert": "hasEscape",
-    "note": "Phoenix of Ash ({1}{R}{R} 2/2 volar/prisa) lanzado desde el cementerio por su coste de escape {2}{R}{R} exiliando otras 3 cartas del cementerio (con exactamente 3 legales el motor las auto-elige sin GAME_TARGET: TargetImpl.tryToAutoChoose) y entrando con contador +1/+1 por EscapesWithAbility: la carta en el campo con +1/+1 + las 3 Montañas del coste en me.exile firman el escape (un hardcast no daría contador). Driver escape con cheatSetup."
+    "note": "Phoenix of Ash ({1}{R}{R} 2/2 flying/haste) cast from the graveyard for its escape cost {2}{R}{R} exiling 3 other graveyard cards (with exactly 3 legal ones the engine auto-picks them without GAME_TARGET: TargetImpl.tryToAutoChoose) and entering with a +1/+1 counter from EscapesWithAbility: the card on the battlefield with +1/+1 + the 3 Mountains of the cost in me.exile sign the escape (a hardcast would not give a counter). escape driver with cheatSetup."
   },
   {
     "file": "foretell.json",
     "mechanic": "foretell",
     "kind": "game",
     "assert": "hasForetell",
-    "note": "Saw It Coming predicha en el primer turno propio ({2}; con 2 manás el hardcast {1}{U}{U} no es pagable y el clic en la carta basta — la SpecialAction aparece en canPlayObjects del objeto como \"other\": \"Foretell {1}{U}…\") → exiliada boca abajo (me.exile con faceDown:true) → lanzada en el turno propio siguiente desde el exilio por {1}{U} apuntando a un Opt propio en la pila (la carta exige \"target spell\"; el turno del SIM en medio es obligatorio: ForetellCostAbility prohíbe lanzarla el mismo turno; el exiliado expone \"Foretell {1}{U}\" como basicCastAbilities). Captura: Saw It Coming + Opt en la pila y me.exile vacío, prueba del ciclo completo. Driver foretell con cheatSetup."
+    "note": "Saw It Coming foretold on our first turn ({2}; with 2 mana the {1}{U}{U} hardcast is not payable and clicking the card is enough — the SpecialAction appears in the object's canPlayObjects as \"other\": \"Foretell {1}{U}…\") → exiled face down (me.exile with faceDown:true) → cast on our next turn from exile for {1}{U} targeting our own Opt on the stack (the card requires \"target spell\"; the SIM's turn in between is mandatory: ForetellCostAbility forbids casting it the same turn; the exiled card exposes \"Foretell {1}{U}\" as basicCastAbilities). Capture: Saw It Coming + Opt on the stack and me.exile empty, proof of the full cycle. foretell driver with cheatSetup."
   },
   {
     "file": "must-block.json",
     "mechanic": "must-block",
     "kind": "game",
     "assert": "hasMustBlock",
-    "note": "Lure ({1}{G}{G} aura: \"All creatures able to block enchanted creature do so\", 4 copias reales del mazo) lanzado sobre un Runeclaw Bear propio (2/2 vanilla) y Grizzly Bears (2/2 vanilla) cheateado al campo del SIM en el MISMO turno T1 del ataque, contra el SIM pasivo de tierras. Hallazgo: cheatSetup no puede adjuntar auras (GameImpl.cheat → putCardOntoBattlefieldWithEffects sin attachment; un aura sin encantar muere a las SBA), así que el aura se lanza de verdad: T1 tierra + cheats raw (Oso + 3 Bosques propios; 800 ms después el Grizzly rival) con la main aparcada + cast del Lure con el id de la mano inicial (responde al SELECT aparcado), {1}{G}{G} girando Bosques y GAME_TARGET al Oso; el aura viaja como attachment real (attachedTo del Lure = UUID del Oso; attachments del Oso contiene el UUID del Lure). El bloqueo es una restricción de regla, no decisión de la IA: Combat.selectBlockers llama a retrieveMustBlockAttackerRequirements (MustBeBlockedByAllAttached → mustBlock) y el motor asigna el bloqueador con defender.declareBlocker. Captura: en gv.combat[].attackers el Oso con el Lure adjunto y en blockers el Grizzly del SIM (DECLARE_BLOCKERS). El bloqueador debe montarse en el mismo turno del ataque: el SIM ataca con todo en su turno y un Grizzly cheateado antes quedaría girado (regla bisecada en first-strike). Driver must-block con cheatSetup + Lure real."
+    "note": "Lure ({1}{G}{G} aura: \"All creatures able to block enchanted creature do so\", 4 real copies from the deck) cast on our own Runeclaw Bear (2/2 vanilla) and Grizzly Bears (2/2 vanilla) cheated onto the SIM's battlefield on the SAME T1 of the attack, against the passive land SIM. Finding: cheatSetup cannot attach auras (GameImpl.cheat → putCardOntoBattlefieldWithEffects without attachment; an unenchanted aura dies to SBAs), so the aura is cast for real: T1 land + raw cheats (our Bear + 3 Forests; 800 ms later the opponent's Grizzly) with the main phase parked + cast of Lure with the opening-hand id (answering the parked SELECT), {1}{G}{G} tapping Forests and GAME_TARGET at the Bear; the aura travels as a real attachment (Lure's attachedTo = Bear's UUID; the Bear's attachments contains the Lure's UUID). The block is a rule restriction, not an AI decision: Combat.selectBlockers calls retrieveMustBlockAttackerRequirements (MustBeBlockedByAllAttached → mustBlock) and the engine assigns the blocker with defender.declareBlocker. Capture: in gv.combat[].attackers the Bear with the Lure attached and in blockers the SIM's Grizzly (DECLARE_BLOCKERS). The blocker must be put together on the same turn as the attack: the SIM attacks with everything on its turn and a Grizzly cheated in earlier would be tapped (rule bisected in first-strike). must-block driver with cheatSetup + real Lure."
   },
   {
     "file": "ninjutsu.json",
     "mechanic": "ninjutsu",
     "kind": "game",
     "assert": "hasNinjutsu",
-    "note": "Ninja of the Deep Hours ({3}{U} 2/2, ninjutsu {1}{U}) en mano y Runeclaw Bear (2/2 vanilla) al campo propio vía un único cheatSetup (más 2 Islas para el coste), contra el SIM pasivo de tierras. El Oso ataca sin bloqueadores y en la ventana DECLARE_BLOCKERS/PRIORITY se clica la carta en la mano: el NinjutsuAbility (canPlayObjects.other, regla \"Ninjutsu {1}{U}\") solo es legal cuando UnblockedPredicate ve un atacante no bloqueado; se paga {1}{U} girando Islas y el coste pide el atacante no bloqueado por GAME_TARGET para devolverlo a la mano, tras lo cual el Ninja entra al campo girado y atacando (NinjutsuEffect.addAttackerToCombat). Captura: Oso en myHand + Ninja en el campo tapped:true dentro de gv.combat[].attackers. Driver ninjutsu con cheatSetup."
+    "note": "Ninja of the Deep Hours ({3}{U} 2/2, ninjutsu {1}{U}) in hand and Runeclaw Bear (2/2 vanilla) onto our battlefield via a single cheatSetup (plus 2 Islands for the cost), against the passive land SIM. The Bear attacks with no blockers and in the DECLARE_BLOCKERS/PRIORITY window the card in hand is clicked: the NinjutsuAbility (canPlayObjects.other, rule \"Ninjutsu {1}{U}\") is only legal when UnblockedPredicate sees an unblocked attacker; {1}{U} is paid by tapping Islands and the cost asks for the unblocked attacker via GAME_TARGET to return it to hand, after which the Ninja enters the battlefield tapped and attacking (NinjutsuEffect.addAttackerToCombat). Capture: Bear in myHand + Ninja on the battlefield tapped:true inside gv.combat[].attackers. ninjutsu driver with cheatSetup."
   },
   {
     "file": "cavern.json",
     "mechanic": "cavern",
     "kind": "game",
     "assert": "hasCavern",
-    "note": "Cavern of Souls cheateada a la mano y jugada como tierra (cheatearla directa al campo NO funciona: el chooser del \"as enters\" corre en el WorkerThread del proxy y el servidor aborta con \"Wrong code usage: game related code must run in GAME thread\"). ChooseCreatureTypeEffect abre un GAME_CHOOSE_CHOICE con ChoiceCreatureType cuyos keyChoices son SubType→SubType (\"Elf\"→\"Elf\"+\" (me)\" si la mano/campo/cementerio propia tiene Elfos), con searchEnabled=true y sortData por relevancia — key-choice: se responde sendPlayerString con la CLAVE (\"Elf\"). Captura: Cavern en el battlefield propio; su CardView lleva en rules el info \"<font color = 'blue'>Chosen type: Elf</font>\" (getRules añade el mapa info del permanente, añadido por ChooseCreatureTypeEffect), prueba de que el tipo quedó fijado. Interés UI: lista larga filtrable de tipos. Driver P4 con cheatSetup."
+    "note": "Cavern of Souls cheated to hand and played as a land (cheating it directly onto the battlefield does NOT work: the \"as enters\" chooser runs on the proxy's WorkerThread and the server aborts with \"Wrong code usage: game related code must run in GAME thread\"). ChooseCreatureTypeEffect opens a GAME_CHOOSE_CHOICE with ChoiceCreatureType whose keyChoices are SubType→SubType (\"Elf\"→\"Elf\"+\" (me)\" if our hand/battlefield/graveyard has Elves), with searchEnabled=true and sortData by relevance — key-choice: it is answered with sendPlayerString using the KEY (\"Elf\"). Capture: Cavern on our battlefield; its CardView carries in rules the info \"<font color = 'blue'>Chosen type: Elf</font>\" (getRules adds the permanent's info map, added by ChooseCreatureTypeEffect), proof that the type was fixed. UI interest: long filterable list of types. recording driver with cheatSetup."
   },
   {
     "file": "pithing-needle.json",
     "mechanic": "pithing-needle",
     "kind": "game",
     "assert": "hasPithingNeedle",
-    "note": "Pithing Needle ({1}) cheateada a la mano + Isla al campo y lanzada de verdad (cheatearla directa al campo NO funciona: el chooser del \"as enters\" corre en el WorkerThread del proxy y el servidor aborta con \"Wrong code usage: game related code must run in GAME thread\"). ChooseACardNameEffect abre un GAME_CHOOSE_CHOICE con ChoiceImpl(required=true, hintType=CARD) cuyas choices son CardRepository.getNames() (~25.000 nombres) y keyChoices VACÍO — string mode, se responde sendPlayerString con el nombre exacto (\"Lightning Bolt\"), validado por choices.contains(val). Captura: Needle en el battlefield propio; su CardView lleva en rules el info \"<font color = 'blue'>Chosen name: Lightning Bolt</font>\" (getRules añade el mapa info del permanente, añadido por ChooseACardNameEffect), prueba de que el nombre quedó fijado. Interés UI: búsqueda por texto sobre ~25k nombres. Driver P4 con cheatSetup."
+    "note": "Pithing Needle ({1}) cheated to hand + Island on the battlefield and cast for real (cheating it directly onto the battlefield does NOT work: the \"as enters\" chooser runs on the proxy's WorkerThread and the server aborts with \"Wrong code usage: game related code must run in GAME thread\"). ChooseACardNameEffect opens a GAME_CHOOSE_CHOICE with ChoiceImpl(required=true, hintType=CARD) whose choices are CardRepository.getNames() (~25,000 names) and EMPTY keyChoices — string mode, answered with sendPlayerString using the exact name (\"Lightning Bolt\"), validated by choices.contains(val). Capture: Needle on our battlefield; its CardView carries in rules the info \"<font color = 'blue'>Chosen name: Lightning Bolt</font>\" (getRules adds the permanent's info map, added by ChooseACardNameEffect), proof that the name was fixed. UI interest: text search over ~25k names. recording driver with cheatSetup."
   },
   {
     "file": "double-strike.json",
     "mechanic": "double-strike",
     "kind": "game",
     "assert": "hasDoubleStrike",
-    "note": "Fencing Ace ({1}{W} 1/1 con daño doble) al campo propio vía cheatSetup (T1, tras jugar la primera tierra; el permanente cheateado entra con summoningSickness:false y ataca el mismo turno) contra el SIM pasivo de tierras: sin bloqueadores. Captura en el GAME_UPDATE del paso FIRST_COMBAT_DAMAGE (el enum real; el host web comprobaba por error FIRST_STRIKE_DAMAGE): el rival ya está en 19 vidas (primer golpe del doble) y el Ace sigue en gv.combat[].attackers con damage:0 y cardIcons ABILITY_DOUBLE_STRIKE — el segundo golpe llega después, en el paso regular, prueba de que el daño doble hace dos pasos. Driver double-strike con cheatSetup."
+    "note": "Fencing Ace ({1}{W} 1/1 with double strike) onto our battlefield via cheatSetup (T1, after playing the first land; the cheated permanent enters with summoningSickness:false and attacks the same turn) against the passive land SIM: no blockers. Capture in the GAME_UPDATE of the FIRST_COMBAT_DAMAGE step (the real enum; the web host mistakenly checked FIRST_STRIKE_DAMAGE): the opponent is already at 19 life (first strike of the double) and the Ace is still in gv.combat[].attackers with damage:0 and cardIcons ABILITY_DOUBLE_STRIKE — the second strike comes later, in the regular step, proof that double strike does two steps. double-strike driver with cheatSetup."
   },
   {
     "file": "emerge.json",
     "mechanic": "emerge",
     "kind": "game",
     "assert": "hasEmerge",
-    "note": "Wretched Gryff (EMN 12, {7} 3/4 volar, Emerge {5}{U}) a la mano + Grizzly Bears (MV 2, fodder) + 4 Islas al campo vía cheatSetup y lanzado por emerge: EmergeAbility es un SpellAbility BASE_ALTERNATE, así que el clic con el hardcast {7} impagable (5 manás) lanza directo por emerge sin picker; el sacrificio (TargetSacrifice con chooseHint \"to sacrifice for emerge\") y CardUtil.reduceCost con el MV del sacrificado rebajan {5}{U} → {3}{U}. Captura: Wretched Gryff en el campo propio + el Grizzly Bears en el cementerio propio. Driver emerge con cheatSetup."
+    "note": "Wretched Gryff (EMN 12, {7} 3/4 flying, Emerge {5}{U}) to hand + Grizzly Bears (MV 2, fodder) + 4 Islands on the battlefield via cheatSetup and cast via emerge: EmergeAbility is a BASE_ALTERNATE SpellAbility, so clicking with the unpayable {7} hardcast (5 mana) casts straight via emerge with no picker; the sacrifice (TargetSacrifice with chooseHint \"to sacrifice for emerge\") and CardUtil.reduceCost with the sacrificed card's MV reduce {5}{U} → {3}{U}. Capture: Wretched Gryff on our battlefield + the Grizzly Bears in our graveyard. emerge driver with cheatSetup."
   },
   {
     "file": "phasing.json",
     "mechanic": "phasing",
     "kind": "game",
     "assert": "hasPhasing",
-    "note": "Reality Ripple ({1}{U}: \"Target artifact, creature, or land phases out\", 1 copia arriba del mazo con skipInitShuffling) lanzado de verdad desde la mano sobre un Runeclaw Bear propio (el hechizo no es un aura: el cheatSetup no puede lanzarlo). T1: tierra → cheat raw (Oso + Isla al campo propio) con la main aparcada → clic en Reality Ripple (responde al SELECT aparcado) → GAME_TARGET al Oso → {1}{U} con las dos Islas. Captura: el Oso sigue en me.battlefield con phasedIn:false (el objeto permanece en la zona, la vista lo marca fuera de fase; BoardZone.tsx lo filtra con p.phasedIn !== false). Driver phasing con cheatSetup + cast real."
+    "note": "Reality Ripple ({1}{U}: \"Target artifact, creature, or land phases out\", 1 copy on top of the deck with skipInitShuffling) cast for real from hand on our own Runeclaw Bear (the spell is not an aura: cheatSetup cannot cast it). T1: land → raw cheat (our Bear + Island on the battlefield) with the main phase parked → click Reality Ripple (answering the parked SELECT) → GAME_TARGET at the Bear → {1}{U} with the two Islands. Capture: the Bear stays in me.battlefield with phasedIn:false (the object remains in the zone, the view marks it phased out; BoardZone.tsx filters it with p.phasedIn !== false). phasing driver with cheatSetup + real cast."
   },
   {
     "file": "reduce-cost.json",
     "mechanic": "reduce-cost",
     "kind": "game",
     "assert": "hasReduceCost",
-    "note": "Goblin Electromancer (GRN 174, {U}{R}; \"Instant and sorcery spells you cast cost {1} less\") + Lightning Strike (M19 152, {1}{R}) vía cheatSetup con solo 3 tierras (Montaña del T1 + Isla y Montaña cheateadas): el Electromancer se paga {U}{R} (Isla+Montaña giradas) y el Strike, ya con el Electromancer en el campo, se paga con la última Montaña — el prompt de maná pide {R} (1 maná) en vez de {1}{R}. Captura: Strike en el cementerio propio, Electromancer en el campo, las 3 únicas tierras giradas y el rival a 17 — coste nominal 4 manás pagado con 3, imposible sin la reducción. Driver reduce-cost con cheatSetup."
+    "note": "Goblin Electromancer (GRN 174, {U}{R}; \"Instant and sorcery spells you cast cost {1} less\") + Lightning Strike (M19 152, {1}{R}) via cheatSetup with only 3 lands (T1's Mountain + cheated Island and Mountain): the Electromancer is paid {U}{R} (Island+Mountain tapped) and the Strike, once the Electromancer is on the battlefield, is paid with the last Mountain — the mana prompt asks for {R} (1 mana) instead of {1}{R}. Capture: Strike in our graveyard, Electromancer on the battlefield, the only 3 lands tapped and the opponent at 17 — nominal cost 4 mana paid with 3, impossible without the reduction. reduce-cost driver with cheatSetup."
   },
   {
     "file": "brainstorm-order.json",
     "mechanic": "brainstorm-order",
     "kind": "game",
     "assert": "hasBrainstorm",
-    "note": "Brainstorm ({U}) resuelto: el \"pon 2 cartas de tu mano arriba en cualquier orden\" NO es GAME_CHOOSE_CARDS_ORDER sino DOS GAME_TARGET secuenciales \"Select a card\" (TargetCardInHand 1/1 dentro de un bucle de BrainstormEffect; cada elección se mueve al instante con moveCardToLibraryWithInfo, la 2ª queda arriba) y luego un tercer GAME_TARGET \"Select up to one card to PUT on the BOTTOM (Scry)\" al resolver Opt. Invariante: mano neta +1 (se roban 3, se devuelven 2) y el orden se prueba con el robo siguiente (Opt declina el scry y roba Plains, la 2ª devuelta; Forest, la 1ª, sigue en la biblioteca). Driver brainstorm-order con cheatSetup (3 cartas sembradas en la biblioteca por cheat)."
+    "note": "Brainstorm ({U}) resolved: the \"put 2 cards from your hand on top in any order\" is NOT GAME_CHOOSE_CARDS_ORDER but TWO sequential GAME_TARGET \"Select a card\" (TargetCardInHand 1/1 inside a BrainstormEffect loop; each choice is moved instantly with moveCardToLibraryWithInfo, the 2nd ends up on top) and then a third GAME_TARGET \"Select up to one card to PUT on the BOTTOM (Scry)\" when resolving Opt. Invariant: net hand +1 (3 drawn, 2 put back) and the order is proven with the following draw (Opt declines the scry and draws Plains, the 2nd put back; Forest, the 1st, remains in the library). brainstorm-order driver with cheatSetup (3 cards seeded into the library by cheat)."
   },
   {
     "file": "energy.json",
     "mechanic": "energy",
     "kind": "game",
     "assert": "hasEnergy",
-    "note": "Attune with Aether ({G}) resuelto: la búsqueda llega como GAME_TARGET con las tierras básicas de la biblioteca en options.possibleTargets (se devuelve un UUID, la carta va a la mano y se revela) y después GetEnergyCountersControllerEffect añade 2 contadores de energía AL JUGADOR (CounterType.ENERGY = \"energy\"), visibles en el view como me.counters=[{name:\"energy\",count:2}] (CounterView: {name,count}). Invariante: me.counters con energy=2 y la carta en el cementerio. Driver energy con cheatSetup."
+    "note": "Attune with Aether ({G}) resolved: the search arrives as GAME_TARGET with the library's basic lands in options.possibleTargets (a UUID is returned, the card goes to hand and is revealed) and then GetEnergyCountersControllerEffect adds 2 energy counters TO THE PLAYER (CounterType.ENERGY = \"energy\"), visible in the view as me.counters=[{name:\"energy\",count:2}] (CounterView: {name,count}). Invariant: me.counters with energy=2 and the card in the graveyard. energy driver with cheatSetup."
   },
   {
     "file": "fof.json",
     "mechanic": "fof",
     "kind": "game",
     "assert": "hasFactOrFiction",
-    "note": "Fact or Fiction ({3}{U}) resuelto: el SIM (rival) separa con la sobrecarga `Cards` de fireSelectTargetEvent (`targets=null`, ids en `options.possibleTargets` y cierre con \"Done\" en `UI.right.btn.text`) — **fix de SimPlayer 2026-09-16**: elige carta por `sendPlayerUUID` (menor UUID) y cierra con `sendPlayerBoolean(false)`; antes hacía cancel() y dejaba pile1 vacía (0/5). El controlador recibe GAME_CHOOSE_PILE con cardsView1/cardsView2 y responde sendPlayerBoolean (true=pile1, false=pile2); this driver elige la pila mayor para la mano. Mazo 60 Islas con cheatSetup (FoF en mano, 3 Islas al campo, top 5 = Grizzly/Runeclaw/Forest/Island/Mountain). Frames re-grabado: pile1=[Grizzly Bears] al cementerio, pile2 (4 cartas) a la mano. Invariante: FoF en el cementerio propio y las 4 reveladas no-Isla exactamente una vez entre mano y cementerio (la revelada Island no se distingue de las del mazo)."
+    "note": "Fact or Fiction ({3}{U}) resolved: the SIM (opponent) splits with the `Cards` overload of fireSelectTargetEvent (`targets=null`, ids in `options.possibleTargets` and closing with \"Done\" in `UI.right.btn.text`) — **SimPlayer fix 2026-09-16**: it picks a card via `sendPlayerUUID` (lowest UUID) and closes with `sendPlayerBoolean(false)`; before it called cancel() and left pile1 empty (0/5). The controller receives GAME_CHOOSE_PILE with cardsView1/cardsView2 and answers sendPlayerBoolean (true=pile1, false=pile2); this driver picks the larger pile for the hand. 60-Island deck with cheatSetup (FoF in hand, 3 Islands on the battlefield, top 5 = Grizzly/Runeclaw/Forest/Island/Mountain). Frames re-recorded: pile1=[Grizzly Bears] to the graveyard, pile2 (4 cards) to the hand. Invariant: FoF in our graveyard and the 4 revealed non-Island cards exactly once between hand and graveyard (the revealed Island cannot be told apart from the deck's own)."
   },
   {
     "file": "manifest-mechanic.json",
     "mechanic": "manifest",
     "kind": "game",
     "assert": "hasManifest",
-    "note": "Soul Summons (FRF {1}{W}) lanzado vía cheatSetup (carta a la mano + 2 Plains al campo) manifiesta la de arriba (Elite Vanguard, puesta con cheatSetup.library: el último nombre queda arriba): el permanente entra boca abajo 2/2 anónimo con faceDown:true y manifested:true. El giro boca arriba (regla 701.34b) se ejecuta clicando el permanente (sendPlayerUUID): el TurnFaceUpAbility que añade BecomesFaceDownCreatureEffect/MANIFESTED NO está en GameState.specialActions (sendPlayerString(\"special\") no activa nada), pero sí entre las habilidades jugables del objeto; se paga su coste de maná ({W}) y Elite Vanguard queda 2/1 boca arriba. Captura: Elite Vanguard boca arriba en el campo propio + Soul Summons en el cementerio. Driver manifest con cheatSetup."
+    "note": "Soul Summons (FRF {1}{W}) cast via cheatSetup (card to hand + 2 Plains on the battlefield) manifests the top card (Elite Vanguard, set with cheatSetup.library: the last name ends up on top): the permanent enters face down, an anonymous 2/2 with faceDown:true and manifested:true. Turning face up (rule 701.34b) is done by clicking the permanent (sendPlayerUUID): the TurnFaceUpAbility added by BecomesFaceDownCreatureEffect/MANIFESTED is NOT in GameState.specialActions (sendPlayerString(\"special\") activates nothing), but it is among the object's playable abilities; its mana cost ({W}) is paid and Elite Vanguard becomes a face-up 2/1. Capture: Elite Vanguard face up on our battlefield + Soul Summons in the graveyard. manifest driver with cheatSetup."
   },
   {
     "file": "mass-tokens.json",
     "mechanic": "mass-tokens",
     "kind": "game",
     "assert": "hasMassTokens",
-    "note": "Krenko, Mob Boss + 50 × Raging Goblin al campo propio en un único cheatSetup (los duplicados del mismo nombre sí funcionan: una Card nueva por entrada de la lista; los permanentes cheateados entran sin mareo) contra el SIM pasivo. Se clica Krenko para activar \"{T}: Create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control\" (PermanentsOnBattlefieldCount(SubType.GOBLIN): Krenko también cuenta) sin coste de maná ni objetivo; resuelve 51 Goblin Token (isToken:true, \"Goblin Token\" 1/1 rojo) → 102 permanentes en el campo propio, frame de agrupación/rendimiento para la fila §3.9 (fichas masivas 50+). Captura: battlefield propio con ≥40 fichas cuyo nombre contiene \"goblin\". Driver mass-tokens con cheatSetup."
+    "note": "Krenko, Mob Boss + 50 × Raging Goblin onto our battlefield in a single cheatSetup (duplicates of the same name do work: a new Card per list entry; cheated permanents enter without summoning sickness) against the passive SIM. Krenko is clicked to activate \"{T}: Create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control\" (PermanentsOnBattlefieldCount(SubType.GOBLIN): Krenko also counts) with no mana cost or target; it resolves 51 Goblin Token (isToken:true, \"Goblin Token\" 1/1 red) → 102 permanents on our battlefield, a grouping/performance frame for the mass-tokens case (50+). Capture: our battlefield with ≥40 tokens whose name contains \"goblin\". mass-tokens driver with cheatSetup."
   },
   {
     "file": "ponder.json",
     "mechanic": "ponder",
     "kind": "game",
     "assert": "hasPonder",
-    "note": "Ponder ({U}) resuelto: el \"put them back in any order\" de LookLibraryControllerEffect(3)/PutCards.TOP_ANY NO es GAME_CHOOSE_CARDS_ORDER (método inexistente en este XMage) sino DOS GAME_TARGET 1/1 secuenciales (PlayerImpl.putCardsOnTopOfLibrary con bucle while cards.size()>1 y clearChosen; cada elección se mueve al instante a la cima y la carta NO elegida se mueve la última → queda la más arriba) con las 3 cartas miradas en cardsView1 y los uuid en options.possibleTargets; después un ASK \"Shuffle your library?\" (ShuffleLibrarySourceEffect(true)) y el robo. Prueba del orden por doble robo (cima sembrada por cheat: Plains/Forest/Grizzly): eligiendo Plains y luego Forest la cima queda Grizzly/Forest/Plains, Ponder roba Grizzly en T1 y el robo natural de T3 trae Forest; invariante: Ponder en el cementerio + Grizzly y Forest en mano + Plains NO en mano. Driver ponder con cheatSetup (Ponder en mano + 3 cartas sobre la biblioteca)."
+    "note": "Ponder ({U}) resolved: the \"put them back in any order\" of LookLibraryControllerEffect(3)/PutCards.TOP_ANY is NOT GAME_CHOOSE_CARDS_ORDER (a method that does not exist in this XMage) but TWO sequential 1/1 GAME_TARGETs (PlayerImpl.putCardsOnTopOfLibrary with a while cards.size()>1 loop and clearChosen; each choice is moved instantly to the top and the card NOT chosen is moved last → it ends up on top) with the 3 looked-at cards in cardsView1 and the uuids in options.possibleTargets; then an ASK \"Shuffle your library?\" (ShuffleLibrarySourceEffect(true)) and the draw. Order proven by a double draw (top seeded by cheat: Plains/Forest/Grizzly): choosing Plains and then Forest leaves the top as Grizzly/Forest/Plains, Ponder draws Grizzly on T1 and the natural T3 draw brings Forest; invariant: Ponder in the graveyard + Grizzly and Forest in hand + Plains NOT in hand. ponder driver with cheatSetup (Ponder in hand + 3 cards on top of the library)."
   },
   {
     "file": "class-level.json",
     "mechanic": "class-level",
     "kind": "game",
     "assert": "hasClassLevel",
-    "note": "Wizard Class ({U}, enchantment Class) vía cheatSetup (T1: tierra + Wizard Class a la mano + 8 Islas al campo, 9 maná exacto para {U}+{2}{U}+{4}{U}) y subida de nivel REAL: clic en el permanente (sendPlayerUUID) → activación de la ClassLevelAbility (GAME_CHOOSE_ABILITY si hay varias; GAME_PLAY_MANA por cada maná, las Islas se giran una a una) → nivel 2 (trigger de robo: se espera a pila vacía) → clic de nuevo → nivel 3. El nivel NO vive en counters ni en un campo classLevel de la vista: llega como hint en rules (\"Class level: N\", ClassLevelHint adjunta en ClassReminderAbility y volcada por CardUtil.getCardRulesWithAdditionalInfo; el web lo parsea a badge con CLASS_LEVEL_RE), y el driver lo parsea igual. Captura: Wizard Class propia con rules conteniendo \"Class level: 3\". Driver class-level con cheatSetup + activación real."
+    "note": "Wizard Class ({U}, Class enchantment) via cheatSetup (T1: land + Wizard Class to hand + 8 Islands on the battlefield, 9 mana exactly for {U}+{2}{U}+{4}{U}) and REAL level-up: click the permanent (sendPlayerUUID) → ClassLevelAbility activation (GAME_CHOOSE_ABILITY if there are several; GAME_PLAY_MANA per mana, Islands tapped one at a time) → level 2 (draw trigger: wait for empty stack) → click again → level 3. The level does NOT live in counters or in a classLevel field of the view: it arrives as a hint in rules (\"Class level: N\", ClassLevelHint attached in ClassReminderAbility and emitted by CardUtil.getCardRulesWithAdditionalInfo; the web parses it into a badge with CLASS_LEVEL_RE), and the driver parses it the same way. Capture: our Wizard Class with rules containing \"Class level: 3\". class-level driver with cheatSetup + real activation."
   },
   {
     "file": "poison.json",
     "mechanic": "poison",
     "kind": "game",
     "assert": "hasPoison",
-    "note": "Glistener Elf ({G} 1/1 infect) al campo propio vía cheatSetup (T1 tras la tierra; el permanente cheateado entra con summoningSickness:false y ataca el mismo turno); el SIM lleva el mazo pasivo de solo tierras y no puede bloquear, así que el Elf conecta: el daño de infect a jugador se aplica como contadores de veneno (CounterType.POISON = \"poison\" en PlayerImpl.addCounters) y NO resta vida. Captura en el GAME_UPDATE del daño de combate: sim.counters contiene {name:\"poison\",count:1} (CounterView) y sim.life sigue 20 — prueba directa de que infect no daña al jugador. Driver poison con cheatSetup."
+    "note": "Glistener Elf ({G} 1/1 infect) onto our battlefield via cheatSetup (T1 after the land; the cheated permanent enters with summoningSickness:false and attacks the same turn); the SIM runs the passive lands-only deck and cannot block, so the Elf connects: infect damage to a player is applied as poison counters (CounterType.POISON = \"poison\" in PlayerImpl.addCounters) and does NOT reduce life. Capture in the GAME_UPDATE of combat damage: sim.counters contains {name:\"poison\",count:1} (CounterView) and sim.life remains 20 — direct proof that infect does not damage the player. poison driver with cheatSetup."
   },
   {
     "file": "twincast.json",
     "mechanic": "twincast",
     "kind": "game",
     "assert": "hasTwincastCopy",
-    "note": "Twincast ({U}{U}) copia con cheatSetup (§3.4) un Lightning Bolt lanzado a la cara del SIM: el objetivo de Twincast al lanzarse lo auto-resuelve el motor (único hechizo legal en la pila, no llega GAME_TARGET); al crearse la copia llega el GAME_ASK \"Change this 1 of 1 target: <SIM>?\" (StackObjectImpl.chooseNewTarget, reemplazo opcional) y se responde false, así la copia conserva el objetivo original. Resolución LIFO: copia 3 daños (20→17) y después el Bolt original (17→14). Captura: vida del SIM 14, pila vacía, UN solo Lightning Bolt físico en el cementerio propio + Twincast (la copia no es carta). Driver twincast con cheatSetup."
+    "note": "Twincast ({U}{U}) with cheatSetup copies a Lightning Bolt cast at the SIM's face: Twincast's target when cast is auto-resolved by the engine (the only legal spell on the stack, no GAME_TARGET); when the copy is created the GAME_ASK \"Change this 1 of 1 target: <SIM>?\" arrives (StackObjectImpl.chooseNewTarget, optional replacement) and it is answered false, so the copy keeps the original target. LIFO resolution: copy 3 damage (20→17) and then the original Bolt (17→14). Capture: SIM life 14, empty stack, a SINGLE physical Lightning Bolt in our graveyard + Twincast (the copy is not a card). twincast driver with cheatSetup."
   },
   {
     "file": "discover.json",
     "mechanic": "discover",
     "kind": "game",
     "assert": "hasDiscover",
-    "note": "Trumpeting Carnosaur ({4}{R}{R}, DiscoverEffect(5) al entrar) con 8 Montañas (tierra + 7 del cheat) y biblioteca cheatSetup [\"Giant Growth\",\"Mountain\"] (el último queda arriba): discover exilia Mountain (tierra, sigue) y Giant Growth (MV 1 ≤ 5, para); la decisión llega como GAME_ASK chooseUse \"Cast spell without paying its mana cost (Giant Growth)?\" y con SÍ se lanza gratis desde el exilio (hallazgo: con el Carnosaur como único objetivo legal el motor lo autoelegido, sin GAME_TARGET en el dump); con NO la carta iría a la mano (rama else de DiscoverEffect.doDiscover) y las exiliadas restantes van al fondo (exile vacío en el frame). Captura: Carnosaur 10/9 en el battlefield propio (base 7/6 + el +3/+3 de Giant Growth, prueba de que se lanzó y resolvió) y Giant Growth en el cementerio. Driver discover con cheatSetup."
+    "note": "Trumpeting Carnosaur ({4}{R}{R}, DiscoverEffect(5) on entry) with 8 Mountains (land + 7 from the cheat) and cheatSetup library [\"Giant Growth\",\"Mountain\"] (the last one ends up on top): discover exiles Mountain (a land, keeps going) and Giant Growth (MV 1 ≤ 5, stops); the decision arrives as GAME_ASK chooseUse \"Cast spell without paying its mana cost (Giant Growth)?\" and with YES it is cast for free from exile (finding: with the Carnosaur as the only legal target the engine auto-picks it, no GAME_TARGET in the dump); with NO the card would go to hand (else branch of DiscoverEffect.doDiscover) and the remaining exiled cards go to the bottom (empty exile in the frame). Capture: Carnosaur 10/9 on our battlefield (base 7/6 + Giant Growth's +3/+3, proof that it was cast and resolved) and Giant Growth in the graveyard. discover driver with cheatSetup."
   },
   {
     "file": "improvise.json",
     "mechanic": "improvise",
     "kind": "game",
     "assert": "hasImprovise",
-    "note": "Reverse Engineer ({3}{U}{U}, roba 3, ImproviseAbility) con 3 Islas + 3 Ornithopter vía cheatSetup: el {U}{U} se paga con 2 Islas (UUID en GAME_PLAY_MANA \"Pay {3}{U}{U}\" → \"Pay {3}{U}\") y el {3} CON el botón special (sendPlayerString \"special\" en \"Pay {3}\" → GAME_CHOOSE_ABILITY con la ImproviseSpecialAction → su TargetControlledPermanent(1..3 artefactos sin girar, notTarget) llega como GAME_TARGET \"Select artifact to tap as Improvise's pay (selected N of 3, min 1)\", un Ornithopter por prompt, 3 giros = {C}{C}{C}); tras improvise el motor bloquea habilidades de maná (ActivationManaAbilityStep.AFTER), por eso las Islas van primero. Captura: Reverse Engineer en el cementerio, los 3 Ornithopter girados en el campo y la mano = pre-cast+2 (la carta lanzada sale de la mano y DrawCardSourceControllerEffect(3) roba 3: 7→9). Driver improvise con cheatSetup."
+    "note": "Reverse Engineer ({3}{U}{U}, draw 3, ImproviseAbility) with 3 Islands + 3 Ornithopter via cheatSetup: the {U}{U} is paid with 2 Islands (UUID in GAME_PLAY_MANA \"Pay {3}{U}{U}\" → \"Pay {3}{U}\") and the {3} WITH the special button (sendPlayerString \"special\" on \"Pay {3}\" → GAME_CHOOSE_ABILITY with the ImproviseSpecialAction → its TargetControlledPermanent(1..3 untapped artifacts, notTarget) arrives as GAME_TARGET \"Select artifact to tap as Improvise's pay (selected N of 3, min 1)\", one Ornithopter per prompt, 3 taps = {C}{C}{C}); after improvise the engine blocks mana abilities (ActivationManaAbilityStep.AFTER), which is why the Islands go first. Capture: Reverse Engineer in the graveyard, the 3 Ornithopters tapped on the battlefield and hand = pre-cast+2 (the cast card leaves the hand and DrawCardSourceControllerEffect(3) draws 3: 7→9). improvise driver with cheatSetup."
   },
   {
     "file": "ward-no-pay.json",
     "mechanic": "ward-no-pay",
     "kind": "game",
     "assert": "hasWardCountered",
-    "note": "Ward sin pagar vía cheatSetup (§3.4): Lightning Bolt al Thornfist Striker (3/3, Ward {1}, sin ETB) cheateado al campo rival; el trigger de Ward pregunta con chooseUse 'Pay {1}?' (texto de CounterUnlessPaysEffect, sin la palabra 'ward' — el matcher /ward/ del driver inline `ward` nunca dispararía) y se responde false: por reglas el hechizo queda contrarrestado. Captura: Thornfist vivo y sin daño (damage 0), Lightning Bolt en el cementerio propio, pila vacía y vida del SIM 20. HALLAZGO: Sythis, Harvest's Hand NO tiene Ward en el fork (su rules es solo el trigger de encantamientos), por eso el driver `ward` existente en realidad mata a Sythis con daño normal; aquí se usa una carta con WardAbility auténtica. Driver ward-no-pay con cheatSetup."
+    "note": "Ward without paying via cheatSetup: Lightning Bolt at Thornfist Striker (3/3, Ward {1}, no ETB) cheated onto the opponent's battlefield; the Ward trigger asks with chooseUse 'Pay {1}?' (text from CounterUnlessPaysEffect, without the word 'ward' — the /ward/ matcher of the inline `ward` driver would never fire) and it is answered false: by the rules the spell is countered. Capture: Thornfist alive and undamaged (damage 0), Lightning Bolt in our graveyard, empty stack and SIM life 20. FINDING: Sythis, Harvest's Hand has NO Ward in the fork (its rules is only the enchantment trigger), which is why the existing `ward` driver actually kills Sythis with normal damage; here a card with an authentic WardAbility is used. ward-no-pay driver with cheatSetup."
   },
   {
     "file": "cant-block.json",
     "mechanic": "cant-block",
     "kind": "game",
     "assert": "hasCantBlock",
-    "note": "Restricción estática \"can't block\" (Tormented Soul, M12 114: {B} 1/1 Spirit con CantBlockAbility + CantBeBlockedSourceEffect, \"can't block and can't be blocked\") cheateada al campo propio; Grizzly Bears 2/2 cheateado al del SIM con el segundo cheat (encadenado a 800 ms; el retardo es de reloj real y el juego avanza turnos rápidos entre medias — en la captura el Grizzly entró en el T18 y atacó en el T19). En el turno del SIM este ataca con todo: la Tormented Soul está destapada y es nuestra ÚNICA criatura, pero por regla no es elegible como bloqueadora (no es una decisión de la IA), así que el ataque entra sin bloqueo (combat[].isBlocked=false, blockers vacío) y nuestra vida cae 20→18. Captura: vida 18, Grizzly atacante vivo y girado en el campo rival y Tormented Soul destapada en el nuestro; su CardView.rules incluye \"{this} can't block and can't be blocked.\" + el icono \"ICON_RESTRICTCan't block (Tormented Soul [62f])\". El otro lado de la carta (can't be blocked) no se ejercita en este fixture (prioridad: can't block). Driver cant-block con cheatSetup."
+    "note": "Static \"can't block\" restriction (Tormented Soul, M12 114: {B} 1/1 Spirit with CantBlockAbility + CantBeBlockedSourceEffect, \"can't block and can't be blocked\") cheated onto our battlefield; Grizzly Bears 2/2 cheated onto the SIM's with the second cheat (chained at 800 ms; the delay is real clock and the game advances turns quickly in between — in the capture the Grizzly entered on T18 and attacked on T19). On the SIM's turn it attacks with everything: Tormented Soul is untapped and is our ONLY creature, but by rule it is not eligible as a blocker (it is not an AI decision), so the attack goes through unblocked (combat[].isBlocked=false, empty blockers) and our life drops 20→18. Capture: life 18, attacking Grizzly alive and tapped on the opponent's battlefield and Tormented Soul untapped on ours; its CardView.rules includes \"{this} can't block and can't be blocked.\" + the icon \"ICON_RESTRICTCan't block (Tormented Soul [62f])\". The card's other side (can't be blocked) is not exercised in this fixture (priority: can't block). cant-block driver with cheatSetup."
   },
   {
     "file": "trample-deathtouch.json",
     "mechanic": "trample-deathtouch",
     "kind": "game",
     "assert": "hasTrampleDeathtouch",
-    "note": "Trample + deathtouch forzado con Lure real (el SIM no bloquea voluntariamente a un atacante con deathtouch; Lure lo obliga por regla, como must-block): tierra + cheat RAW (sin auto-pass) — Elvish Warrior 2/3 al campo + 8 Bosques + Lure/Rancor/Basilisk Collar en mano — + casts Lure→Rancor→Collar ({1}{G}{G}+{G}+{2}, giro de Bosques) + equipar el Collar (equip {2}) + atacar con el Warrior 4/3 (Rancor +2/+0 da trample; Collar da deathtouch+lifelink) confirmando con el botón special. Hallazgo de timing (re-validado en 1.4.62): sembrar el Grizzly al inicio (800 ms tras el primer cheat) ya no funciona (el juego avanza ~2 turnos/s, el Grizzly muere o nos pega antes de armar el combo y la vida no cuadra); el Grizzly se siembra una sola vez en el turno del ataque, gateado por Lure+Rancor+Collar adjuntos, y el driver ataca en cuanto hay Grizzly fresco. Hallazgo que corrige el plan: un atacante 4/2 (Grizzly+Rancor) muere al daño de bloqueo, que es simultáneo (deathtouch no \"pega antes\"); con Elvish Warrior 2/3 el atacante es 4/3 y sobrevive con 2 daños. El reparto de daño llega como GAME_GET_MULTI_AMOUNT (items[min/max/defaultValue]; el defaultValue del servidor ya rebaja el letal a 1 por deathtouch) y se responde el default (1 al bloqueador): el motor calcula el exceso de trample (damage - asignado = 3) y lo manda al jugador. Captura: Grizzly del SIM en el cementerio (letal de deathtouch), vida del SIM 20→17 (1 letal + 3 de trample), nuestra vida 20→24 (lifelink 4 de los 4 daños; ya no se acepta 22: sin Grizzlies sueltos el SIM no llega a pegar antes del ataque) y Elvish Warrior 4/3 vivo en el campo con damage=2, rules [\"Trample\",\"Deathtouch\",\"Lifelink\"], Lure+Rancor+Collar adjuntos. Driver trample-deathtouch con cheatSetup + Lure real."
+    "note": "Trample + deathtouch forced with a real Lure (the SIM does not voluntarily block an attacker with deathtouch; Lure forces it by rule, like must-block): land + RAW cheat (no auto-pass) — Elvish Warrior 2/3 to the battlefield + 8 Forests + Lure/Rancor/Basilisk Collar in hand — + casts Lure→Rancor→Collar ({1}{G}{G}+{G}+{2}, tapping Forests) + equipping the Collar (equip {2}) + attacking with the 4/3 Warrior (Rancor +2/+0 grants trample; Collar grants deathtouch+lifelink) confirming with the special button. Timing finding (re-validated in 1.4.62): seeding the Grizzly at the start (800 ms after the first cheat) no longer works (the game advances ~2 turns/s, the Grizzly dies or hits us before the combo is assembled and the life does not add up); the Grizzly is seeded once on the turn of the attack, gated by Lure+Rancor+Collar attached, and the driver attacks as soon as there is a fresh Grizzly. Finding that corrects the plan: a 4/2 attacker (Grizzly+Rancor) dies to the blocking damage, which is simultaneous (deathtouch does not \"hit first\"); with Elvish Warrior 2/3 the attacker is 4/3 and survives with 2 damage. The damage assignment arrives as GAME_GET_MULTI_AMOUNT (items[min/max/defaultValue]; the server's defaultValue already reduces the lethal to 1 because of deathtouch) and the default is answered (1 to the blocker): the engine computes the trample excess (damage - assigned = 3) and sends it to the player. Capture: SIM's Grizzly in the graveyard (deathtouch lethal), SIM life 20→17 (1 lethal + 3 trample), our life 20→24 (lifelink 4 from the 4 damage; 22 is no longer accepted: without stray Grizzlies the SIM does not get to hit before the attack) and Elvish Warrior 4/3 alive on the battlefield with damage=2, rules [\"Trample\",\"Deathtouch\",\"Lifelink\"], Lure+Rancor+Collar attached. trample-deathtouch driver with cheatSetup + real Lure."
   },
   {
     "file": "attack-pw.json",
     "mechanic": "attack-pw",
     "kind": "game",
     "assert": "hasAttackPlaneswalker",
-    "note": "Grizzly Bears (2/2 vanilla) propio vía cheatSetup ataca al planeswalker del SIM Tibalt, Rakish Instigator ({2}{R}, starting loyalty 5) también cheateado (~800 ms después) al campo rival; sin criaturas en el SIM el ataque queda sin bloquear y el daño resta lealtad 5→3. Método de elección de defensor: al enviar el UUID del atacante con >1 defensor (jugador + PW) HumanPlayer.selectDefender (HumanPlayer.java:2020) lanza un TargetDefender \"player, planeswalker, or battle to attack\" → GAME_TARGET cuyas opciones (options.possibleTargets, notTarget) incluyen el UUID del PW; se responde sendPlayerUUID(pwId) — ese es el clic en el PW — y la declaración se cierra con sendPlayerBoolean(false) (botón ok; NO usar special con >1 defensor: abre un segundo target de \"all attack\", HumanPlayer.java:1855). Evidencia en el view: el permanente del SIM con cardTypes PLANESWALKER y `loyalty` \"3\" (string derivado del contador LOYALTY, también en counters [{name:\"loyalty\",count:3}]) y gv.combat[] con defenderId = UUID del PW y el Grizzly en attackers. Driver attack-pw con cheatSetup."
+    "note": "Our own Grizzly Bears (2/2 vanilla) via cheatSetup attacks the SIM's planeswalker Tibalt, Rakish Instigator ({2}{R}, starting loyalty 5), also cheated (~800 ms later) onto the opponent's battlefield; with no creatures on the SIM the attack goes unblocked and the damage reduces loyalty 5→3. Defender-choice method: when sending the attacker's UUID with >1 defender (player + PW) HumanPlayer.selectDefender (HumanPlayer.java:2020) throws a TargetDefender \"player, planeswalker, or battle to attack\" → GAME_TARGET whose options (options.possibleTargets, notTarget) include the PW's UUID; it is answered with sendPlayerUUID(pwId) — that is the click on the PW — and the declaration is closed with sendPlayerBoolean(false) (ok button; do NOT use special with >1 defender: it opens a second \"all attack\" target, HumanPlayer.java:1855). Evidence in the view: the SIM's permanent with cardTypes PLANESWALKER and `loyalty` \"3\" (a string derived from the LOYALTY counter, also in counters [{name:\"loyalty\",count:3}]) and gv.combat[] with defenderId = the PW's UUID and the Grizzly in attackers. attack-pw driver with cheatSetup."
   },
   {
     "file": "attack-cost.json",
     "mechanic": "attack-cost",
     "kind": "game",
     "assert": "hasAttackCostPaid",
-    "note": "Propaganda ({2}{U}, \"Creatures can't attack you or a planeswalker you control unless their controller pays {2} for each of those creatures.\") cheateada al campo del SIM; Grizzly Bears propio cheateado (sin mareo) ataca y un Treasure token (creado por Prosperous Innkeeper lanzado de verdad con Forest) se sacrifica para cubrir parte del coste (el resto lo paga una Forest). HALLAZGO: durante el GAME_PLAY_MANA del coste de Propaganda, canPlayObjects llega VACÍO ({}) aunque haya Treasure y Forest sin girar — a diferencia del pago normal de un hechizo, donde el Treasure sí aparece en canPlayObjects.other. El servidor igualmente acepta sendPlayerUUID(treasureId) como pago válido; el bug estaba en el web, que gateaba el click de cualquier permanente en playableIds (1:1 con canPlayObjects) — reporte de usuario: con 2 Treasure disponibles, el pago de {2} para atacar no dejaba clicarlos. Fix: useBoardPresenter.ts reenvía cualquier click de permanente durante un feedback de maná (mode \"mana\"), igual que el cliente oficial (CardPanel.mouseClicked no gatea en isPlayable). Driver attack-cost con cheatSetup + spell real."
+    "note": "Propaganda ({2}{U}, \"Creatures can't attack you or a planeswalker you control unless their controller pays {2} for each of those creatures.\") cheated onto the SIM's battlefield; our own cheated Grizzly Bears (no summoning sickness) attacks and a Treasure token (created by a real Prosperous Innkeeper cast with a Forest) is sacrificed to cover part of the cost (the rest is paid with a Forest). FINDING: during the GAME_PLAY_MANA of Propaganda's cost, canPlayObjects arrives EMPTY ({}) even though there is a Treasure and an untapped Forest — unlike the normal payment of a spell, where the Treasure does appear in canPlayObjects.other. The server nonetheless accepts sendPlayerUUID(treasureId) as valid payment; the bug was in the web, which gated the click of any permanent on playableIds (1:1 with canPlayObjects) — user report: with 2 Treasures available, the {2} payment to attack would not let them be clicked. Fix: useBoardPresenter.ts forwards any permanent click during mana feedback (mode \"mana\"), just like the official client (CardPanel.mouseClicked does not gate on isPlayable). attack-cost driver with cheatSetup + real spell."
   },
   {
     "file": "echo-upkeep.json",
     "mechanic": "echo-upkeep",
     "kind": "game",
     "assert": "hasEchoUpkeepPaid",
-    "note": "Citanul Centaurs ({3}{G} 6/3, Shroud, Echo {3}{G}) cheateado directo al campo propio; en nuestro siguiente upkeep EchoAbility dispara EchoEffect (GAME_ASK \"Pay {3}{G}?\" → sí) y el pago sale por el mismo game.firePlayManaEvent que cualquier GAME_PLAY_MANA (HumanPlayer.playManaHandling), igual que el coste de Propaganda para atacar pero disparado por un trigger de upkeep, no por declarar un ataque. Segundo caso confirmado del mismo patrón que attack-cost.json: el fix de useBoardPresenter.ts (reenviar cualquier click de permanente durante feedback.mode === \"mana\", sin depender de canPlayObjects) cubre ambos sin cambios específicos por mecánica. Captura: Citanul Centaurs vivo en el campo (no sacrificado) tras pagar, pila vacía. Driver echo-upkeep con cheatSetup."
+    "note": "Citanul Centaurs ({3}{G} 6/3, Shroud, Echo {3}{G}) cheated directly onto our battlefield; on our next upkeep EchoAbility fires EchoEffect (GAME_ASK \"Pay {3}{G}?\" → yes) and the payment goes through the same game.firePlayManaEvent as any GAME_PLAY_MANA (HumanPlayer.playManaHandling), just like Propaganda's cost to attack but triggered by an upkeep trigger, not by declaring an attack. Second confirmed case of the same pattern as attack-cost.json: the useBoardPresenter.ts fix (forward any permanent click during feedback.mode === \"mana\", without depending on canPlayObjects) covers both with no mechanic-specific changes. Capture: Citanul Centaurs alive on the battlefield (not sacrificed) after paying, empty stack. echo-upkeep driver with cheatSetup."
   },
   {
     "file": "choice-color.json",
     "mechanic": "choice-color",
     "kind": "game",
     "assert": "hasChoiceColorOrNumber",
-    "note": "Elección de color Y de número en un mismo frame vía cheatSetup (§3.7): Story Circle y Sanctum Prelate (ambas {1}{W}{W}, white, sin ETB que pida decisión al cheatear; van a la MANO con 6 Plains al campo y se lanzan de verdad). HALLAZGO: en el fork 1.4.61 NO existen los callbacks GAME_CHOOSE_COLOR/GAME_CHOOSE_NUMBER (verificado en ClientCallbackMethod; el web solo los soporta como legado/fake): la elección de color llega como GAME_CHOOSE_CHOICE con ChoiceColor (choices White/Blue/Black/Red/Green, keyChoices VACÍO ⇒ string mode, se responde sendPlayerString \"Red\" y HumanPlayer la valida con setChoice) y la de número como GAME_GET_AMOUNT (getAmount(0, MAX, \"Choose a number (mana cost to restrict)\") ⇒ sendPlayerInteger 3). Captura: ambos permanentes en el battlefield propio con el rules visible \"Chosen color: Red\" (ChooseColorEffect.addInfo) y \"Chosen Number: 3\" (ChooseNumberEffect.addInfo) y pila vacía. Driver choice-color con cheatSetup."
+    "note": "Color AND number choice in the same frame via cheatSetup: Story Circle and Sanctum Prelate (both {1}{W}{W}, white, no ETB that asks for a decision when cheated; they go to HAND with 6 Plains on the battlefield and are cast for real). FINDING: in the 1.4.61 fork the GAME_CHOOSE_COLOR/GAME_CHOOSE_NUMBER callbacks do NOT exist (verified in ClientCallbackMethod; the web only supports them as legacy/fake): the color choice arrives as GAME_CHOOSE_CHOICE with ChoiceColor (choices White/Blue/Black/Red/Green, EMPTY keyChoices ⇒ string mode, answered with sendPlayerString \"Red\" and HumanPlayer validates it with setChoice) and the number one as GAME_GET_AMOUNT (getAmount(0, MAX, \"Choose a number (mana cost to restrict)\") ⇒ sendPlayerInteger 3). Capture: both permanents on our battlefield with the visible rules \"Chosen color: Red\" (ChooseColorEffect.addInfo) and \"Chosen Number: 3\" (ChooseNumberEffect.addInfo) and empty stack. choice-color driver with cheatSetup."
   },
   {
     "file": "goad.json",
     "mechanic": "goad",
     "kind": "game",
     "assert": "hasGoad",
-    "note": "Disrupt Decorum ({2}{R}{R}: \"Goad all creatures you don't control\", GoadAllEffect Duration.UntilYourNextTurn) lanzado de verdad con cheatSetup (4 Mountains al campo propio + la sorcery a la mano; 800 ms después Grizzly Bears al campo del SIM, patrón must-block/energy) contra el SIM pasivo. El view NO trae `goadingPlayers` (gap aceptado), pero PermanentImpl.getRules(game) añade \"Goaded by <jugador> (must attack)\" (HintUtils ICON_REQUIRE) a `rules` y CardView lo vuelca además como cardIcon OTHER_HAS_RESTRICTIONS (hint \"Goaded by <jugador> (must attack)\", CardView.java:758-773); la captura es el GAME_UPDATE tras resolver el hechizo con el Grizzly del SIM mostrando ese texto en `rules`/`cardIcons`. Driver goad con spell real vía cheatSetup."
+    "note": "Disrupt Decorum ({2}{R}{R}: \"Goad all creatures you don't control\", GoadAllEffect Duration.UntilYourNextTurn) cast for real with cheatSetup (4 Mountains onto our battlefield + the sorcery in hand; 800 ms later Grizzly Bears onto the SIM's battlefield, must-block/energy pattern) against the passive SIM. The view does NOT carry `goadingPlayers` (accepted gap), but PermanentImpl.getRules(game) adds \"Goaded by <player> (must attack)\" (HintUtils ICON_REQUIRE) to `rules` and CardView also emits it as the cardIcon OTHER_HAS_RESTRICTIONS (hint \"Goaded by <player> (must attack)\", CardView.java:758-773); the capture is the GAME_UPDATE after resolving the spell with the SIM's Grizzly showing that text in `rules`/`cardIcons`. goad driver with a real spell via cheatSetup."
   },
   {
     "file": "hexproof.json",
     "mechanic": "hexproof",
     "kind": "game",
     "assert": "hasHexproof",
-    "note": "Hexproof sin ward vía cheatSetup (§3.4, caso que faltaba): Slippery Bogle ({G/U} 1/1, HexproofAbility, sin ETB) al campo rival y Lightning Bolt propio. La regla 702.11b impide elegir al Bogle: el GAME_TARGET del lanzamiento llega con possibleTargets SIN su id (solo las dos caras del duelo) y el driver responde la cara del rival; el Bolt resuelve a la cara (SIM 20→17) y el Bogle queda vivo con damage 0 y su rules con el texto de Hexproof. Contraste con ward-no-pay: con Ward el hechizo SÍ se puede lanzar al permanente y el trigger lo contrarresta al no pagar; con hexproof el permanente ni siquiera es objetivo legal. Cheats encadenados a ~800 ms (Bolt+Montaña y luego Bogle al rival), ambos en main propio (regla P1); si el turno avanza antes del segundo, se difiere al siguiente main propio. Driver hexproof con cheatSetup."
+    "note": "Hexproof without ward via cheatSetup (the missing case): Slippery Bogle ({G/U} 1/1, HexproofAbility, no ETB) onto the opponent's battlefield and our own Lightning Bolt. Rule 702.11b prevents choosing the Bogle: the cast's GAME_TARGET arrives with possibleTargets WITHOUT its id (only the two duel faces) and the driver answers the opponent's face; the Bolt resolves to the face (SIM 20→17) and the Bogle stays alive with damage 0 and its rules containing the Hexproof text. Contrast with ward-no-pay: with Ward the spell CAN be cast at the permanent and the trigger counters it when you do not pay; with hexproof the permanent is not even a legal target. Cheats chained at ~800 ms (Bolt+Mountain and then Bogle onto the opponent), both on our own main phase (rule P1); if the turn advances before the second, it is deferred to our next main phase. hexproof driver with cheatSetup."
   },
   {
     "file": "monarch.json",
     "mechanic": "monarch",
     "kind": "game",
     "assert": "hasMonarch",
-    "note": "Palace Sentinels (CN2 19, {3}{W}: ETB \"you become the monarch\") lanzada de verdad vía cheatSetup (carta a la mano + 3 Llanuras al campo; 4 manás exactos) contra el SIM pasivo; el ETB no abre ninguna decisión (0 GAME_TARGET en la run). SONDA DE CONTRATO: el monarca SÍ viaja al view aunque GameState.monarchId no tenga campo propio — GameView no tiene monarchId/monarch de nivel superior; PlayerView lo proyecta como players[].monarch:boolean (\"player.getId().equals(game.getMonarchId())\", PlayerView.java:154). HALLAZGO: players[].designationNames NO sirve para el monarca (quedó []): Monarch es una Designation GLOBAL de GameState (state.addDesignation desde GameImpl.setMonarchId) y PlayerView solo serializa las designations del jugador (City's Blessing, Speed…). Sin gap engine→view: la fuente de verdad del cliente es players[].monarch. Invariante del frame: me.monarch===true, Palace Sentinels en mi battlefield y pila vacía. Driver monarch con cheatSetup."
+    "note": "Palace Sentinels (CN2 19, {3}{W}: ETB \"you become the monarch\") cast for real via cheatSetup (card to hand + 3 Plains on the battlefield; exactly 4 mana) against the passive SIM; the ETB opens no decision (0 GAME_TARGET in the run). CONTRACT PROBE: the monarch DOES travel to the view even though GameState.monarchId has no field of its own — GameView has no top-level monarchId/monarch; PlayerView projects it as players[].monarch:boolean (\"player.getId().equals(game.getMonarchId())\", PlayerView.java:154). FINDING: players[].designationNames does NOT work for the monarch (it stayed []): Monarch is a GLOBAL GameState Designation (state.addDesignation from GameImpl.setMonarchId) and PlayerView only serializes the player's designations (City's Blessing, Speed…). No engine→view gap: the client's source of truth is players[].monarch. Frame invariant: me.monarch===true, Palace Sentinels on my battlefield and empty stack. monarch driver with cheatSetup."
   },
   {
     "file": "switcheroo.json",
     "mechanic": "switcheroo",
     "kind": "game",
     "assert": "hasSwitcheroo",
-    "note": "Switcheroo (M19 78, {4}{U} sorcery \"Exchange control of two target creatures\"; TargetCreaturePermanent(2) + ExchangeControlTargetEffect Duration.EndOfGame, capa 2) lanzado de verdad: cheatSetup pone Switcheroo en mano, 4 Islas + Grizzly Bears propios al campo y (800 ms después, segundo cheat al playerId del SIM) Elvish Mystic al campo rival; se paga {4}{U} con 5 Islas (T1 + 4 cheateadas) y el intercambio voltea los controladores. HALLAZGO de targeting: con exactamente min=max=2 objetivos legales NO hay GAME_TARGET del hechizo — TargetImpl.tryToAutoChoose (autoTargetLevel por defecto > 0) autoelige ambos (possibleTargets==min−elegidos); el ÚNICO GAME_TARGET de la run es el descarte de limpieza del T2 (\"Select a card to discard\", flag=true, min=max=0, targets=8 UUIDs de la mano, options={chosenTargets:[],targetZone:\"HAND\",queryType:\"PICK_TARGET\"}). Invariante del frame: Elvish Mystic en MI battlefield, Grizzly Bears en el del SIM (la zona del view sigue al controlador), Switcheroo en mi cementerio y pila vacía. Driver switcheroo con cheatSetup."
+    "note": "Switcheroo (M19 78, {4}{U} sorcery \"Exchange control of two target creatures\"; TargetCreaturePermanent(2) + ExchangeControlTargetEffect Duration.EndOfGame, layer 2) cast for real: cheatSetup puts Switcheroo in hand, 4 Islands + our Grizzly Bears on the battlefield and (800 ms later, a second cheat at the SIM's playerId) Elvish Mystic onto the opponent's battlefield; {4}{U} is paid with 5 Islands (T1 + 4 cheated) and the exchange flips the controllers. TARGETING FINDING: with exactly min=max=2 legal targets there is NO GAME_TARGET for the spell — TargetImpl.tryToAutoChoose (default autoTargetLevel > 0) auto-picks both (possibleTargets==min−chosen); the ONLY GAME_TARGET in the run is the T2 cleanup discard (\"Select a card to discard\", flag=true, min=max=0, targets=8 hand UUIDs, options={chosenTargets:[],targetZone:\"HAND\",queryType:\"PICK_TARGET\"}). Frame invariant: Elvish Mystic on MY battlefield, Grizzly Bears on the SIM's (the view's zone follows the controller), Switcheroo in my graveyard and empty stack. switcheroo driver with cheatSetup."
   },
   {
     "file": "colorless-c.json",
     "mechanic": "colorless-c",
     "kind": "game",
     "assert": "hasColorlessC",
-    "note": "Incoloro específico {C} (§3.2): Spatial Contortion ({1}{C}, OGW 8) lanzado con 5 Wastes (OGW 183, básica incolora; {T}: Add {C}) contra un Craw Wurm 6/4 propio, todo vía cheatSetup (4 Wastes + el Wurm al campo entran sin decisión). Prompts reales del pago: GAME_PLAY_MANA \"Pay {1}{C}\" (se responde con UUID de Wastes: su {C} cubre la parte {C}) y después \"Pay {1}\" (2ª Wastes); el pago sale de onPlayMana explícito. HALLAZGO: con un único objetivo legal (el Wurm) y min==max==1 el motor autoelige el objetivo (TargetImpl.tryToAutoChoose, mismo patrón que switcheroo) y NO llega GAME_TARGET. Captura: Spatial Contortion en mi cementerio, Craw Wurm 9/1 en el campo (PermanentView.power/toughness son strings con el +3/-3 aplicado, como en discover/planeswalker) y 2 Wastes giradas, pila vacía. Driver colorless-c con cheatSetup."
+    "note": "Colorless {C} specifically: Spatial Contortion ({1}{C}, OGW 8) cast with 5 Wastes (OGW 183, colorless basic; {T}: Add {C}) at our own 6/4 Craw Wurm, all via cheatSetup (4 Wastes + the Wurm onto the battlefield enter with no decision). Real payment prompts: GAME_PLAY_MANA \"Pay {1}{C}\" (answered with a Wastes UUID: its {C} covers the {C} part) and then \"Pay {1}\" (2nd Wastes); the payment comes from an explicit onPlayMana. FINDING: with a single legal target (the Wurm) and min==max==1 the engine auto-picks the target (TargetImpl.tryToAutoChoose, same pattern as switcheroo) and NO GAME_TARGET arrives. Capture: Spatial Contortion in my graveyard, Craw Wurm 9/1 on the battlefield (PermanentView.power/toughness are strings with the +3/-3 applied, as in discover/planeswalker) and 2 tapped Wastes, empty stack. colorless-c driver with cheatSetup."
   },
   {
     "file": "disguise.json",
     "mechanic": "disguise",
     "kind": "game",
     "assert": "hasDisguise",
-    "note": "Unyielding Gatekeeper ({1}{W}, Disguise {1}{W}) lanzado boca abajo por {3} vía cheatSetup (carta a la mano + 4 Plains al campo): entra como 2/2 anónimo con faceDown:true, disguised:true (morph usa morphed:true y manifest manifested:true), ward {2} visible en rules (\"A face-down creature that was cloaked or cast with disguise has ward {2}…\") y NO en cardIcons (vacío, medido). Giro boca arriba verificado aparte (run exploratorio, JSON no conservado): clic → GAME_PLAY_MANA \"Pay {1}{W}… face down creature\" → Unyielding Gatekeeper 3/2 boca arriba y su trigger \"turn face up\" se desvanece sin objetivo legal (no hay otro permanente no-tierra); mismo camino TurnFaceUpAbility que manifest.json, que no se ejecuta en la captura porque el frame del ward solo existe boca abajo. Captura: permanente propio faceDown+disguised en un GAME_UPDATE_AND_INFORM."
+    "note": "Unyielding Gatekeeper ({1}{W}, Disguise {1}{W}) cast face down for {3} via cheatSetup (card to hand + 4 Plains on the battlefield): it enters as an anonymous 2/2 with faceDown:true, disguised:true (morph uses morphed:true and manifest manifested:true), ward {2} visible in rules (\"A face-down creature that was cloaked or cast with disguise has ward {2}…\") and NOT in cardIcons (empty, measured). Face-up turn verified separately (exploratory run, JSON not kept): click → GAME_PLAY_MANA \"Pay {1}{W}… face down creature\" → Unyielding Gatekeeper 3/2 face up and its \"turn face up\" trigger fizzles with no legal target (there is no other nonland permanent); same TurnFaceUpAbility path as manifest.json, which does not run in the capture because the ward frame only exists face down. Capture: our faceDown+disguised permanent in a GAME_UPDATE_AND_INFORM."
   },
   {
     "file": "stun-oil.json",
     "mechanic": "stun-oil",
     "kind": "game",
     "assert": "hasStunOil",
-    "note": "Stun + oil en un mismo frame vía cheatSetup (§3.9): Rime Chill (ECL 64) al Grizzly Bears del SIM e Incubation Sac ({G} artefacto con EntersBattlefieldWithCountersAbility de 3 aceite) propios. HALLAZGO: en el fork 1.4.61 Rime Chill NO es \"Tap target creature. Put a stun counter on it.\" sino un instant {6}{U} con Vivid (\"Tap up to two target creatures. Put a stun counter on each of them. Draw a card.\", TargetCreaturePermanent(0,2)); el Vivid reduce {1} por color entre tus permanentes pero las básicas de XMage solo llevan frameColor (Island.java: frameColor.setBlue) y su color queda vacío ⇒ solo cuenta el verde de Incubation Sac y el prompt real es \"Pay {5}{U}\" (6 Islas). El GAME_TARGET llega como \"Select creatures (selected 0 of 2)\" con min 0/max 0 y possibleTargets=[Grizzly]; un solo UUID (Grizzly) cierra la selección (sin prompt Done). Captura: PermanentView.counters (CounterView {name,count}) — Incubation Sac con [{name:\"oil\",count:3}] y el Grizzly del SIM con tapped:true y [{name:\"stun\",count:1}] (mismo campo que +1/+1 o loyalty), pila vacía; el stun sustituye el próximo despertar. Driver stun-oil con cheatSetup (G pagado con Forest explícito en onPlayMana; los 800 ms entre cheats son de reloj real y el juego avanzó ~10 turnos de tierras hasta el Grizzly, como en cant-block)."
+    "note": "Stun + oil in the same frame via cheatSetup: Rime Chill (ECL 64) at the SIM's Grizzly Bears and our own Incubation Sac ({G} artifact with an EntersBattlefieldWithCountersAbility of 3 oil). FINDING: in the 1.4.61 fork Rime Chill is NOT \"Tap target creature. Put a stun counter on it.\" but a {6}{U} instant with Vivid (\"Tap up to two target creatures. Put a stun counter on each of them. Draw a card.\", TargetCreaturePermanent(0,2)); Vivid reduces {1} per color among your permanents but XMage's basics only carry frameColor (Island.java: frameColor.setBlue) and their color stays empty ⇒ only the green of Incubation Sac counts and the real prompt is \"Pay {5}{U}\" (6 Islands). The GAME_TARGET arrives as \"Select creatures (selected 0 of 2)\" with min 0/max 0 and possibleTargets=[Grizzly]; a single UUID (Grizzly) closes the selection (no Done prompt). Capture: PermanentView.counters (CounterView {name,count}) — Incubation Sac with [{name:\"oil\",count:3}] and the SIM's Grizzly with tapped:true and [{name:\"stun\",count:1}] (same field as +1/+1 or loyalty), empty stack; the stun replaces the next untap. stun-oil driver with cheatSetup (G paid with an explicit Forest in onPlayMana; the 800 ms between cheats are real clock and the game advanced ~10 land turns until the Grizzly, as in cant-block)."
   },
   {
     "file": "coin-dice.json",
     "mechanic": "coin-dice",
     "kind": "game",
     "assert": "hasCoinDice",
-    "note": "Moneda + d20 vía cheatSetup (§3.7): Tavern Swindler ({1}{B} 2/2) cheateado al campo (sin mareo; lanzarlo lo dejaría mareado y no podría activar {T} este turno) activa \"{T}, Pay 3 life: Flip a coin. If you win the flip, you gain 6 life\" → GAME_ASK \"Heads or tails?\" (chooseUse del flip winnable; se responde Heads) y vida 17/23 (17 = 20-3 perdida, 23 = 20-3+6 ganada) + Recruitment Drive ({2}{W}, \"Roll a d20\") lanzada después → fichas Soldier Token 1/1 (1-9) o Knight Token 2/2 (10-19 dos; 20 tres) en el campo. HALLAZGO DE CONTRATO: dado y moneda NO son eventos estructurados ni campos del GameView (types.generated.ts no tiene roll/dice/coin); el resultado llega SOLO como TEXTO al CHAT DE LA PARTIDA (game.informPlayers → GameImpl.fireInformEvent → GameController INFO → chatManager.broadcast MessageType.GAME → callback CHATMESSAGE; el web lo pinta con handleChatMessage → addLog channel \"game\"), NO por GAME_INFORM/GAME_UPDATE_AND_INFORM (eso es solo \"Waiting for X\" y espectadores). El frame debe asertar el efecto aplicado (vida 17/23 + Swindler girado + fichas d20 + pila vacía). Driver coin-dice con cheatSetup."
+    "note": "Coin + d20 via cheatSetup: Tavern Swindler ({1}{B} 2/2) cheated onto the battlefield (no summoning sickness; casting it would leave it summoning-sick and it could not activate {T} this turn) activates \"{T}, Pay 3 life: Flip a coin. If you win the flip, you gain 6 life\" → GAME_ASK \"Heads or tails?\" (chooseUse of the winnable flip; answered Heads) and life 17/23 (17 = 20-3 lost, 23 = 20-3+6 gained) + Recruitment Drive ({2}{W}, \"Roll a d20\") cast afterwards → 1/1 Soldier Token (1-9) or 2/2 Knight Token (10-19 two; 20 three) tokens on the battlefield. CONTRACT FINDING: dice and coin are NOT structured events nor GameView fields (types.generated.ts has no roll/dice/coin); the result arrives ONLY as TEXT to the GAME CHAT (game.informPlayers → GameImpl.fireInformEvent → GameController INFO → chatManager.broadcast MessageType.GAME → CHATMESSAGE callback; the web renders it with handleChatMessage → addLog channel \"game\"), NOT via GAME_INFORM/GAME_UPDATE_AND_INFORM (that is only \"Waiting for X\" and spectators). The frame must assert the applied effect (life 17/23 + tapped Swindler + d20 tokens + empty stack). coin-dice driver with cheatSetup."
   },
   {
     "file": "fail-to-find.json",
     "mechanic": "fail-to-find",
     "kind": "game",
     "assert": "hasFailToFind",
-    "note": "Fail-to-find REAL vía cheatSetup (§3.8): Evolving Wilds al campo + activación \"{T}, Sacrifice: Search your library for a basic land card\" y el GAME_TARGET se declina con sendPlayerBoolean(false). Vía: TargetCardInLibrary nace required=false cuando el filtro tiene predicados (setRequired(!filter.hasPredicates()); FILTER_CARD_BASIC_LAND añade SuperType.BASIC, regla 701.15b), así que HumanPlayer.chooseTarget rompe el bucle (\"done or cancel\" → break) y searchLibrary devuelve false; Demonic Tutor (FILTER_CARD sin predicados) es required=true y por eso declinar re-preguntaba en bucle. El GAME_TARGET llega con message \"Select a basic land card\", flag=false (= required: GameClientMessage.flag) y options.possibleTargets con las 53 tierras de la biblioteca — ese flag=false es lo que el web necesita para ofrecer el \"fail to find\" (hoy no lo usa). El Swing no tiene botón especial: el botón derecho del FeedbackPanel manda el mismo sendPlayerBoolean(false) (texto \"Done\" de options[UI.right.btn.text] cuando ya hay min objetivos). Captura: Evolving Wilds en el cementerio, 1 sola tierra en el campo (la jugada de la mano; si fallara al revés habría 2), libraryCount intacto (53 en el frame: 60-7, sin robar; 52 si empieza el SIM) y pila vacía. Driver fail-to-find con cheatSetup."
+    "note": "REAL fail-to-find via cheatSetup: Evolving Wilds onto the battlefield + activation \"{T}, Sacrifice: Search your library for a basic land card\" and the GAME_TARGET is declined with sendPlayerBoolean(false). Path: TargetCardInLibrary is born required=false when the filter has predicates (setRequired(!filter.hasPredicates()); FILTER_CARD_BASIC_LAND adds SuperType.BASIC, rule 701.15b), so HumanPlayer.chooseTarget breaks the loop (\"done or cancel\" → break) and searchLibrary returns false; Demonic Tutor (FILTER_CARD with no predicates) is required=true and that is why declining re-asked in a loop. The GAME_TARGET arrives with message \"Select a basic land card\", flag=false (= required: GameClientMessage.flag) and options.possibleTargets with the library's 53 lands — that flag=false is what the web needs to offer the \"fail to find\" (today it does not use it). Swing has no special button: the FeedbackPanel's right button sends the same sendPlayerBoolean(false) (text \"Done\" from options[UI.right.btn.text] when min targets are already met). Capture: Evolving Wilds in the graveyard, only 1 land on the battlefield (the one played from hand; if it failed the other way there would be 2), libraryCount untouched (53 in the frame: 60-7, no draw; 52 if the SIM starts) and empty stack. fail-to-find driver with cheatSetup."
   },
   {
     "file": "win-effect.json",
     "mechanic": "win-effect",
     "kind": "game",
     "assert": "hasWinEffect",
-    "note": "Approach of the Second Sun ({6}{W}) x2 vía cheatSetup: la 1ª sube 7 vidas (20→27) y va 7ª desde arriba; la 2ª gana la partida (el servidor declara \"Player <u> is the winner\" en GAME_OVER). Frame final: GameView con vida 27, la 2ª Approach en el cementerio y pila vacía. **Hallazgo/fix 2026-09-16**: el estado de victoria solo llega en un GAME_UPDATE PLANO (GameView aplanado en `data`, sin clave gameView) y en GAME_OVER; `rec-lib` solo evaluaba `m.data.gameView` en GAME_UPDATE/AND_INFORM → se amplió para aceptar `m.data` aplanado (si trae `players`) y `GAME_OVER` con gameView. Mismo camino sirve para cualquier \"ganas/pierdes la partida\" (won()/lostForced() → game.end() sin inform posterior)."
+    "note": "Approach of the Second Sun ({6}{W}) x2 via cheatSetup: the 1st gains 7 life (20→27) and goes 7th from the top; the 2nd wins the game (the server declares \"Player <u> is the winner\" in GAME_OVER). Final frame: GameView with life 27, the 2nd Approach in the graveyard and empty stack. **Finding/fix 2026-09-16**: the victory state only arrives in a FLAT GAME_UPDATE (GameView flattened into `data`, without the gameView key) and in GAME_OVER; `rec-lib` only evaluated `m.data.gameView` in GAME_UPDATE/AND_INFORM → it was extended to accept a flattened `m.data` (if it carries `players`) and `GAME_OVER` with gameView. The same path serves any \"you win/lose the game\" (won()/lostForced() → game.end() with no later inform)."
   },
   {
     "file": "always-attack.json",
     "mechanic": "always-attack",
     "kind": "game",
     "assert": "hasAlwaysAttack",
-    "note": "Restricción \"attacks each combat if able\" (Rubblebelt Recluse, {4}{R} 6/5 Ogre Berserker, AttacksEachCombatStaticAbility → AttacksIfAbleSourceEffect eachCombat=true, texto \"...attacks each combat if able.\") cheateada al campo del SIM en cuanto hay ≥1 acción normal (en la run: tierra en nuestro T2, arrancó el SIM) y el SIM ataca con TODO en su turno (SimPlayer envía el botón especial \"All attack\" en DECLARE_ATTACKERS), así que la criatura ataca en su siguiente turno tras el cheat (T3 en la run). Cómo llega la restricción al view: PermanentImpl.getRules(game) recoge el requirement (\"Must attack\" + \" (Rubblebelt Recluse)\") marcado con HintUtils.HINT_ICON_REQUIRE y CardView.java:758-773 lo convierte en cardIcons [{cardIconType:\"OTHER_HAS_RESTRICTIONS\", text:\"\", hint:\"Must attack (Rubblebelt Recluse [b22])\"}] (el sufijo [b22] es el getIdName de la fuente); el CardView.rules incluye \"{this} attacks each combat if able.\", \"<br/><hintstart/>\" y el marcador crudo \"ICON_REQUIREMust attack (...)\". El requirement aplica mientras el permanente esté en el campo (atacando o no), por lo que el icono está en el mismo frame del ataque. Evidencia en el frame: la Recluse del SIM en gv.combat[].attackers (tapped:true) y su cardIcon de restricción en el CardView del campo. Driver always-attack con cheatSetup."
+    "note": "\"attacks each combat if able\" restriction (Rubblebelt Recluse, {4}{R} 6/5 Ogre Berserker, AttacksEachCombatStaticAbility → AttacksIfAbleSourceEffect eachCombat=true, text \"...attacks each combat if able.\") cheated onto the SIM's battlefield as soon as there is ≥1 normal action (in the run: land on our T2, the SIM started) and the SIM attacks with EVERYTHING on its turn (SimPlayer sends the special \"All attack\" button in DECLARE_ATTACKERS), so the creature attacks on its next turn after the cheat (T3 in the run). How the restriction reaches the view: PermanentImpl.getRules(game) collects the requirement (\"Must attack\" + \" (Rubblebelt Recluse)\") marked with HintUtils.HINT_ICON_REQUIRE and CardView.java:758-773 turns it into cardIcons [{cardIconType:\"OTHER_HAS_RESTRICTIONS\", text:\"\", hint:\"Must attack (Rubblebelt Recluse [b22])\"}] (the [b22] suffix is the source's getIdName); CardView.rules includes \"{this} attacks each combat if able.\", \"<br/><hintstart/>\" and the raw marker \"ICON_REQUIREMust attack (...)\". The requirement applies while the permanent is on the battlefield (attacking or not), so the icon is in the same frame as the attack. Evidence in the frame: the SIM's Recluse in gv.combat[].attackers (tapped:true) and its restriction cardIcon in the battlefield's CardView. always-attack driver with cheatSetup."
   },
   {
     "file": "attack-battle.json",
     "mechanic": "attack-battle",
     "kind": "game",
     "assert": "hasAttackBattle",
-    "note": "Batalla Invasion of Gobakhan ({1}{W}, Battle — Siege, startingDefense 3) cheateada al campo PROPIO junto a Grizzly Bears 2/2 en un único cheatSetup (mismo jugador) y atacada por el Grizzly en el mismo turno del cheat (T1 si arranca el humano, T2 si arranca el SIM; en la captura final T2). Hallazgo: la batalla debe ser PROPIA, no del SIM — Combat.setDefenders (Combat.java:1389-1393) usa FilterBattlePermanent + ProtectedByOpponentPredicate (defensor legal para P solo si su protector ∈ oponentes(P)); con la batalla del SIM el protector es el humano y el humano no puede atacarla, con la propia el protector es el SIM (PermanentImpl.chooseProtector, automático en duelo) y sí puede (\"You and others can attack it\"). El cheat directo al campo no dispara ETB (CardUtil.putCardOntoBattlefieldWithEffects \"without ETB\") pero pasa por PermanentImpl.entersBattlefield: añade los contadores DEFENSE (3) y elige protector. Elección de defensor: al declarar el Grizzly con 2 defensores (jugador SIM + batalla) llega GAME_TARGET \"Select a player, planeswalker, or battle to attack\" (HumanPlayer.selectDefender, TargetDefender/FilterDefender) cuyo payload observado es data.targets=[UUID del jugador SIM, UUID de la batalla] (2 opciones), min/max 0 y options.queryType \"PICK_TARGET\"; se responde sendPlayerUUID(battleId) + sendPlayerBoolean(false) para confirmar (nunca special con 2+ defensores). Evidencia en el view: step COMBAT_DAMAGE, el permanente propio con cardTypes BATTLE y `defense` \"1\" (3→1 por los 2 del Grizzly; también counters [{name:\"defense\",count:1}], PermanentImpl.damage 1192-1199) y gv.combat[] con defenderId = UUID de la batalla, defenderName \"Invasion of Gobakhan\" y el Grizzly en attackers, pila vacía; el rules de la batalla incluye \"Protected by <sim>\" (addInfo del protector). Driver attack-battle con cheatSetup."
+    "note": "Battle Invasion of Gobakhan ({1}{W}, Battle — Siege, startingDefense 3) cheated onto OUR battlefield next to a 2/2 Grizzly Bears in a single cheatSetup (same player) and attacked by the Grizzly on the same turn as the cheat (T1 if the human starts, T2 if the SIM starts; in the final capture T2). Finding: the battle must be OUR OWN, not the SIM's — Combat.setDefenders (Combat.java:1389-1393) uses FilterBattlePermanent + ProtectedByOpponentPredicate (a legal defender for P only if its protector ∈ opponents(P)); with the SIM's battle the protector is the human and the human cannot attack it, with our own the protector is the SIM (PermanentImpl.chooseProtector, automatic in a duel) and it can (\"You and others can attack it\"). The direct battlefield cheat does not fire an ETB (CardUtil.putCardOntoBattlefieldWithEffects \"without ETB\") but goes through PermanentImpl.entersBattlefield: it adds the DEFENSE counters (3) and chooses a protector. Defender choice: when declaring the Grizzly with 2 defenders (SIM player + battle) the GAME_TARGET \"Select a player, planeswalker, or battle to attack\" arrives (HumanPlayer.selectDefender, TargetDefender/FilterDefender) whose observed payload is data.targets=[SIM player UUID, battle UUID] (2 options), min/max 0 and options.queryType \"PICK_TARGET\"; it is answered with sendPlayerUUID(battleId) + sendPlayerBoolean(false) to confirm (never special with 2+ defenders). Evidence in the view: step COMBAT_DAMAGE, our permanent with cardTypes BATTLE and `defense` \"1\" (3→1 from the Grizzly's 2; also counters [{name:\"defense\",count:1}], PermanentImpl.damage 1192-1199) and gv.combat[] with defenderId = the battle's UUID, defenderName \"Invasion of Gobakhan\" and the Grizzly in attackers, empty stack; the battle's rules includes \"Protected by <sim>\" (the protector's addInfo). attack-battle driver with cheatSetup."
   },
   {
     "file": "floating-mana.json",
     "mechanic": "floating-mana",
     "kind": "game",
     "assert": "hasFloatingMana",
-    "note": "Maná flotante y confirmEmptyManaPool: en el primer turno propio, clic en la Forest jugada (sendPlayerUUID del permanente = activa su única habilidad de maná) deja {G} en el pool; al pasar prioridad (sendPlayerBoolean false) HumanPlayer.passWithManaPoolCheck dispara el GAME_ASK chooseUse \"You still have mana in your mana pool and it will be lost. Pass anyway?\" (solo con userData.confirmEmptyManaPool=true, que es el default del proxy: UserData.getDefaultUserDataView; el web lo reenvía en GAME_INIT con updatePreferences {confirmEmptyManaPool} y lo togglea en GameMenu → settings.manaPayment.confirmEmptyPool) y se responde true = seguir. El frame capturado es el GAME_UPDATE_AND_INFORM inmediatamente posterior a responder el ASK: me.manaPool.green=1 (aún sin vaciar), pila vacía, Forest girada y prioridad ya cedida al SIM (hasPriority=false, isActive=true) — el ASK llega como GAME_ASK (no como GAME_UPDATE) y rec-lib solo captura GAME_UPDATE, así que este es el estado más cercano al aviso (el fallback del driver re-flota en un turno posterior si el pool se vaciara antes de capturar). El pool se serializa como ManaPoolView {red,green,blue,white,black,colorless} (cifras; 0 = vacío) y el web lo pinta en ManaPoolView."
+    "note": "Floating mana and confirmEmptyManaPool: on the first turn of ours, clicking the Forest played (sendPlayerUUID of the permanent = activates its only mana ability) leaves {G} in the pool; when passing priority (sendPlayerBoolean false) HumanPlayer.passWithManaPoolCheck fires the GAME_ASK chooseUse \"You still have mana in your mana pool and it will be lost. Pass anyway?\" (only with userData.confirmEmptyManaPool=true, which is the proxy's default: UserData.getDefaultUserDataView; the web forwards it in GAME_INIT with updatePreferences {confirmEmptyManaPool} and toggles it in GameMenu → settings.manaPayment.confirmEmptyPool) and it is answered true = continue. The captured frame is the GAME_UPDATE_AND_INFORM immediately after answering the ASK: me.manaPool.green=1 (not yet emptied), empty stack, tapped Forest and priority already yielded to the SIM (hasPriority=false, isActive=true) — the ASK arrives as GAME_ASK (not as GAME_UPDATE) and rec-lib only captures GAME_UPDATE, so this is the state closest to the warning (the driver's fallback re-floats on a later turn if the pool were emptied before capturing). The pool is serialized as ManaPoolView {red,green,blue,white,black,colorless} (numbers; 0 = empty) and the web renders it in ManaPoolView."
   },
   {
     "file": "plot.json",
     "mechanic": "plot",
     "kind": "game",
     "assert": "hasPlot",
-    "note": "Rictus Robber ({3}{B}) con Plot {2}{B}: con 3 Swamps (tierra del turno + 2 cheatSetup) el hardcast de 4 NO es pagable y el plot de 3 SÍ → clic en la carta en mano = SpecialAction directa sin chooser (el coste se paga con GAME_PLAY_MANA normales: {B},{2},{1}). La carta queda en la zona de exilio \"Plots of <jugador>\" (PlotAbility.doExileAndPlotCard) y el dueño la ve en me.exile como CardView normal (name \"Rictus Robber\", faceDown:false, rules [\"…\",\"Plot {2}{B}\"]; el rival no la ve: PlayerView solo lista exilios de owner == jugador de la vista), sin campo de zona \"Plotted\" en el frame. Captura: Rictus Robber en me.exile + stack vacío (plot recién resuelto, POSTCOMBAT_MAIN, 3 Swamps girados; el turno varía según quién empiece). Hallazgo (corrida exploratoria, en el turno propio siguiente al plot): clicar el UUID exiliado dispara GAME_CHOOSE_ABILITY con opción única \"Cast Rictus Robber using Plot\" (el picker NO se suprime) y lanza gratis: el frame resultante tiene Rictus Robber en la pila con TODAS las Swamps sin girar y manaPool 0 (PlotSpellAbility {0}, BASE_ALTERNATE de PlotAddSpellAbilityEffect). Driver plot con cheatSetup."
+    "note": "Rictus Robber ({3}{B}) with Plot {2}{B}: with 3 Swamps (land for the turn + 2 cheatSetup) the 4 hardcast is NOT payable and the 3 plot IS → clicking the card in hand = direct SpecialAction with no chooser (the cost is paid with normal GAME_PLAY_MANA: {B},{2},{1}). The card stays in the exile zone \"Plots of <player>\" (PlotAbility.doExileAndPlotCard) and the owner sees it in me.exile as a normal CardView (name \"Rictus Robber\", faceDown:false, rules [\"…\",\"Plot {2}{B}\"]; the opponent does not see it: PlayerView only lists exiles with owner == the view's player), with no \"Plotted\" zone field in the frame. Capture: Rictus Robber in me.exile + empty stack (plot just resolved, POSTCOMBAT_MAIN, 3 tapped Swamps; the turn varies depending on who starts). Finding (exploratory run, on our turn after the plot): clicking the exiled UUID fires GAME_CHOOSE_ABILITY with the single option \"Cast Rictus Robber using Plot\" (the picker is NOT suppressed) and casts for free: the resulting frame has Rictus Robber on the stack with ALL Swamps untapped and manaPool 0 (PlotSpellAbility {0}, BASE_ALTERNATE of PlotAddSpellAbilityEffect). plot driver with cheatSetup."
   },
   {
     "file": "cloak.json",
     "mechanic": "cloak",
     "kind": "game",
     "assert": "hasCloak",
-    "note": "Vannifar, Evolved Enigma ({2}{G}{U}, MKM; cheatSetup al campo + Grizzly Bears/Elite Vanguard a la mano): al inicio del combate su trigger modal pide modo — HALLAZGO: llega como GAME_CHOOSE_ABILITY (AbilityPickerView de GameController.chooseMode: choices {uuid:\"1. Cloak a card from your hand.\"} / \"2. Put a +1/+1 counter on each colorless creature you control.\" / \"Cancel\"), NO como GAME_CHOOSE_CHOICE; se responde sendPlayerUUID — y luego la carta de la mano como GAME_TARGET con message \"Select a card\", options.targetZone HAND y secondMessage \"Vannifar, Evolved Enigma\" (TargetCardInHand). Al resolver, ManifestEffect.doManifestCards(cloakNotManifest=true) aplica BecomesFaceDownCreatureEffect/FaceDownType.CLOAKED: el permanente entra 2/2 anónimo con `cloaked:true` (morph usa morphed:true, disguise disguised:true, manifest manifested:true), name \"Cloak: Grizzly Bears\", imageFileName \"Cloak\", manaValue 0 y ward {2} solo en `rules` (\"A face-down creature that was cloaked or cast with disguise has ward {2}…\"), cardIcons vacío. Captura: permanente propio faceDown+cloaked (turn 1 COMBAT) y pila vacía. Driver cloak con cheatSetup."
+    "note": "Vannifar, Evolved Enigma ({2}{G}{U}, MKM; cheatSetup onto the battlefield + Grizzly Bears/Elite Vanguard to hand): at the start of combat its modal trigger asks for a mode — FINDING: it arrives as GAME_CHOOSE_ABILITY (GameController.chooseMode's AbilityPickerView: choices {uuid:\"1. Cloak a card from your hand.\"} / \"2. Put a +1/+1 counter on each colorless creature you control.\" / \"Cancel\"), NOT as GAME_CHOOSE_CHOICE; it is answered with sendPlayerUUID — and then the card from hand as GAME_TARGET with message \"Select a card\", options.targetZone HAND and secondMessage \"Vannifar, Evolved Enigma\" (TargetCardInHand). On resolution, ManifestEffect.doManifestCards(cloakNotManifest=true) applies BecomesFaceDownCreatureEffect/FaceDownType.CLOAKED: the permanent enters as an anonymous 2/2 with `cloaked:true` (morph uses morphed:true, disguise disguised:true, manifest manifested:true), name \"Cloak: Grizzly Bears\", imageFileName \"Cloak\", manaValue 0 and ward {2} only in `rules` (\"A face-down creature that was cloaked or cast with disguise has ward {2}…\"), empty cardIcons. Capture: our faceDown+cloaked permanent (turn 1 COMBAT) and empty stack. cloak driver with cheatSetup."
   },
   {
     "file": "day-night.json",
     "mechanic": "day-night",
     "kind": "game",
     "assert": "hasDayNight",
-    "note": "Day/night vía Reckless Stormseeker (daybound, cheatSetup directo al campo): su DayboundEffect aplica 702.145d y el juego pasa de \"ni de día ni de noche\" a DÍA (dato en el helper emblem: rules \"It's currently day, active player has cast 0 spells this turn...\"); en el destapado del turno del SIM, UntapStep.handleDayNight (726.2a: 0 hechizos del activo anterior) hace NOCHE y transforma el daybound → Storm-Charged Slasher (transformed:true, secondCardFace Reckless Stormseeker) en el BEGINNING/UPKEEP del turno del SIM siguiente a mi turno (turn 2 o 3 según quién empiece; frame final: turn 2). HALLAZGO: el flag day/night NO es campo de GameView (GameState.hasDayNight/isDaytime no se serializan) ni viaja en PlayerView.designationNames (la heurística del web MechanicsTray/PlayerInfoBar/GameScreen no recibe nada en 1.4.61: no existe DesignationType day/night); la única evidencia estructurada en cada frame es el DayNightHint dentro de myHelperEmblems (CardView \"Helper Emblem\" con rules [\"Day or night.\",\"<br/><hintstart/>\",\"It's currently day/night, active player has cast N spells this turn. It will [not] become day/night next turn.\"], verificado con REC_DUMP_EVENTS=1) y el permanente transformado; el texto \"It has become day/night\" de GameImpl.setDaytime → informPlayers va al chat de la partida (TableEvent.INFO → chatManager.broadcast, NO como GAME_INFORM ni campo). Captura: DFC transformado + hint \"It's currently night\" en myHelperEmblems. Driver day-night con cheatSetup."
+    "note": "Day/night via Reckless Stormseeker (daybound, cheatSetup directly onto the battlefield): its DayboundEffect applies 702.145d and the game goes from \"neither day nor night\" to DAY (data in the helper emblem: rules \"It's currently day, active player has cast 0 spells this turn...\"); on the SIM's turn untap, UntapStep.handleDayNight (726.2a: 0 spells from the previous active player) makes it NIGHT and transforms the daybound → Storm-Charged Slasher (transformed:true, secondCardFace Reckless Stormseeker) in the BEGINNING/UPKEEP of the SIM's turn following mine (turn 2 or 3 depending on who starts; final frame: turn 2). FINDING: the day/night flag is NOT a GameView field (GameState.hasDayNight/isDaytime are not serialized) nor does it travel in PlayerView.designationNames (the web's MechanicsTray/PlayerInfoBar/GameScreen heuristic receives nothing in 1.4.61: no DesignationType day/night exists); the only structured evidence in each frame is the DayNightHint inside myHelperEmblems (CardView \"Helper Emblem\" with rules [\"Day or night.\",\"<br/><hintstart/>\",\"It's currently day/night, active player has cast N spells this turn. It will [not] become day/night next turn.\"], verified with REC_DUMP_EVENTS=1) and the transformed permanent; the text \"It has become day/night\" from GameImpl.setDaytime → informPlayers goes to the game chat (TableEvent.INFO → chatManager.broadcast, NOT as GAME_INFORM or a field). Capture: transformed DFC + hint \"It's currently night\" in myHelperEmblems. day-night driver with cheatSetup."
   },
   {
     "file": "concede-mulligan.json",
     "mechanic": "concede-mulligan",
     "kind": "game",
     "assert": "hasConcedeMulligan",
-    "note": "CONCEDE en la 1ª ventana de mulligan (GAME_ASK \"Mulligan down to 6 cards?\"): el server SÍ lo honra — GameImpl.setConcedingPlayer usa state.getChoosingPlayerId() (fijado por Mulligan.executeMulliganPhase), HumanPlayer.signalPlayerConcede(true) despierta waitForResponse y checkConcede→leave→end dejan un GAME_UPDATE inmediato con players[].hasLeft=true (turn 1, mano 0, sin tierras jugadas, rival con 7). El CONCEDE se procesa antes que la respuesta keep/mulligan que manda el driver (se envió mulligan true y el diálogo ya estaba cortado). La UI no expone Conceder dentro del MulliganDialog (el botón vive en el menú ⋯ de la cabecera y el backdrop modal lo tapa, Modal.tsx): como el server sí lo procesa, debería ofrecerse desde el propio diálogo. Invariante del frame: me.hasLeft===true. Driver concede-mulligan."
+    "note": "CONCEDE in the 1st mulligan window (GAME_ASK \"Mulligan down to 6 cards?\"): the server DOES honor it — GameImpl.setConcedingPlayer uses state.getChoosingPlayerId() (set by Mulligan.executeMulliganPhase), HumanPlayer.signalPlayerConcede(true) wakes waitForResponse and checkConcede→leave→end leave an immediate GAME_UPDATE with players[].hasLeft=true (turn 1, hand 0, no lands played, opponent with 7). The CONCEDE is processed before the keep/mulligan answer the driver sends (a mulligan true was sent and the dialog was already cut). The UI does not expose Concede inside the MulliganDialog (the button lives in the header's ⋯ menu and the modal backdrop covers it, Modal.tsx): since the server does process it, it should be offered from the dialog itself. Frame invariant: me.hasLeft===true. concede-mulligan driver."
   },
   {
     "file": "dungeon.json",
     "mechanic": "dungeon",
     "kind": "game",
     "assert": "hasDungeon",
-    "note": "Cloister Gargoyle (AFR 7, {2}{W}: ETB \"venture into the dungeon\", sin objetivos) lanzado de verdad x2 vía cheatSetup (2 a la mano + 4 Llanuras al campo; {2}{W} pagado con Llanuras UUID en GAME_PLAY_MANA) contra el SIM pasivo. 1ª aventura: selectDungeon abre GAME_CHOOSE_CHOICE en modo string (\"Choose a dungeon to venture into\", choice.choices = los 3 nombres, keyChoices vacío) y se responde el texto EXACTO \"Lost Mine of Phandelver\"; la 1ª sala (Cave Entrance) entra automática y su Scry 1 llega como GAME_TARGET opcional (TargetCard 0..1 \"to PUT on the BOTTOM (Scry)\") que se declina con sendPlayerBoolean(false). 2ª aventura: DungeonRoom.chooseNextRoom abre GAME_ASK \"Choose which room to go to in\" (chooseUse con UI.left/right.btn.text = Goblin Lair / Mine Tunnels) y true entra en Goblin Lair (Goblin 1/1). CONTRATO: la mazmorra SÍ viaja estructurada — es un CommandObject y PlayerView la proyecta en players[].commandList como DungeonView {id,name,imageFileName,imageNumber,expansionSetCode,rules,playableStats} (PlayerView.java:122-126); NO hay campo currentRoom ni grafo: la sala actual es rules[0]=\"<i>(Currently in <sala>)</i>\" (Dungeon.getRules) y el grafo es estático en el cliente (web/src/game/dungeons.ts). Además el servidor informa \"X has entered <sala> (dungeon: <nombre>)\" (GAME_UPDATE_AND_INFORM) y el prompt de rama es la vía que el web sniffa (recordDungeonRoom). Invariante del frame: commandList con Lost Mine of Phandelver, rules con \"Currently in Goblin Lair\", 2 Cloister Gargoyle en mi campo y pila vacía. Driver dungeon con cheatSetup."
+    "note": "Cloister Gargoyle (AFR 7, {2}{W}: ETB \"venture into the dungeon\", no targets) cast for real x2 via cheatSetup (2 to hand + 4 Plains on the battlefield; {2}{W} paid with a Plains UUID in GAME_PLAY_MANA) against the passive SIM. 1st venture: selectDungeon opens GAME_CHOOSE_CHOICE in string mode (\"Choose a dungeon to venture into\", choice.choices = the 3 names, empty keyChoices) and the EXACT text \"Lost Mine of Phandelver\" is answered; the 1st room (Cave Entrance) enters automatically and its Scry 1 arrives as an optional GAME_TARGET (TargetCard 0..1 \"to PUT on the BOTTOM (Scry)\") that is declined with sendPlayerBoolean(false). 2nd venture: DungeonRoom.chooseNextRoom opens GAME_ASK \"Choose which room to go to in\" (chooseUse with UI.left/right.btn.text = Goblin Lair / Mine Tunnels) and true enters Goblin Lair (Goblin 1/1). CONTRACT: the dungeon DOES travel structured — it is a CommandObject and PlayerView projects it in players[].commandList as DungeonView {id,name,imageFileName,imageNumber,expansionSetCode,rules,playableStats} (PlayerView.java:122-126); there is NO currentRoom field nor graph: the current room is rules[0]=\"<i>(Currently in <room>)</i>\" (Dungeon.getRules) and the graph is static on the client (web/src/game/dungeons.ts). In addition the server informs \"X has entered <room> (dungeon: <name>)\" (GAME_UPDATE_AND_INFORM) and the branch prompt is the channel the web sniffs (recordDungeonRoom). Frame invariant: commandList with Lost Mine of Phandelver, rules with \"Currently in Goblin Lair\", 2 Cloister Gargoyle on my battlefield and empty stack. dungeon driver with cheatSetup."
   },
   {
     "file": "initiative.json",
     "mechanic": "initiative",
     "kind": "game",
     "assert": "hasInitiative",
-    "note": "White Plume Adventurer (CLB 49, {2}{W}: ETB \"you take the initiative\") lanzada de verdad vía cheatSetup (carta a la mano + 2 Llanuras al campo; 3 manás exactos) contra el SIM pasivo. HALLAZGO: la iniciativa SÍ tiene campo estructurado en el view — players[].initiative:boolean (PlayerView.java:60/155, \"player.getId().equals(game.getInitiativeId())\"), ya modelado en types.generated.ts; players[].designationNames sigue vacío para designations GLOBALES de GameState como Initiative/Monarch (PlayerView.java:156 itera player.getDesignations()). El trigger de iniciativa ventura al Undercity y abre la sala Secret Entrance (búsqueda de tierra básica respondida por GAME_TARGET \"Select a basic land card\"); el dungeon viaja además en commandList como DungeonView (PlayerView.java:122-126, name \"Undercity\", rules[0] \"(Currently in Secret Entrance)\"). Invariante del frame: me.initiative===true, White Plume Adventurer en mi battlefield, Undercity en commandList, pila vacía. Driver initiative con cheatSetup."
+    "note": "White Plume Adventurer (CLB 49, {2}{W}: ETB \"you take the initiative\") cast for real via cheatSetup (card to hand + 2 Plains on the battlefield; exactly 3 mana) against the passive SIM. FINDING: the initiative DOES have a structured field in the view — players[].initiative:boolean (PlayerView.java:60/155, \"player.getId().equals(game.getInitiativeId())\"), already modeled in types.generated.ts; players[].designationNames remains empty for GLOBAL GameState designations like Initiative/Monarch (PlayerView.java:156 iterates player.getDesignations()). The initiative trigger ventures into Undercity and opens the Secret Entrance room (basic land search answered by GAME_TARGET \"Select a basic land card\"); the dungeon also travels in commandList as a DungeonView (PlayerView.java:122-126, name \"Undercity\", rules[0] \"(Currently in Secret Entrance)\"). Frame invariant: me.initiative===true, White Plume Adventurer on my battlefield, Undercity in commandList, empty stack. initiative driver with cheatSetup."
   },
   {
     "file": "radiation.json",
     "mechanic": "radiation",
     "kind": "game",
     "assert": "hasRadiation",
-    "note": "Radiación con Mariposa Military Base (tierra de Fallout) cheateada a la mano en T1 (3 Grizzly Bears no-tierra encima de la biblioteca): al jugarla como tierra del turno su ETB \"may\" llega como GAME_ASK (\"you may have it enter tapped\") y al responder SÍ el jugador recibe 2 contadores de jugador \"rad\" (CounterType.RAD = \"rad\", NO \"radiation\"; PlayerView.counters [{name:\"rad\",count:N}]). HALLAZGO fuente: el trigger inherente de los rad counters NO es un upkeep sino el inicio de cada precombat main del jugador radiado (RadiationEmblem, regla 725.1: muele tantas cartas como rad counters tenga y por cada NO-tierra pierde 1 vida y quita 1 rad; sin dado). Captura tras resolver ese trigger: me.counters rad=1 (2−1), vida 19, el Grizzly molido en el cementerio, pila vacía. El emblem \"Radiation\" con su rules text aparece siempre en gv.myHelperEmblems. Driver radiation con cheatSetup."
+    "note": "Radiation with Mariposa Military Base (a Fallout land) cheated to hand on T1 (3 nonland Grizzly Bears on top of the library): when played as the turn's land its \"may\" ETB arrives as GAME_ASK (\"you may have it enter tapped\") and answering YES gives the player 2 \"rad\" player counters (CounterType.RAD = \"rad\", NOT \"radiation\"; PlayerView.counters [{name:\"rad\",count:N}]). SOURCE FINDING: the inherent trigger of the rad counters is NOT an upkeep but the start of each precombat main of the radiated player (RadiationEmblem, rule 725.1: it mills as many cards as rad counters it has and for each NON-land loses 1 life and removes 1 rad; no die). Capture after resolving that trigger: me.counters rad=1 (2−1), life 19, the milled Grizzly in the graveyard, empty stack. The \"Radiation\" emblem with its rules text always appears in gv.myHelperEmblems. radiation driver with cheatSetup."
   },
   {
     "file": "the-ring.json",
     "mechanic": "the-ring",
     "kind": "game",
     "assert": "hasTheRing",
-    "note": "Uruk-hai Berserker (LTR 112, {2}{B} 3/2; ETB \"the Ring tempts you\") + 2×Ranger's Firebrand (LTR 143, {R} sorcery: 2 daño a cualquier objetivo — GAME_TARGET \"Select any target\" con 3 UUIDs legales, se elige el del SIM — y \"the Ring tempts you\") lanzados de verdad vía cheatSetup (cartas a la mano + 2 Swamps/2 Mountains al campo; maná pagado con el color pedido en GAME_PLAY_MANA: {2}{B}→Swamp, {R}→Mountain) contra el SIM pasivo: nivel 1 → 2 → 3 en el T1. Con UNA criatura PlayerImpl.chooseRingBearer toma ids.size()==1 y NO abre prompt en ninguna tentación (0 GAME_ASK en la run): la 1ª fija al Berserker como portador y las siguientes informan \"did not choose a new Ring-bearer\"; el hook onAsk cubre el caso ≥2 criaturas (chooseUse \"Choose a new Ring-bearer?\" → false). CONTRATO (hallazgo): el Anillo NO tiene nivel ni portador como campos propios. El nivel se DERIVA de players[].commandList → EmblemView \"The Ring\" con `rules` (una línea por habilidad añadida por TheRingEmblem.addNextAbility: nivel 1 = estática legendary+evasión en UNA regla, niveles 2/3/4 = triggers; el web hace level = min(4, max(1, rules.length)), MechanicsTray.tsx). El Ring-bearer NO está en el view como booleano: PermanentView no expone isRingBearer/ringBearer; CardView.java:754 lo pinta SOLO como icono cardIcons [{cardIconType:\"RINGBEARER\", hint:\"Ring-bearer\"}] (el findRingBearer de MechanicsTray busca isRingBearer/ringBearer, campos inexistentes — bug latente del cliente; la vía real es cardIcons). Invariante del frame: The Ring en commandList con rules.length=3, cardIcons RINGBEARER en el Berserker, 2 Firebrands en el cementerio y pila vacía. Driver the-ring con cheatSetup."
+    "note": "Uruk-hai Berserker (LTR 112, {2}{B} 3/2; ETB \"the Ring tempts you\") + 2×Ranger's Firebrand (LTR 143, {R} sorcery: 2 damage to any target — GAME_TARGET \"Select any target\" with 3 legal UUIDs, the SIM's is chosen — and \"the Ring tempts you\") cast for real via cheatSetup (cards to hand + 2 Swamps/2 Mountains on the battlefield; mana paid with the requested color in GAME_PLAY_MANA: {2}{B}→Swamp, {R}→Mountain) against the passive SIM: level 1 → 2 → 3 on T1. With ONE creature PlayerImpl.chooseRingBearer takes ids.size()==1 and does NOT open a prompt on any temptation (0 GAME_ASK in the run): the 1st sets the Berserker as bearer and the following ones inform \"did not choose a new Ring-bearer\"; the onAsk hook covers the ≥2 creatures case (chooseUse \"Choose a new Ring-bearer?\" → false). CONTRACT (finding): the Ring has NO level or bearer as its own fields. The level is DERIVED from players[].commandList → EmblemView \"The Ring\" with `rules` (one line per ability added by TheRingEmblem.addNextAbility: level 1 = static legendary+evasion in ONE rule, levels 2/3/4 = triggers; the web does level = min(4, max(1, rules.length)), MechanicsTray.tsx). The Ring-bearer is NOT in the view as a boolean: PermanentView does not expose isRingBearer/ringBearer; CardView.java:754 paints it ONLY as the cardIcons icon [{cardIconType:\"RINGBEARER\", hint:\"Ring-bearer\"}] (MechanicsTray's findRingBearer looks for isRingBearer/ringBearer, nonexistent fields — a latent client bug; the real path is cardIcons). Frame invariant: The Ring in commandList with rules.length=3, cardIcons RINGBEARER on the Berserker, 2 Firebrands in the graveyard and empty stack. the-ring driver with cheatSetup."
   },
   {
     "file": "starting-player.json",
     "mechanic": "starting-player",
     "kind": "game",
     "assert": "hasStartingPlayerChoice",
-    "note": "Elección real de quién empieza con el opt-out skipStartingPlayerChoice:false (sin el atajo determinista del fork, rec-lib lo reenvía en createTable): GameImpl.init hace el sorteo aleatorio (pickChoosingPlayer, inform \"won the toss\") y SOLO el ganador del sorteo recibe el prompt — UN jugador, no ambos. Payload exacto del prompt: GAME_TARGET con message \"Select a starting player\" y targets=[simPlayerId, myPlayerId], options={queryType:\"PICK_TARGET\", chosenTargets:[]}, flag=true; se responde sendPlayerUUID del playerId elegido (mismo camino que runTournamentRecorder para /starting player/i). Al rival no le llega nada: si el sorteo lo gana el SIM, su ComputerPlayer.makeChoice compara target.getMessage(game)==\"Select a starting player\" y se elige a sí mismo sin consultar (la run no captura y se reintenta; ~50% de sorteo). Timeout: GameController.startResponseIdleTimeout(choosingPlayerId) queda corriendo hasta que el elegido responde. Tras la elección el servidor emite sendStartMessage (\"X chooses that Y will start\") solo como inform en el log. Captura del estado posterior: turno 1, nosotros activos (nos elegimos) con gv.activePlayerId == me.playerId, tierra jugada (Forest) y pila vacía. Driver starting-player."
+    "note": "Real choice of who starts with the opt-out skipStartingPlayerChoice:false (without the fork's deterministic shortcut, rec-lib forwards it in createTable): GameImpl.init does the random toss (pickChoosingPlayer, inform \"won the toss\") and ONLY the toss winner receives the prompt — ONE player, not both. Exact prompt payload: GAME_TARGET with message \"Select a starting player\" and targets=[simPlayerId, myPlayerId], options={queryType:\"PICK_TARGET\", chosenTargets:[]}, flag=true; it is answered with sendPlayerUUID of the chosen playerId (same path as runTournamentRecorder for /starting player/i). Nothing reaches the opponent: if the SIM wins the toss, its ComputerPlayer.makeChoice compares target.getMessage(game)==\"Select a starting player\" and picks itself without asking (the run does not capture and retries; ~50% toss). Timeout: GameController.startResponseIdleTimeout(choosingPlayerId) keeps running until the chosen one answers. After the choice the server emits sendStartMessage (\"X chooses that Y will start\") only as an inform in the log. Capture of the following state: turn 1, we are active (we picked ourselves) with gv.activePlayerId == me.playerId, land played (Forest) and empty stack. starting-player driver."
   },
   {
     "file": "emblem.json",
     "mechanic": "emblem",
     "kind": "game",
     "assert": "hasEmblem",
-    "note": "Gideon of the Trials (AKH 14, {1}{W}{W}, lealtad 3; AKH de Amonkhet.java \"AKH\") lanzado de verdad vía cheatSetup (a la mano + 3 Llanuras al campo; maná pagado con GAME_PLAY_MANA girando una Llanura por símbolo) y su habilidad de lealtad 0 que crea un emblema activada con un CLIC en el permanente (sendPlayerUUID de su id de battlefield, NO el UUID de la habilidad — HumanPlayer.activateAbility resuelve el picker: GAME_CHOOSE_ABILITY con AbilityPickerView.choices = Map<UUID,String> \"1. +1: ...\", \"2. 0: ...\", \"3. 0: You get an emblem with ...\"; se elige la etiqueta con \"emblem\"). CONTRATO (hallazgo): los emblemas de PLANESWALKER NO viajan por myHelperEmblems (ese campo de GameView.java:84-88 es solo para los helper emblems del motor: Radiation/storm/day-night/XmageHelperEmblem vía state.getHelperEmblems()); el emblema de carta entra por GameImpl.addEmblem → state.addCommandObject y PlayerView.java:117-121 lo proyecta en players[].commandList como EmblemView {id,name,cardNumber,imageFileName,imageNumber,expansionSetCode,rules,playableStats} (sin mageObjectType), igual que Dungeon/Plane/Commander. El web lo detecta por nombre (\"Emblem Gideon\" cumple nameLower.startsWith(\"emblem \")) y lo pinta en .emblem-slot (CommandZone.tsx; el selector que aserta mechanics.spec.ts:142). Invariante del frame: commandList del controlado con EmblemView name=\"Emblem Gideon\" y rules.length>=1, Gideon en el campo y pila vacía. Driver emblem con cheatSetup."
+    "note": "Gideon of the Trials (AKH 14, {1}{W}{W}, loyalty 3; AKH from Amonkhet.java \"AKH\") cast for real via cheatSetup (to hand + 3 Plains on the battlefield; mana paid with GAME_PLAY_MANA tapping one Plains per symbol) and its 0-loyalty ability that creates an emblem activated with a CLICK on the permanent (sendPlayerUUID of its battlefield id, NOT the ability's UUID — HumanPlayer.activateAbility resolves the picker: GAME_CHOOSE_ABILITY with AbilityPickerView.choices = Map<UUID,String> \"1. +1: ...\", \"2. 0: ...\", \"3. 0: You get an emblem with ...\"; the label with \"emblem\" is chosen). CONTRACT (finding): PLANESWALKER emblems do NOT travel via myHelperEmblems (that GameView.java:84-88 field is only for the engine's helper emblems: Radiation/storm/day-night/XmageHelperEmblem via state.getHelperEmblems()); a card emblem enters via GameImpl.addEmblem → state.addCommandObject and PlayerView.java:117-121 projects it in players[].commandList as an EmblemView {id,name,cardNumber,imageFileName,imageNumber,expansionSetCode,rules,playableStats} (without mageObjectType), just like Dungeon/Plane/Commander. The web detects it by name (\"Emblem Gideon\" satisfies nameLower.startsWith(\"emblem \")) and paints it in .emblem-slot (CommandZone.tsx; the selector asserted by mechanics.spec.ts:142). Frame invariant: the controlled player's commandList with an EmblemView name=\"Emblem Gideon\" and rules.length>=1, Gideon on the battlefield and empty stack. emblem driver with cheatSetup."
   },
   {
     "file": "commander-zone.json",
     "mechanic": "commander-zone",
     "kind": "game",
     "assert": "hasCommanderZone",
-    "note": "Commander legal (99 Montañas + Krenko, Mob Boss) en mesa de variant \"Commander Two Player Duel\": el comandante arranca en la zona de mando, se lanza con {2}{R}{R} (impuesto +{2} en el 2º lanzamiento = {4}{R}{R}), muere con Lightning Bolt propio y el SBA de GameImpl pregunta por GAME_ASK (\"Move Krenko, Mob Boss to the command zone or leave it in current zone (GRAVEYARD)?\", botones \"Move to command\"/\"Leave in current zone (GRAVEYARD)\"); al responder SÍ vuelve a players[].commandList. Invariante: Krenko en commandList con 2 Lightning Bolt en el cementerio. OJO: el harness hardcodea gameType Two Player Duel, este driver parchea su propio createTable a Commander Two Player Duel (shim pendiente de passthrough en rec-lib)."
+    "note": "Legal Commander (99 Mountains + Krenko, Mob Boss) on a \"Commander Two Player Duel\" variant table: the commander starts in the command zone, is cast for {2}{R}{R} (tax +{2} on the 2nd cast = {4}{R}{R}), dies to our own Lightning Bolt and GameImpl's SBA asks via GAME_ASK (\"Move Krenko, Mob Boss to the command zone or leave it in current zone (GRAVEYARD)?\", buttons \"Move to command\"/\"Leave in current zone (GRAVEYARD)\"); answering YES returns it to players[].commandList. Invariant: Krenko in commandList with 2 Lightning Bolt in the graveyard. NOTE: the harness hardcodes gameType Two Player Duel, this driver patches its own createTable to Commander Two Player Duel (a shim pending passthrough in rec-lib)."
   },
   {
     "file": "karn-restart.json",
     "mechanic": "karn-restart",
     "kind": "game",
     "assert": "hasKarnRestart",
-    "note": "Karn Liberated ({7}, lealtad 6) cheateado directo al campo con cheatSetup (entra con sus 6 contadores de lealtad; sin decisión \"as it enters\" el cheat es seguro) contra SIM pasivo: +4 legal en el T1 (6→10, GAME_CHOOSE_ABILITY con \"+4: Target player exiles a card from their hand\" respondido por texto; el GAME_TARGET \"Select a player\" se apunta al SIM, que exilia una carta de su mano) y +4 después (10→14); con 14 de lealtad exacta se activa el -14 (legible por PayLoyaltyCost.canPay: loyalty + cost >= 0). El reinicio NO llega como GAME_INIT ni como GAME_OVER: KarnLiberatedEffect.apply llama a GameState.clearOnGameRestart() + Player.init/useDeck + game.start(null) DENTRO de la resolución del -14, y el juego se re-inicializa con el MISMO gameId (el proxy no ve GAME_INIT nuevo; el rec-lib lo confirma: solo GAME_UPDATE). El primer GAME_UPDATE del juego reiniciado trae turno 1, activePlayerId = controlador de Karn, las manos re-repartidas por el init (7/7 tras el mulligan ASK, resuelto por el default del rec-lib), bibliotecas frescas (yo 53, SIM 93) y battlefield/cementerio/pila vacíos sin Karn (barajado de vuelta a la biblioteca); ese frame es la captura. Hallazgo del \"dirty hack\" del motor: las cartas exiliadas con Karn en el juego viejo NO se re-colocan en el battlefield en el primer frame y su rastro es inconsistente entre runs (run 2: exiles vacío; run 3: 1 Forest del SIM aún en exile) — la UI no debe fiarse de ellas. La UI debe re-inicializarse con ese GAME_UPDATE (no esperar GAME_INIT) y aceptar turn=1 tras una partida avanzada. Driver karn-restart con cheatSetup."
+    "note": "Karn Liberated ({7}, loyalty 6) cheated directly onto the battlefield with cheatSetup (it enters with its 6 loyalty counters; with no \"as it enters\" decision the cheat is safe) against a passive SIM: +4 legal on T1 (6→10, GAME_CHOOSE_ABILITY with \"+4: Target player exiles a card from their hand\" answered by text; the GAME_TARGET \"Select a player\" is aimed at the SIM, which exiles a card from its hand) and +4 again (10→14); with exactly 14 loyalty the -14 is activated (readable by PayLoyaltyCost.canPay: loyalty + cost >= 0). The restart does NOT arrive as GAME_INIT nor as GAME_OVER: KarnLiberatedEffect.apply calls GameState.clearOnGameRestart() + Player.init/useDeck + game.start(null) INSIDE the -14's resolution, and the game re-initializes with the SAME gameId (the proxy sees no new GAME_INIT; rec-lib confirms it: only GAME_UPDATE). The first GAME_UPDATE of the restarted game brings turn 1, activePlayerId = Karn's controller, hands redealt by init (7/7 after the mulligan ASK, resolved by rec-lib's default), fresh libraries (me 53, SIM 93) and empty battlefield/graveyard/stack without Karn (shuffled back into the library); that frame is the capture. Finding of the engine's \"dirty hack\": the cards exiled with Karn in the old game are NOT re-placed on the battlefield in the first frame and their trail is inconsistent between runs (run 2: empty exiles; run 3: 1 SIM Forest still in exile) — the UI must not trust them. The UI must re-initialize with that GAME_UPDATE (not wait for GAME_INIT) and accept turn=1 after an advanced game. karn-restart driver with cheatSetup."
   },
   {
     "file": "reanimate.json",
     "mechanic": "reanimate",
     "kind": "game",
     "assert": "hasReanimateTarget",
-    "note": "Objetivo dentro de una pila (cementerio) — el gap real que dejó pasar el bug de PileOverlay (commit 8290f779a45: la pila nunca recibía targetIds/onTargetClick). Reanimate ({B}) cheateada a la mano + Grizzly Bears cheateado al propio cementerio: el GAME_TARGET llega con el id del Grizzly en el cementerio como objetivo legal (el mismo id que el jugador clicaría dentro del PileOverlay abierto), a diferencia de todos los demás drivers de cementerio (escape/foretell/suspend/jump-start) que solo prueban LANZAR desde ahí. Captura: Grizzly Bears bajo control propio en el campo, fuera del cementerio, vida 20→18 (mana value 2) — la prueba de que entró por Reanimate y no por hardcast. Driver reanimate con cheatSetup."
+    "note": "Target inside a pile (graveyard) — the real gap that let the PileOverlay bug through (commit 8290f779a45: the pile never received targetIds/onTargetClick). Reanimate ({B}) cheated to hand + Grizzly Bears cheated into our own graveyard: the GAME_TARGET arrives with the Grizzly's id in the graveyard as a legal target (the same id the player would click inside the open PileOverlay), unlike all the other graveyard drivers (escape/foretell/suspend/jump-start) which only test CASTING from there. Capture: Grizzly Bears under our control on the battlefield, out of the graveyard, life 20→18 (mana value 2) — proof that it entered via Reanimate and not via hardcast. reanimate driver with cheatSetup."
   },
   {
     "file": "commander-free-mulligan.json",
     "mechanic": "commander-free-mulligan",
     "kind": "game",
     "assert": "firstMulliganFreeSecondCostsCard",
-    "note": "CR 103.5c verificado en real (el \"Gap de motor\" del plan4 era un falso diagnóstico: citaba 103.4a/903.8 y ligaba la exención al starting player). La regla exime el PRIMER mulligan de cada jugador en multijugador y en cualquier Brawl; el motor la implementa con `MatchOptions.freeMulligans` + `usedFreeMulligans` por jugador en LondonMulligan. Frame: mesa \"Commander Free For All\" de 3 (1 humano + 2 SIM) con freeMulligans:1 (antes el default 0 lo dejaba fuera; el wizard web ya lo preselecciona desde 2026-09-17), tomamos DOS mulligans y keep: mano final 6 (una carta al fondo por el segundo), no 5. Los dos SIM conservan 7. El informe \"mulligans for free.\" va al chat/log, no al GameView. El caso 1v1 sin mulligan gratis (Commander Two Player Duel, freeMulligans 0) queda documentado en el historial del driver."
+    "note": "CR 103.5c verified for real (the \"engine gap\" was a false diagnosis: it cited 103.4a/903.8 and tied the exemption to the starting player). The rule exempts each player's FIRST mulligan in multiplayer and in any Brawl; the engine implements it with `MatchOptions.freeMulligans` + `usedFreeMulligans` per player in LondonMulligan. Frame: a 3-player \"Commander Free For All\" table (1 human + 2 SIM) with freeMulligans:1 (previously the default 0 left it out; the web wizard already preselects it since 2026-09-17), we take TWO mulligans and keep: final hand 6 (one card to the bottom for the second), not 5. Both SIMs keep 7. The report \"mulligans for free.\" goes to the chat/log, not to the GameView. The 1v1 case without a free mulligan (Commander Two Player Duel, freeMulligans 0) is documented in the driver's history."
   },
   {
     "file": "game-clock-timeout.json",
     "mechanic": "game-clock-timeout",
     "kind": "game",
     "assert": "hasTimeoutLoss",
-    "note": "Timeout de reloj de partida (§3.5). Mesa con timeLimit=MIN___5 (300s, el mínimo real del motor — el wizard web solo baja hasta 15 min) vía driver standalone game-clock-timeout.mjs, porque rec-lib.mjs no expone timeLimit/bufferTime en su createTable hardcodeado (gap de tooling P4, no del motor; no se tocó rec-lib.mjs). El driver mantiene la mano y luego ignora a propósito toda ventana de prioridad: HumanPlayer.priority() mantiene el reloj corriendo (game.resumeTimer) hasta agotarlo → GameController→game.timerTimeout→PlayerImpl.timerTimeout (quit+timerTimeout+concede). Captura (turno 1, COMBAT/DECLARE_ATTACKERS): jugador controlado con priorityTimeLeftSecs=0 y hasLeft=true pero life=20 intacta; rival con priorityTimeLeftSecs=300 sin tocar — la asimetría de reloj es la prueba de timeout, no de concesión/daño. El texto 'run out of time' vive en el callback END_GAME_INFO (no en GAME_OVER, que este driver sí captura) y no quedó registrado en este frame; el aviso visible de \"timer bajo\" ya existe en cliente vía PlayerInfoBar.tsx isTimeLow a ≤30s (PlayerView.priorityTimeLeftSecs), verificado leyendo código pero no en e2e."
+    "note": "Game clock timeout. Table with timeLimit=MIN___5 (300s, the engine's real minimum — the web wizard only goes down to 15 min) via the standalone game-clock-timeout.mjs driver, because rec-lib.mjs does not expose timeLimit/bufferTime in its hardcoded createTable (a recording-tooling gap, not an engine one; rec-lib.mjs was not touched). The driver keeps its hand and then deliberately ignores every priority window: HumanPlayer.priority() keeps the clock running (game.resumeTimer) until it runs out → GameController→game.timerTimeout→PlayerImpl.timerTimeout (quit+timerTimeout+concede). Capture (turn 1, COMBAT/DECLARE_ATTACKERS): the controlled player with priorityTimeLeftSecs=0 and hasLeft=true but life=20 intact; the opponent with priorityTimeLeftSecs=300 untouched — the clock asymmetry is the proof of timeout, not concession/damage. The text 'run out of time' lives in the END_GAME_INFO callback (not in GAME_OVER, which this driver does capture) and was not recorded in this frame; the visible \"low timer\" warning already exists on the client via PlayerInfoBar.tsx isTimeLow at ≤30s (PlayerView.priorityTimeLeftSecs), verified by reading code but not in e2e."
   },
   {
     "file": "combat-trick.json",
     "mechanic": "combat-trick",
     "kind": "game",
     "assert": "hasCombatTrick",
-    "note": "Truco de combate (Giant Growth {G}, +3/+3 hasta el final del turno) lanzado en DECLARE_BLOCKERS sobre el propio Grizzly atacante (GAME_SELECT de combate con prioridad real; el objetivo se AUTO-RESUELVE al ser el único legal). Captura: atacante en gv.combat[].attackers con P/T 5/5 (2/2 +3/+3), Giant Growth en el cementerio y pila vacía — la prueba de que la ventana post-bloqueadores es jugable."
+    "note": "Combat trick (Giant Growth {G}, +3/+3 until end of turn) cast in DECLARE_BLOCKERS on our own attacking Grizzly (a combat GAME_SELECT with real priority; the target AUTO-RESOLVES as it is the only legal one). Capture: attacker in gv.combat[].attackers with P/T 5/5 (2/2 +3/+3), Giant Growth in the graveyard and empty stack — proof that the post-blockers window is playable."
   },
   {
     "file": "companion.json",
     "mechanic": "companion",
     "kind": "game",
     "assert": "hasCompanion",
-    "note": "Companion revelado (Lurrus of the Dream-Den en el BANQUILLO; mazo 24 Bosques + 36 Grizzly Bears, todos los permanentes MV ≤ 2 para que la condición Companion sea legal). Al inicializar, el motor pregunta \"Use Lurrus … as your companion?\" (chooseUse) y el driver responde SÍ; la carta queda en la zona de compañero (GameView.companion, RevealedView) con la SpecialAction de pagar {3} (CompanionAbility extends SpecialAction). El driver clica la carta desde la zona para pagar {3} (con 3 Bosques: la tierra del turno + 2 cheateados) y la copia propia pasa a la mano; el SIM lleva el mismo mazo con Lurrus para que la entrada del rival siga visible en la zona de compañero. Captura: Lurrus en mi mano + zona de compañero ajena aún poblada + vida sin cambios."
+    "note": "Companion revealed (Lurrus of the Dream-Den in the SIDEBOARD; deck 24 Forests + 36 Grizzly Bears, all permanents MV ≤ 2 so the Companion condition is legal). On initialization, the engine asks \"Use Lurrus … as your companion?\" (chooseUse) and the driver answers YES; the card stays in the companion zone (GameView.companion, RevealedView) with the SpecialAction to pay {3} (CompanionAbility extends SpecialAction). The driver clicks the card from the zone to pay {3} (with 3 Forests: the turn's land + 2 cheated) and our copy goes to hand; the SIM runs the same deck with Lurrus so the opponent's entry stays visible in the companion zone. Capture: Lurrus in my hand + the opponent's companion zone still populated + life unchanged."
   },
   {
     "file": "gitaxian-probe.json",
     "mechanic": "gitaxian-probe",
     "kind": "game",
     "assert": "hasLookedAt",
-    "note": "Mirar la mano del rival (G12-2): Gitaxian Probe ({U/P}, \"Look at target player's hand. Draw a card.\") cheateada a la mano + 1 Isla propia; el GAME_TARGET de jugador se responde con el playerId del SIM. Captura: GameView.lookedAt poblado (RevealedView con la mano del rival) — la señal que alimenta el visor temporal (InfoWindows) tras la corrección G12-2."
+    "note": "Look at the opponent's hand (G12-2): Gitaxian Probe ({U/P}, \"Look at target player's hand. Draw a card.\") cheated to hand + 1 of our Islands; the player GAME_TARGET is answered with the SIM's playerId. Capture: GameView.lookedAt populated (RevealedView with the opponent's hand) — the signal that feeds the temporary viewer (InfoWindows) after the G12-2 fix."
   },
   {
     "file": "multikicker.json",
     "mechanic": "multikicker",
     "kind": "game",
     "assert": "hasMultikicker",
-    "note": "Multikicker (Everflowing Chalice {0}, Multikicker {2}): el prompt del motor es REPETIDO y en modo chooseUse — \"Pay 1 time {2} ?\", \"Pay 2 times {2} ?\", … (KickerAbility.addOptionalAdditionalCosts; no es GAME_CHOOSE_CHOICE ni un GAME_GET_AMOUNT). El driver paga 2 kicks con 4 Bosques (se pregunta 1 y 2 → SÍ, 3 → NO; canPay filtra las impagables) y la carta entra con 2 contadores de carga (AddCountersSourceEffect + MultikickerCount). Captura: Chalice en el campo con {charge:2} y pila vacía."
+    "note": "Multikicker (Everflowing Chalice {0}, Multikicker {2}): the engine prompt is REPEATED and in chooseUse mode — \"Pay 1 time {2} ?\", \"Pay 2 times {2} ?\", … (KickerAbility.addOptionalAdditionalCosts; it is not GAME_CHOOSE_CHOICE nor a GAME_GET_AMOUNT). The driver pays 2 kicks with 4 Forests (it asks 1 and 2 → YES, 3 → NO; canPay filters the unpayable ones) and the card enters with 2 charge counters (AddCountersSourceEffect + MultikickerCount). Capture: Chalice on the battlefield with {charge:2} and empty stack."
   },
   {
     "file": "strive.json",
     "mechanic": "strive",
     "kind": "game",
     "assert": "hasStrive",
-    "note": "Strive (Launch the Fleet {W}, StriveAbility \"{1}\"): dos Grizzly Bears propios cheateados + 3 Llanuras; los objetivos llegan como GAME_TARGET repetido (se declina con false al acabar) y el coste final es {1}{W} (se paga con 2 Llanuras). Captura: los DOS Grizzlies 2/2 → 3/3 hasta el final del turno, Launch the Fleet en el cementerio y pila vacía."
+    "note": "Strive (Launch the Fleet {W}, StriveAbility \"{1}\"): two of our Grizzly Bears cheated in + 3 Plains; the targets arrive as a repeated GAME_TARGET (declined with false when done) and the final cost is {1}{W} (paid with 2 Plains). Capture: BOTH Grizzlies 2/2 → 3/3 until end of turn, Launch the Fleet in the graveyard and empty stack."
   },
   {
     "file": "pod-combat.json",
     "mechanic": "pod-combat",
     "kind": "game",
     "assert": "hasPodCombat",
-    "note": "Combate multijugador con varios defensores: FFA de 4 (1 humano + 3 SIM, `playerTypes`/`simDecks` de rec-lib) con un Grizzly propio cheateado. HALLAZGO 2026-09-17: el GAME_TARGET del defensor no llegaba porque el default de MatchOptions es attackOption=LEFT (en FFA `Combat.getAttackablePlayers` deja 1 solo defensor y HumanPlayer.selectDefender declara sin preguntar); la mesa ahora se crea con `attackOption: MULTIPLE` (passthrough nuevo en rec-lib.mjs). Al declarar el atacante el motor pregunta el defensor (TargetDefender \"Select a player, planeswalker, or battle to attack\") y el driver elige al ÚLTIMO SIM; la captura exige el grupo de combate con defenderId = ese SIM. Es el caso que el preview del overlay (CombatArrowsOverlay, `players.find(p => p.playerId !== activePlayerId)`) no cubre en pod: el replay aserta la flecha real por `[data-arrow-from]`/`[data-arrow-to]`."
+    "note": "Multiplayer combat with several defenders: a 4-player FFA (1 human + 3 SIM, `playerTypes`/`simDecks` from rec-lib) with one of our Grizzlies cheated in. FINDING 2026-09-17: the defender GAME_TARGET was not arriving because MatchOptions defaults to attackOption=LEFT (in FFA `Combat.getAttackablePlayers` leaves only 1 defender and HumanPlayer.selectDefender declares without asking); the table is now created with `attackOption: MULTIPLE` (a new passthrough in rec-lib.mjs). When declaring the attacker the engine asks for the defender (TargetDefender \"Select a player, planeswalker, or battle to attack\") and the driver picks the LAST SIM; the capture requires the combat group with defenderId = that SIM. It is the case the overlay preview (CombatArrowsOverlay, `players.find(p => p.playerId !== activePlayerId)`) does not cover in a pod: the replay asserts the real arrow via `[data-arrow-from]`/`[data-arrow-to]`."
   },
   {
     "file": "commander-4.json",
     "mechanic": "commander-4",
     "kind": "game",
     "assert": "hasPodCommander",
-    "note": "Commander FFA de 4 (1 humano + 3 SIM) con mazo legal (99 Montañas + Krenko, Mob Boss). SONDA DE CONTRATO 2026-09-17: el daño de comandante NO tiene campo en el view (`PlayerView`/`GameView`/`CommanderView` no lo exponen; vive en `CommanderInfoWatcher.damageToPlayer` del motor) — viaja SOLO como info del cardState en `rules` de la carta/permanente del comandante (\"Commander did N combat damage to player <nombre>.\"), que el web parsea en `CommanderDamageMatrix.extractDamage`. Krenko se lanza DESDE LA ZONA DE MANDO (cheatearlo crearía otra copia con id distinto que el watcher no ve) con 8 Montañas cheateadas y ataca al ÚLTIMO SIM con `attackOption: MULTIPLE` (el default LEFT no genera GAME_TARGET, ver pod-combat); después un Lightning Bolt propio lo manda de vuelta a la zona de mando, que es donde el CardView conserva la línea de daño (la matriz enumera comandantes desde commandList, no desde el battlefield). Captura: Krenko en commandList con la línea de daño y la vida del último SIM 40−N."
+    "note": "A 4-player Commander FFA (1 human + 3 SIM) with a legal deck (99 Mountains + Krenko, Mob Boss). CONTRACT PROBE 2026-09-17: commander damage has NO field in the view (`PlayerView`/`GameView`/`CommanderView` do not expose it; it lives in the engine's `CommanderInfoWatcher.damageToPlayer`) — it travels ONLY as cardState info in the `rules` of the commander card/permanent (\"Commander did N combat damage to player <name>.\"), which the web parses in `CommanderDamageMatrix.extractDamage`. Krenko is cast FROM THE COMMAND ZONE (cheating it would create another copy with a different id that the watcher does not see) with 8 cheated Mountains and attacks the LAST SIM with `attackOption: MULTIPLE` (the LEFT default does not generate a GAME_TARGET, see pod-combat); then our own Lightning Bolt sends it back to the command zone, which is where the CardView keeps the damage line (the matrix enumerates commanders from commandList, not from the battlefield). Capture: Krenko in commandList with the damage line and the last SIM's life 40−N."
   },
   {
     "file": "ffa-six.json",
     "mechanic": "ffa-six",
     "kind": "game",
     "assert": "hasFfaSix",
-    "note": "FFA real de 6 (1 humano + 5 SIM) en mesa \"Free For All\": frame estable en la primera main propia con la tierra jugada (sin cheat ni combate). Evidencia de la decisión §9.1 (solo standard con switcher para 5+): el view trae 6 jugadores y el replay exige `game-board` (NO `pod-board`), `.opponent-switcher-bar` visible y 6 píldoras `.opp-pill` — `effectiveBoardLayout` cae a standard cuando totalPlayers > MAX_BOARD_PLAYERS=4."
+    "note": "A real 6-player FFA (1 human + 5 SIM) on a \"Free For All\" table: a stable frame on our first main phase with the land played (no cheat or combat). Evidence of the layout decision (only standard with switcher for 5+): the view brings 6 players and the replay requires `game-board` (NOT `pod-board`), a visible `.opponent-switcher-bar` and 6 `.opp-pill` pills — `effectiveBoardLayout` falls back to standard when totalPlayers > MAX_BOARD_PLAYERS=4."
   },
   {
     "file": "slicer.json",
     "mechanic": "slicer",
     "kind": "game",
     "assert": "hasSlicerCeded",
-    "note": "Slicer, Hired Muscle (BOT 6/21, Transformers; DFC 3/4 doble estocada + prisa) con cheatSetup al campo propio en el T1: en el upkeep del SIM su trigger (BeginningOfUpkeepTriggeredAbility OPPONENT) pregunta al CONTROLADOR \"you may have that player gain control of Slicer until end of turn. If you do, untap Slicer, goad it, and it can't be sacrificed this turn. If you don't, convert it.\" y el driver responde SÍ (GAME_ASK chooseUse). Captura: Slicer en el battlefield del SIM (el view sigue al controlador real) desgirada (tapped:false por el untap) y con el hint de goad en `rules`/`cardIcons` (OTHER_HAS_RESTRICTIONS, \"Goaded by <jugador> (must attack)\" — mismo camino que goad.json; `goadingPlayers` no se serializa). Prueba el caso \"ceder control de tu permanente al rival en SU upkeep\" (dirección inversa a Threaten) sin campos nuevos del contrato."
+    "note": "Slicer, Hired Muscle (BOT 6/21, Transformers; DFC 3/4 double strike + haste) with cheatSetup onto our battlefield on T1: on the SIM's upkeep its trigger (BeginningOfUpkeepTriggeredAbility OPPONENT) asks the CONTROLLER \"you may have that player gain control of Slicer until end of turn. If you do, untap Slicer, goad it, and it can't be sacrificed this turn. If you don't, convert it.\" and the driver answers YES (GAME_ASK chooseUse). Capture: Slicer on the SIM's battlefield (the view follows the real controller) untapped (tapped:false from the untap) and with the goad hint in `rules`/`cardIcons` (OTHER_HAS_RESTRICTIONS, \"Goaded by <player> (must attack)\" — same path as goad.json; `goadingPlayers` is not serialized). It tests the case \"yield control of your permanent to the opponent on THEIR upkeep\" (the reverse direction of Threaten) with no new contract fields."
   },
   {
     "file": "companion-available.json",
     "mechanic": "companion-available",
     "kind": "game",
     "assert": "hasCompanionPlayable",
-    "note": "Companion DISPONIBLE (Lurrus of the Dream-Den en el banquillo; mazo 24 Bosques + 36 Grizzly Bears, MV ≤ 2 para que la condición sea legal). Al inicializar el motor pregunta \"Use Lurrus … as your companion?\" (chooseUse) y el driver responde SÍ; el compañero queda en la zona de compañero (GameView.companion, RevealedView). El driver juega la tierra del turno + 2 Bosques por cheatSetup y se detiene SIN pagar: captura el primer game view en el que el id de la carta (clave de canPlayObjects.objects) aparece con un record de los buckets jugables [normalmente `other`, CompanionAbility extends SpecialAction] — la forma exacta que debe habilitar el clic del visor web (issue #3). El record.id es el id de la habilidad, DISTINTO de la clave: un cliente que compare ambos nunca ofrece la acción (bug que el frame fija). Captura: Lurrus aún en la zona de compañero (NO en la mano), canPlayObjects.objects[id] con bucket no vacío."
+    "note": "Companion AVAILABLE (Lurrus of the Dream-Den in the sideboard; deck 24 Forests + 36 Grizzly Bears, MV ≤ 2 so the condition is legal). On initialization the engine asks \"Use Lurrus … as your companion?\" (chooseUse) and the driver answers YES; the companion stays in the companion zone (GameView.companion, RevealedView). The driver plays the turn's land + 2 Forests via cheatSetup and stops WITHOUT paying: it captures the first game view in which the card's id (key of canPlayObjects.objects) appears with a record of the playable buckets [usually `other`, CompanionAbility extends SpecialAction] — the exact shape that must enable the web viewer's click (issue #3). The record.id is the ability's id, DIFFERENT from the key: a client that compares the two never offers the action (a bug this frame pins). Capture: Lurrus still in the companion zone (NOT in hand), canPlayObjects.objects[id] with a non-empty bucket."
   },
   {
     "file": "opponent-reveal.json",
     "mechanic": "opponent-reveal",
     "kind": "game",
     "assert": "hasOpponentReveal",
-    "note": "Revelado del RIVAL (issue #1): la SIM juega Trinket Mage ({2}{U}; ETB busca un artefacto MV ≤ 1, lo revela y lo pone en su mano) y el humano (60 Bosques, juega tierra y pasa) captura el game view con la entrada de `GameView.revealed` del oponente. Para que la captura sea temprana y determinista, el cheatSetup pone un Trinket Mage en la mano de la SIM y 3 Aether Vial en su biblioteca; el Aether Vial es un artefacto no criatura, así que el SimPlayer nunca lo lanza y la búsqueda siempre encuentra. Fija que el revelado de una búsqueda ajena llega a MI vista (y por tanto el visor `InfoWindows` del web debe pintarlo): la entrada se llama como la carta fuente (\"Trinket Mage …\") y trae el Aether Vial revelado como CardView."
+    "note": "OPPONENT reveal (issue #1): the SIM plays Trinket Mage ({2}{U}; ETB searches for an artifact MV ≤ 1, reveals it and puts it into its hand) and the human (60 Forests, plays a land and passes) captures the game view with the opponent's `GameView.revealed` entry. To make the capture early and deterministic, cheatSetup puts a Trinket Mage in the SIM's hand and 3 Aether Vial in its library; Aether Vial is a noncreature artifact, so the SimPlayer never casts it and the search always finds one. It pins that the reveal from someone else's search reaches MY view (and therefore the web's `InfoWindows` viewer must paint it): the entry is named after the source card (\"Trinket Mage …\") and carries the revealed Aether Vial as a CardView."
   },
   {
     "file": "slicer-transformed.json",
     "mechanic": "slicer-transformed",
     "kind": "game",
     "assert": "hasLivingMetalOffTurn",
-    "note": "Rama contraria a slicer.json del mismo trigger (BeginningOfUpkeepTriggeredAbility OPPONENT): el driver responde NO al chooseUse, así que el motor convierte Slicer a su cara trasera en vez de cederlo. La cara trasera es \"Slicer, High-Speed Antagonist\", un Vehículo (ARTIFACT/VEHICLE) con metal viviente, y el motor publica el tipo CREATURE de forma CONDICIONAL al turno: `[\"ARTIFACT\"]` en el turno del rival (este frame, turno 3) y `[\"ARTIFACT\",\"CREATURE\"]` en el tuyo (slicer-living-metal.json, turno 4). Fija que `cardTypes` es un valor volátil por turno, no una propiedad estable de la carta: cualquier colocación del tablero que dependa de él mueve la carta de sitio en cada cambio de turno. `attachedTo` es null en ambos: no interviene ningún adjunto."
+    "note": "The branch opposite to slicer.json of the same trigger (BeginningOfUpkeepTriggeredAbility OPPONENT): the driver answers NO to the chooseUse, so the engine converts Slicer to its back face instead of yielding it. The back face is \"Slicer, High-Speed Antagonist\", a Vehicle (ARTIFACT/VEHICLE) with living metal, and the engine publishes the CREATURE type CONDITIONALLY per turn: `[\"ARTIFACT\"]` on the opponent's turn (this frame, turn 3) and `[\"ARTIFACT\",\"CREATURE\"]` on yours (slicer-living-metal.json, turn 4). It pins that `cardTypes` is a per-turn volatile value, not a stable property of the card: any board placement that depends on it moves the card around on every turn change. `attachedTo` is null in both: no attachment is involved."
   },
   {
     "file": "top-card-peek.json",

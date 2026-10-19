@@ -4,10 +4,12 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import mage.game.match.MatchOptions;
+import mage.players.LLMPlayerConfig;
 import mage.players.PlayerType;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /** Construcción de MatchOptions/TournamentOptions desde args JSON. */
 final class MatchOptionsParser {
@@ -16,6 +18,16 @@ final class MatchOptionsParser {
     }
 
     static MatchOptions parseMatchOptions(JsonObject args) {
+        return parseMatchOptions(args, Config.parseHostSet(Config.DEFAULT_ALLOWED_MODEL_HOSTS));
+    }
+
+    /**
+     * {@code allowedModelHosts}: the model-endpoint allowlist the seat {@code apiEndpoint}s must
+     * pass (the proxy CLI's {@code --allowedModelHosts}). Violations throw
+     * {@link IllegalArgumentException}; the command handlers answer typed
+     * {@code ok:false, errorCode:"INVALID_ARGUMENT"}.
+     */
+    static MatchOptions parseMatchOptions(JsonObject args, Set<String> allowedModelHosts) {
         String name = JsonArgs.str(args, "name", "Game " + System.currentTimeMillis());
         String gameType = JsonArgs.str(args, "gameType", "");
         boolean multiPlayer = JsonArgs.getBool(args, "multiPlayer", false);
@@ -83,7 +95,39 @@ final class MatchOptionsParser {
                 options.getPlayerTypes().addAll(types);
             }
         }
+        // One optional llmConfigs entry per COMPUTER_LLM seat, consumed positionally
+        // by the server (TableController.wireLlmConfigs). null entries mean server defaults.
+        List<LLMPlayerConfig> llmConfigs = LlmConfigs.parse(args, options.getPlayerTypes(), allowedModelHosts);
+        if (!llmConfigs.isEmpty()) {
+            options.setLlmPlayerConfigs(llmConfigs);
+        }
+        options.setLlmChatPublic(resolveLlmChatPublic(args, options.getPlayerTypes()));
         return options;
+    }
+
+    /**
+     * Fork (LLMage): decide the match's {@code llmChatPublic} flag for a MATCH request.
+     *
+     * <p>The webui's LLM drawer tab is offered to a spectator only when the table is
+     * marked {@code llmChatPublic}. But the one-click "LLM vs LLM" preset
+     * creates an all-bot table exactly so the human can WATCH it (the creator holds no
+     * seat, {@code humanSeat=false}), and the web never sends this flag — so without this
+     * default every preset table is private and its LLM tab is unreachable by design.
+     *
+     * <p>Rule: a table with LLM seats and NO HUMAN seat is a public showcase — mark it
+     * public. Any table with a HUMAN seat keeps the private (per-seat) default, so an
+     * opponent still cannot read a human's LLM reasoning mid-game.
+     *
+     * <p>An explicit client {@code llmChatPublic} always wins (forward-compat: a client
+     * whose table setup exposes the checkbox can send it); today the webui omits it.
+     */
+    static boolean resolveLlmChatPublic(JsonObject args, List<PlayerType> playerTypes) {
+        if (args.has("llmChatPublic") && args.get("llmChatPublic").isJsonPrimitive()) {
+            return args.get("llmChatPublic").getAsBoolean();
+        }
+        boolean hasLlmSeat = playerTypes != null && playerTypes.contains(PlayerType.COMPUTER_LLM);
+        boolean hasHumanSeat = playerTypes != null && playerTypes.contains(PlayerType.HUMAN);
+        return hasLlmSeat && !hasHumanSeat;
     }
 
     /** True when the requested seat list contains the dev-only "SIM" bot seat. */
@@ -140,6 +184,10 @@ final class MatchOptionsParser {
     }
 
     static mage.game.tournament.TournamentOptions parseTournamentOptions(JsonObject args) {
+        return parseTournamentOptions(args, Config.parseHostSet(Config.DEFAULT_ALLOWED_MODEL_HOSTS));
+    }
+
+    static mage.game.tournament.TournamentOptions parseTournamentOptions(JsonObject args, Set<String> allowedModelHosts) {
         String name = JsonArgs.str(args, "name", "Tournament " + System.currentTimeMillis());
         String tournamentType = JsonArgs.str(args, "tournamentType", "Elimination");
         String matchType = JsonArgs.str(args, "matchType", JsonArgs.str(args, "gameType", "Two Player Duel"));
@@ -167,6 +215,16 @@ final class MatchOptionsParser {
         // matchOptions sub-fields
         MatchOptions mOpts = tOpts.getMatchOptions();
         applyMatchOptions(args, mOpts);
+        // Tournaments: the seats are TournamentOptions.playerTypes; the server wires
+        // the configs from getMatchOptions().llmPlayerConfigs to its COMPUTER_LLM seats.
+        List<LLMPlayerConfig> llmConfigs = LlmConfigs.parse(args, tOpts.getPlayerTypes(), allowedModelHosts);
+        if (!llmConfigs.isEmpty()) {
+            mOpts.setLlmPlayerConfigs(llmConfigs);
+        }
+        // Fork (LLMage): same all-LLM showcase rule as parseMatchOptions. The tournament's own
+        // playerTypes decide (a tournament whose LLM seats play only bots is watchable; one with
+        // a HUMAN seat stays private). applyMatchOptions does not touch this flag, so set it once.
+        mOpts.setLlmChatPublic(resolveLlmChatPublic(args, tOpts.getPlayerTypes()));
         // limitedOptions
         // El engine exige DraftOptions (no el base LimitedOptions) para los tipos
         // draft: BoosterDraftEliminationTournament.draft() hace

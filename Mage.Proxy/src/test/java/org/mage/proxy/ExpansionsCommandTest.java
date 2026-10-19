@@ -13,7 +13,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Comando T5: getExpansionsWithBoosters responde ok con un array (vacío si la BD aún no está lista). */
+/** getExpansionsWithBoosters answers ok with an array (empty if the DB is not ready yet). */
 class ExpansionsCommandTest {
 
     static final class StubSession extends SessionImpl {
@@ -55,6 +55,12 @@ class ExpansionsCommandTest {
         }
 
         @Override
+        public ServerCapabilities capabilities() {
+            return ServerCapabilities.forTest(true, false, true, true, "1.4.62-V1",
+                    java.util.Arrays.asList("HUMAN", "COMPUTER_LLM"));
+        }
+
+        @Override
         public void sendFailure(WebSocket conn, String action, String requestId, long start) {
             gateway.send(conn, ProxyProtocol.resultJson(action, requestId, false, ProxyProtocol.ERR_FAILED, null));
         }
@@ -69,6 +75,29 @@ class ExpansionsCommandTest {
 
         @Override
         public void markGameInactive(java.util.UUID gameId) {
+        }
+
+        @Override
+        public boolean replayActive() {
+            return false;
+        }
+
+        @Override
+        public int replayStateCount() {
+            return -1;
+        }
+
+        @Override
+        public boolean liveGameActive() {
+            return false;
+        }
+
+        @Override
+        public void markReplayActive(java.util.UUID gameId) {
+        }
+
+        @Override
+        public void clearReplay() {
         }
 
         @Override

@@ -1,0 +1,57 @@
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  background: var(--ink-1);
+  border-bottom: 1px solid var(--ink-3);
+  flex-shrink: 0;
+}
+
+.replay-boundary {
+  margin-left: var(--sp-1);
+  color: var(--ink-4);
+  font-size: var(--fs-3xs);
+}
+
+/* "View as" seat picker: one button per seat, the active (own-side) seat filled. */
+.replay-perspective {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-left: var(--sp-2);
+  padding-left: var(--sp-2);
+  border-left: 1px solid var(--ink-3);
+}
+
+.replay-perspective-label {
+  color: var(--ink-4);
+  font-size: var(--fs-3xs);
+  white-space: nowrap;
+}
+
+.replay-scrubber {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: 1;
+  min-width: 120px;
+}
+
+.replay-scrubber-range {
+  flex: 1;
+  accent-color: var(--brand);
+}
+
+.replay-scrubber-label {
+  color: var(--ink-4);
+  font-size: var(--fs-3xs);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-loading {
+  margin-left: var(--sp-1);
+  color: var(--ink-4);
+  font-size: var(--fs-3xs);
+}

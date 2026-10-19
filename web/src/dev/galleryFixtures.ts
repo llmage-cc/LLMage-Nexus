@@ -31,11 +31,10 @@ interface FrameModule {
 
 const frameModules = import.meta.glob<FrameModule>('../../fixtures/recorded/*.json', { eager: true })
 
-// Fecha fija (no `Date.now()`): los datos de ejemplo del gallery se evalúan una
-// vez por carga de página, así que un timestamp "en vivo" difiere entre la
-// generación del baseline y cualquier ejecución posterior — hace flakear
-// `toHaveScreenshot()` en cualquier pantalla que pinte una hora/fecha absoluta
-// (p. ej. inicio/fin de torneo).
+// Fixed date (not `Date.now()`): the gallery sample data is evaluated once per
+// page load, so a "live" timestamp differs between baseline generation and any
+// later run — it makes `toHaveScreenshot()` flaky on any screen that paints an
+// absolute time/date (e.g. tournament start/end).
 const GALLERY_EPOCH = new Date('2026-01-01T12:00:00Z').getTime()
 
 export interface RecordedFrame {
@@ -83,7 +82,7 @@ export interface GalleryEntry {
   label: string
   description?: string
   phase?: 'idle' | 'connecting' | 'lobby' | 'game'
-  /** Pantalla no cubierta por `game`/`login`: lobby, editor de mazos, draft, construct, torneo… */
+  /** Screen not covered by `game`/`login`: lobby, deck editor, draft, construct, tournament… */
   screen?: GalleryScreenName
   game?: GameView | null
   gameId?: string | null
@@ -94,14 +93,14 @@ export interface GalleryEntry {
   draft?: DraftState
   construct?: ConstructState
   tournamentModal?: { table: TableView; view: TournamentView | null; loading?: boolean; error?: string | null }
-  /** `tournament` del store: monta el TournamentPanel dentro de GameScreen. */
+  /** store `tournament`: mounts the TournamentPanel inside GameScreen. */
   tournament?: { tournamentId: string; view: TournamentView } | null
-  /** Error del slice de sesión (banner de lobby / caja de LoginScreen). */
+  /** Session-slice error (lobby banner / LoginScreen box). */
   error?: string | null
   gameEnd?: GameEndInfo | null
-  /** Watchdog de cuña del draft (`lastDraftEventAt`); 0 = cuñado siempre. */
+  /** Draft-stall watchdog (`lastDraftEventAt`); 0 = always stalled. */
   lastDraftEventAt?: number | null
-  /** `table` explícita de SpectatorStagingScreen (modo jugador). */
+  /** Explicit `table` of SpectatorStagingScreen (player mode). */
   stagingTable?: TableView
   stagingMode?: 'player' | 'spectator'
   /** Deck in play (`myDeck` in the store); omitted = keep the current one. */
@@ -112,11 +111,11 @@ export interface GalleryEntry {
   rollbackVote?: RollbackVote | null
   uiScale?: number
   cjkBoost?: boolean
-  /** Idioma de la i18n para este estado (se restaura al salir). */
+  /** i18n language for this state (restored on exit). */
   lang?: SupportedLanguage
-  /** Sesión desconectada: App pinta el banner de reconexión. */
+  /** Disconnected session: App paints the reconnect banner. */
   connecting?: boolean
-  /** Siembra de localStorage aplicada antes de montar (wizard de crear mesa). */
+  /** localStorage seed applied before mount (create-table wizard). */
   storageSeed?: Record<string, string>
 }
 
@@ -187,7 +186,7 @@ const LIBRARY_CARDS: FeedbackCard[] = [
   { id: 'g6', name: 'Forest', expansionSetCode: 'M21', cardNumber: '277', cardTypes: ['Land'] },
 ]
 
-// ─── Pantallas nuevas (P3 núcleo, 2026-09-17): lobby, editor, draft, construct, torneo ──
+// ─── New screens: lobby, editor, draft, construct, tournament ────────────────
 
 const GALLERY_CONN: ConnectionInfo = {
   wsHost: 'localhost',
@@ -211,7 +210,7 @@ function makeLobbyTable(i: number, overrides: Partial<TableView> = {}): TableVie
     tableId: `gallery-table-${i}`,
     gameType: LOBBY_GAME_TYPES[i % LOBBY_GAME_TYPES.length],
     deckType: 'Constructed',
-    tableName: `Mesa de ${LOBBY_NAMES[i % LOBBY_NAMES.length]} #${i + 1}`,
+    tableName: `Table ${LOBBY_NAMES[i % LOBBY_NAMES.length]} #${i + 1}`,
     controllerName: LOBBY_NAMES[i % LOBBY_NAMES.length],
     additionalInfoShort: '',
     additionalInfoFull: '',
@@ -325,7 +324,7 @@ function makeConstructPool(size: number): SimpleCardsView {
 }
 
 const CONSTRUCT_STATE_NORMAL: ConstructState = {
-  deckName: 'Mi mazo sellado',
+  deckName: 'My sealed deck',
   pool: makeConstructPool(45),
   tableId: 'gallery-construct-1',
   parentTableId: null,
@@ -333,7 +332,7 @@ const CONSTRUCT_STATE_NORMAL: ConstructState = {
 }
 
 const CONSTRUCT_STATE_BIG: ConstructState = {
-  deckName: 'Pool grande (cubo)',
+  deckName: 'Big pool (cube)',
   pool: makeConstructPool(90),
   tableId: 'gallery-construct-2',
   parentTableId: null,
@@ -351,7 +350,7 @@ function makeTournamentGame(roundNum: number, players: string, state: string, re
 const TOURNAMENT_TABLE = makeLobbyTable(0, { tableId: 'gallery-tournament-table', tableName: 'Standard Swiss #12', isTournament: true })
 
 const TOURNAMENT_INPROGRESS: TournamentView = {
-  tournamentName: 'Standard Swiss — Ronda 2 de 3',
+  tournamentName: 'Standard Swiss — Round 2 of 3',
   tournamentType: 'Swiss',
   tournamentState: 'DUELING',
   startTime: GALLERY_EPOCH - 30 * 60_000,
@@ -373,7 +372,7 @@ const TOURNAMENT_INPROGRESS: TournamentView = {
 
 const TOURNAMENT_FINISHED: TournamentView = {
   ...TOURNAMENT_INPROGRESS,
-  tournamentName: 'Standard Swiss — Terminado',
+  tournamentName: 'Standard Swiss — Finished',
   tournamentState: 'END',
   endTime: GALLERY_EPOCH,
   players: [
@@ -391,10 +390,10 @@ const TOURNAMENT_FINISHED: TournamentView = {
   ],
 }
 
-// ─── §4 matriz de estados (2026-09-17): variantes de tablero, pantallas y globales ──
-// Todo lo de aquí se deriva de los frames grabados o de los props/slices reales de
-// cada pantalla. Nada de backend: los estados que solo existen por respuesta del
-// servidor (p. ej. `pickError` del draft) quedan documentados como pendientes.
+// ─── State matrix: board variants, screens and globals ───────────────────
+// Everything here derives from the recorded frames or from the real props/slices of
+// each screen. No backend: states that only exist from a server response
+// (e.g. draft `pickError`) are documented as pending.
 
 const GALLERY_ISO = new Date(GALLERY_EPOCH).toISOString()
 const GALLERY_ISO_END = new Date(GALLERY_EPOCH + 14 * 60_000).toISOString()
@@ -410,7 +409,7 @@ function isPlainObject(value: unknown): value is MutableRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Clona reemplazando ids (claves y valores) por el mapa dado; el resto tal cual. */
+/** Clones replacing ids (keys and values) through the given map; everything else as-is. */
 function remapIds<T>(value: T, map: (id: string) => string | undefined): T {
   if (typeof value === 'string') return (map(value) ?? value) as unknown as T
   if (Array.isArray(value)) return value.map((v) => remapIds(v, map)) as unknown as T
@@ -440,7 +439,7 @@ function playerCardIds(player: PlayerView): Set<string> {
   return ids
 }
 
-/** FFA sintético: clona un rival del frame con ids únicos (uuid + sufijo) y su mano. */
+/** Synthetic FFA: clones one frame opponent with unique ids (uuid + suffix) and their hand. */
 function withClonedOpponent(game: GameView, src: PlayerView | undefined, suffix: string, name?: string): GameView {
   if (!src) return game
   const ids = playerCardIds(src)
@@ -451,7 +450,7 @@ function withClonedOpponent(game: GameView, src: PlayerView | undefined, suffix:
   return { ...game, players: [...players(game), clone], opponentHands }
 }
 
-/** Mano sintética de N cartas reutilizando las del frame con ids nuevos. */
+/** Synthetic N-card hand reusing the frame's cards with new ids. */
 function withHandSize(game: GameView, size: number): GameView {
   const hand = (game.myHand ?? {}) as Record<string, unknown>
   const entries = Object.entries(hand)
@@ -472,7 +471,7 @@ function withHandSize(game: GameView, size: number): GameView {
   }
 }
 
-/** Rellena el campo de cada jugador clonando sus criaturas/tierras hasta N (ids nuevos). */
+/** Fills each player's battlefield by cloning their creatures/lands up to N (new ids). */
 function withCrowdedBattlefields(game: GameView, creatures: number, lands: number): GameView {
   const grow = (player: PlayerView, kind: 'creature' | 'land', target: number): PlayerView => {
     const battlefield = { ...(player.battlefield ?? {}) } as unknown as Record<string, MutableRecord>
@@ -501,7 +500,7 @@ const LONG_ME = 'Alejandro-de-la-Vega-Fernández-Castillo'
 const LONG_OPP = 'Bartholomew-Montgomery-Fitzwilliam-III'
 const LONG_CARD = 'Asmoranomardicadaistinaculdacar'
 
-/** Nombres largos de jugador y de carta (desbordado de etiquetas). */
+/** Long player and card names (label overflow). */
 function withLongNames(game: GameView): GameView {
   const renamed = players(game).map((p) => ({ ...p, name: p.controlled ? LONG_ME : LONG_OPP }))
   const me = renamed.find((p) => p.controlled)
@@ -525,7 +524,7 @@ function withLongNames(game: GameView): GameView {
   }
 }
 
-// gang-block es 1v1: se clona DOS veces el rival del frame (c1/c2) para llegar a 4.
+// gang-block is 1v1: the frame opponent is cloned TWICE (c1/c2) to reach 4.
 const FOUR_PLAYER_GAME = GANG_BLOCK_FRAME
   ? (() => {
       const game = GANG_BLOCK_FRAME.gameView
@@ -548,7 +547,7 @@ function withTopCardPeek(gv: GameView): GameView {
 
 const STAGING_TABLE = makeLobbyTable(0, {
   tableId: 'gallery-staging-table',
-  tableName: 'Duelo de bienvenida',
+  tableName: 'Welcome duel',
   gameType: 'Two Player Duel',
   deckType: 'Constructed - Pioneer',
   controllerName: 'gallery-dev',
@@ -575,7 +574,7 @@ const STAGING_DECK: Deck = {
 
 const STAGING_POD_TABLE = makeLobbyTable(0, {
   tableId: 'gallery-staging-pod',
-  tableName: 'Viernes de Commander',
+  tableName: 'Friday Commander',
   gameType: 'Commander Free For All',
   deckType: 'Variant Magic - Commander',
   controllerName: 'gallery-dev',
@@ -592,7 +591,7 @@ const STAGING_POD_TABLE = makeLobbyTable(0, {
 
 const STAGING_OPEN_TABLE = makeLobbyTable(0, {
   tableId: 'gallery-staging-open',
-  tableName: 'Pauper a 1',
+  tableName: 'Pauper 1v1',
   gameType: 'Two Player Duel',
   deckType: 'Constructed - Pauper',
   controllerName: 'bora-the-bold',
@@ -633,25 +632,25 @@ const GAME_END_MATCH: GameEndInfo = {
   matchView: { matchId: 'gallery-match-1', result: '2-1', players: `${LONG_ME} vs ${LONG_OPP}`, games: ['1', '2', '3'], startTime: GALLERY_ISO, endTime: GALLERY_ISO_END },
 }
 
-// Estado real del wire: `TournamentView.tournamentState` es el texto del
-// `TableState` del fork ("Constructing"/"Dueling"/"Finished"), no el enum.
+// Real wire state: `TournamentView.tournamentState` is the fork's
+// `TableState` text ("Constructing"/"Dueling"/"Finished"), not the enum.
 const TOURNAMENT_WAITING: TournamentView = {
   ...TOURNAMENT_INPROGRESS,
-  tournamentName: 'Standard Swiss — En construcción',
+  tournamentName: 'Standard Swiss — Constructing',
   tournamentState: 'Constructing',
   startTime: GALLERY_EPOCH - 2 * 60_000,
   constructionTime: 600,
   rounds: [],
 }
 
-// Formulario persistido «Draft MH3 (8P)»: el wizard lo relee al montar (la
-// combinación inválida NO es representable: los setters y un efecto de montaje
-// la auto-corrigen, ver `useCreateTableForm`). `seatConfigs` = 7 asientos SIM.
+// Persisted form «Draft MH3 (8P)»: the wizard re-reads it on mount (the
+// invalid combination is NOT representable: the setters and a mount effect
+// auto-correct it, see `useCreateTableForm`). `seatConfigs` = 7 SIM seats.
 const WIZARD_DRAFT_FORM = JSON.stringify({
   tableCategory: 'tourney',
   tournamentCategory: 'limited',
   useDraftTournament: true,
-  name: 'Draft MH3 de la galería',
+  name: 'Gallery MH3 Draft',
   gameType: 'Two Player Duel',
   deckType: 'Limited',
   wins: 2,
@@ -664,7 +663,7 @@ const WIZARD_DRAFT_FORM = JSON.stringify({
 export function buildGalleryEntries(): GalleryEntry[] {
   const entries: GalleryEntry[] = recordedFrames.map((frame) => ({
     id: `frame:${frame.mechanic}`,
-    group: 'Frames reales',
+    group: 'Real frames',
     label: frame.mechanic,
     description: frame.note,
     phase: 'game',
@@ -672,8 +671,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
     gameId: frame.gameId,
   }))
 
-  // gang-block es el frame con criaturas en ambos lados (objetivos realistas)
-  // y tierras enderezadas del jugador controlado (pago de maná).
+  // gang-block is the frame with creatures on both sides (realistic targets)
+  // and untapped lands for the controlled player (mana payment).
   const base =
     recordedFrames.find((f) => f.file === 'gang-block.json') ??
     recordedFrames.find((f) => f.file === 'combat.json') ??
@@ -683,8 +682,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
     const me = controlledPlayer(game)
     const myLands = landIds(me)
     const myPermanents = battlefieldIds(me)
-    // Forma real del server: `CardsView(abilities, game)` serializa AbilityView
-    // (name "Ability" + sourceCard/sourceName anidados) — no FeedbackCard plana.
+    // Real server shape: `CardsView(abilities, game)` serializes AbilityView
+    // (name "Ability" + nested sourceCard/sourceName) — not a flat FeedbackCard.
     const triggers = myPermanents.slice(0, 2).map((id, index) => {
       const source = cardOf(me, id)
       const sourceName = source.name ?? id
@@ -728,9 +727,9 @@ export function buildGalleryEntries(): GalleryEntry[] {
       ),
     }
 
-    // Jace, the Mind Sculptor +2: la carta del top llega en `lookedAt` (visor
-    // "Miradas", que se engancha y queda abierto) y la decisión del motor es un
-    // GAME_ASK booleano: Sí = enviarla al fondo, No = dejarla arriba.
+    // Jace, the Mind Sculptor +2: the top card arrives in `lookedAt` (the
+    // "Looked at" viewer, which latches and stays open) and the engine's decision is a
+    // boolean GAME_ASK: Yes = send it to the bottom, No = leave it on top.
     const jaceTopCard: CardView = {
       id: 'jace-top-1',
       parentId: 'jace-top-1',
@@ -749,20 +748,20 @@ export function buildGalleryEntries(): GalleryEntry[] {
     const prompts: { id: string; label: string; description: string; prompt: FeedbackPrompt; playableIds?: string[]; game?: GameView }[] = [
       {
         id: 'prompt:target',
-        label: 'GAME_TARGET (obligatorio)',
-        description: 'Barra de objetivo con un candidato válido del rival.',
+        label: 'GAME_TARGET (required)',
+        description: 'Target bar with a valid candidate from the opponent.',
         prompt: targetPrompt(game, gameId, true),
       },
       {
         id: 'prompt:target-optional',
-        label: 'GAME_TARGET (opcional)',
-        description: '"Hasta N": aparece Terminar además de Cancelar.',
+        label: 'GAME_TARGET (optional)',
+        description: '"Up to N": a Finish button appears next to Cancel.',
         prompt: targetPrompt(game, gameId, false),
       },
       {
         id: 'prompt:mana',
         label: 'GAME_PLAY_MANA',
-        description: 'Pago de maná con fuentes resaltadas y botón especial.',
+        description: 'Mana payment with highlighted sources and a special button.',
         prompt: {
           method: 'GAME_PLAY_MANA',
           gameId,
@@ -778,8 +777,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:combat-attack',
-        label: 'Combat (declarar atacantes)',
-        description: 'Barra de combate con "atacar con todo" (special).',
+        label: 'Combat (declare attackers)',
+        description: 'Combat bar with "attack with everything" (special).',
         prompt: {
           method: 'GAME_SELECT',
           gameId,
@@ -795,8 +794,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:combat-block',
-        label: 'Combat (declarar bloqueadores)',
-        description: 'Barra de combate sin botón de ataque total.',
+        label: 'Combat (declare blockers)',
+        description: 'Combat bar without the attack-all button.',
         prompt: {
           method: 'GAME_SELECT',
           gameId,
@@ -810,8 +809,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:ask',
-        label: 'GAME_ASK (Sí/No)',
-        description: 'Pregunta genérica del motor con opciones booleanas.',
+        label: 'GAME_ASK (Yes/No)',
+        description: 'Generic engine question with boolean options.',
         prompt: {
           method: 'GAME_ASK',
           gameId,
@@ -819,7 +818,7 @@ export function buildGalleryEntries(): GalleryEntry[] {
           message: 'Search your library for a basic land?',
           mode: 'boolean',
           options: [
-            { id: 'yes', label: 'Sí', value: 'true' },
+            { id: 'yes', label: 'Yes', value: 'true' },
             { id: 'no', label: 'No', value: 'false' },
           ],
           min: 0,
@@ -830,7 +829,7 @@ export function buildGalleryEntries(): GalleryEntry[] {
       {
         id: 'prompt:jace-top',
         label: 'GAME_ASK (Jace, the Mind Sculptor +2)',
-        description: 'Carta del top en el visor "Miradas" + "Put that card on the bottom of its owner\'s library?" (Sí = al fondo, No = dejarla arriba).',
+        description: 'Top card in the "Looked at" viewer + "Put that card on the bottom of its owner\'s library?" (Yes = to the bottom, No = leave it on top).',
         prompt: {
           method: 'GAME_ASK',
           gameId,
@@ -838,7 +837,7 @@ export function buildGalleryEntries(): GalleryEntry[] {
           message: "Put that card on the bottom of its owner's library?",
           mode: 'boolean',
           options: [
-            { id: 'yes', label: 'Sí', value: 'true' },
+            { id: 'yes', label: 'Yes', value: 'true' },
             { id: 'no', label: 'No', value: 'false' },
           ],
           min: 0,
@@ -849,8 +848,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:mulligan',
-        label: 'Mulligan de Londres',
-        description: 'Diálogo de mantener/mulligan con contador.',
+        label: 'London Mulligan',
+        description: 'Keep/mulligan dialog with a counter.',
         prompt: {
           method: 'GAME_ASK',
           gameId,
@@ -858,7 +857,7 @@ export function buildGalleryEntries(): GalleryEntry[] {
           message: 'Mulligan down to 6 cards?',
           mode: 'boolean',
           options: [
-            { id: 'keep', label: 'Mantener (7)', value: 'false' },
+            { id: 'keep', label: 'Keep (7)', value: 'false' },
             { id: 'mull', label: 'Mulligan', value: 'true' },
           ],
           min: 0,
@@ -868,8 +867,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:london-bottom',
-        label: 'Mulligan de Londres (al fondo)',
-        description: 'Una carta por clic; muestra cuántas faltan por poner al fondo.',
+        label: 'London Mulligan (to the bottom)',
+        description: 'One card per click; shows how many are still to go to the bottom.',
         prompt: {
           method: 'GAME_TARGET',
           gameId,
@@ -905,8 +904,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:graveyard-grid',
-        label: 'Selección múltiple (cementerio)',
-        description: 'GAME_TARGET con cartas: la selección la lleva el servidor y se ve el contador.',
+        label: 'Multi-select (graveyard)',
+        description: 'GAME_TARGET with cards: the server owns the selection and the counter is shown.',
         prompt: {
           method: 'GAME_TARGET',
           gameId,
@@ -925,8 +924,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:discard-hand',
-        label: 'Descarte desde la mano (barra)',
-        description: 'GAME_TARGET con las cartas de tu mano: se resuelve clicando la mano, sin grid modal y con el tablero visible.',
+        label: 'Discard from hand (bar)',
+        description: 'GAME_TARGET with your hand cards: resolved by clicking the hand, no modal grid, with the board visible.',
         prompt: {
           method: 'GAME_TARGET',
           gameId,
@@ -944,8 +943,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:card-grid',
-        label: 'Búsqueda en biblioteca (grid)',
-        description: 'Grid HD de cartas con buscador para tutores.',
+        label: 'Library search (grid)',
+        description: 'HD card grid with a search box for tutors.',
         prompt: {
           method: 'GAME_CHOOSE_CARDS',
           gameId,
@@ -961,7 +960,7 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:card-grid-filtered',
-        label: 'Búsqueda filtrada (solo válidas)',
+        label: 'Filtered search (only valid)',
         description: 'Filtered search: the grid pre-filters to the cards the target accepts (options.possibleTargets) and a toggle reveals the remaining candidates.',
         prompt: {
           method: 'GAME_TARGET',
@@ -979,8 +978,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:trigger-order',
-        label: 'Orden de triggers',
-        description: 'Dos triggers simultáneos sin orden fijado.',
+        label: 'Trigger order',
+        description: 'Two simultaneous triggers with no fixed order.',
         prompt: {
           method: 'GAME_TARGET',
           gameId,
@@ -996,8 +995,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
       },
       {
         id: 'prompt:voting',
-        label: 'Votación (Council)',
-        description: 'Voto de dos opciones con origen visible.',
+        label: 'Voting (Council)',
+        description: 'Two-option vote with the source visible.',
         prompt: {
           method: 'GAME_CHOOSE_CHOICE',
           gameId,
@@ -1042,7 +1041,7 @@ export function buildGalleryEntries(): GalleryEntry[] {
       id: 'prompt:ask-slicer',
       group: 'Prompts',
       label: 'GAME_ASK (Slicer, Hired Muscle)',
-      description: 'Pregunta real del motor con {this}: el saneado la resuelve con sourceName.',
+      description: 'Real engine question with {this}: the sanitizer resolves it with sourceName.',
       phase: 'game',
       game: slicerFrame.gameView,
       gameId: slicerFrame.gameId,
@@ -1052,7 +1051,7 @@ export function buildGalleryEntries(): GalleryEntry[] {
 
   entries.push({
     id: 'screen:rendered-cards',
-    group: 'Pantallas',
+    group: 'Screens',
     label: 'Rendered cards',
     description: 'Every distinct card layout in the recorded frames, drawn from data.',
     screen: 'cards',
@@ -1061,176 +1060,176 @@ export function buildGalleryEntries(): GalleryEntry[] {
 
   entries.push({
     id: 'screen:login',
-    group: 'Pantallas',
+    group: 'Screens',
     label: 'Login',
-    description: 'Pantalla de conexión sin formulario enviado.',
+    description: 'Connection screen with no form submitted.',
     phase: 'idle',
   })
 
   entries.push({
     id: 'screen:lobby-empty',
-    group: 'Pantallas',
-    label: 'Lobby (vacío)',
-    description: 'Sin mesas ni jugadores conectados.',
+    group: 'Screens',
+    label: 'Lobby (empty)',
+    description: 'No tables and no connected players.',
     screen: 'lobby',
     lobby: LOBBY_EMPTY,
     conn: GALLERY_CONN,
   })
   entries.push({
     id: 'screen:lobby-overflow',
-    group: 'Pantallas',
-    label: 'Lobby (desbordado)',
-    description: '48 mesas y 55 jugadores conectados.',
+    group: 'Screens',
+    label: 'Lobby (overflowing)',
+    description: '48 tables and 55 connected players.',
     screen: 'lobby',
     lobby: LOBBY_OVERFLOW,
     conn: GALLERY_CONN,
   })
   entries.push({
     id: 'screen:decks',
-    group: 'Pantallas',
-    label: 'Editor de mazos',
+    group: 'Screens',
+    label: 'Deck editor',
     description:
-      'Usa el almacenamiento real del navegador (IndexedDB): no se fuerzan mazos de ejemplo aquí para no contaminar tus mazos guardados con datos falsos.',
+      'Uses the real browser storage (IndexedDB): no sample decks are forced here so your saved decks are not polluted with fake data.',
     screen: 'decks',
   })
   entries.push({
     id: 'screen:draft',
-    group: 'Pantallas',
-    label: 'Draft (pick en curso)',
-    description: 'Booster de 14 cartas, pick 3 de la ronda 1, con 2 ya elegidas.',
+    group: 'Screens',
+    label: 'Draft (pick in progress)',
+    description: '14-card booster, pick 3 of round 1, with 2 already picked.',
     screen: 'draft',
     draft: DRAFT_INPROGRESS,
   })
   entries.push({
     id: 'screen:draft-waiting',
-    group: 'Pantallas',
-    label: 'Draft (esperando booster)',
-    description: 'Booster vacío tras terminar el pick (picking:false) con nombres de jugador largos.',
+    group: 'Screens',
+    label: 'Draft (waiting for booster)',
+    description: 'Empty booster after the pick ends (picking:false) with long player names.',
     screen: 'draft',
     draft: DRAFT_WAITING,
   })
   entries.push({
     id: 'screen:construct',
-    group: 'Pantallas',
-    label: 'Construct (pool sellado)',
-    description: '45 cartas de un sobre sellado típico.',
+    group: 'Screens',
+    label: 'Construct (sealed pool)',
+    description: '45 cards from a typical sealed booster.',
     screen: 'construct',
     construct: CONSTRUCT_STATE_NORMAL,
   })
   entries.push({
     id: 'screen:construct-overflow',
-    group: 'Pantallas',
-    label: 'Construct (pool grande)',
-    description: '90 cartas: pool de cubo/sellado grande, desbordado.',
+    group: 'Screens',
+    label: 'Construct (big pool)',
+    description: '90 cards: big cube/sealed pool, overflowing.',
     screen: 'construct',
     construct: CONSTRUCT_STATE_BIG,
   })
   entries.push({
     id: 'screen:tournament-inprogress',
-    group: 'Pantallas',
-    label: 'Torneo (cuadro en curso)',
-    description: 'Suizo a 3 rondas, ronda 2 en curso.',
+    group: 'Screens',
+    label: 'Tournament (bracket in progress)',
+    description: '3-round Swiss, round 2 in progress.',
     screen: 'tournament',
     tournamentModal: { table: TOURNAMENT_TABLE, view: TOURNAMENT_INPROGRESS },
   })
   entries.push({
     id: 'screen:tournament-finished',
-    group: 'Pantallas',
-    label: 'Torneo (cuadro terminado)',
-    description: 'Torneo terminado con posiciones finales.',
+    group: 'Screens',
+    label: 'Tournament (bracket finished)',
+    description: 'Finished tournament with final standings.',
     screen: 'tournament',
     tournamentModal: { table: TOURNAMENT_TABLE, view: TOURNAMENT_FINISHED },
   })
   entries.push({
     id: 'screen:tournament-loading',
-    group: 'Pantallas',
-    label: 'Torneo (cargando)',
-    description: 'Cuadro sin datos mientras llega TOURNAMENT_INIT (loading).',
+    group: 'Screens',
+    label: 'Tournament (loading)',
+    description: 'Bracket without data while TOURNAMENT_INIT arrives (loading).',
     screen: 'tournament',
     tournamentModal: { table: TOURNAMENT_TABLE, view: null, loading: true },
   })
   entries.push({
     id: 'screen:tournament-error',
-    group: 'Pantallas',
-    label: 'Torneo (error)',
-    description: 'Fallo al pedir el cuadro (prop error del modal).',
+    group: 'Screens',
+    label: 'Tournament (error)',
+    description: 'Failed to request the bracket (modal error prop).',
     screen: 'tournament',
-    tournamentModal: { table: TOURNAMENT_TABLE, view: null, error: 'No se pudo cargar el cuadro del torneo' },
+    tournamentModal: { table: TOURNAMENT_TABLE, view: null, error: 'Could not load the tournament bracket' },
   })
   entries.push({
     id: 'screen:tournament-empty',
-    group: 'Pantallas',
-    label: 'Torneo (sin datos)',
-    description: 'Carga terminada sin vista todavía: estado vacío del modal.',
+    group: 'Screens',
+    label: 'Tournament (no data)',
+    description: 'Load finished with no view yet: the modal empty state.',
     screen: 'tournament',
     tournamentModal: { table: TOURNAMENT_TABLE, view: null },
   })
   entries.push({
     id: 'screen:tournament-waiting',
-    group: 'Pantallas',
-    label: 'Torneo (en construcción)',
-    description: 'Constructing con 6 jugadores y 0 rondas: espera antes del primer emparejamiento.',
+    group: 'Screens',
+    label: 'Tournament (constructing)',
+    description: 'Constructing with 6 players and 0 rounds: waiting before the first pairing.',
     screen: 'tournament',
     tournamentModal: { table: TOURNAMENT_TABLE, view: TOURNAMENT_WAITING },
   })
   entries.push({
     id: 'screen:draft-stalled',
-    group: 'Pantallas',
-    label: 'Draft (cuñado)',
-    description: 'Watchdog sin eventos desde hace >150 s: aviso + botón Reintentar.',
+    group: 'Screens',
+    label: 'Draft (stalled)',
+    description: 'Watchdog with no events for >150 s: warning + Retry button.',
     screen: 'draft',
     draft: DRAFT_INPROGRESS,
     lastDraftEventAt: 0,
   })
   entries.push({
     id: 'screen:setup',
-    group: 'Pantallas',
+    group: 'Screens',
     label: 'Setup wizard',
-    description: 'Primera ejecución: configuración de proxy y servidor.',
+    description: 'First run: proxy and server configuration.',
     phase: 'idle',
     screen: 'setup',
   })
   entries.push({
     id: 'screen:login-connecting',
-    group: 'Pantallas',
-    label: 'Login (conectando)',
-    description: 'Formulario enviado: botón Conectando… con spinner y envío bloqueado.',
+    group: 'Screens',
+    label: 'Login (connecting)',
+    description: 'Form submitted: Connecting… button with a spinner and submit blocked.',
     phase: 'connecting',
     conn: GALLERY_CONN,
   })
   entries.push({
     id: 'screen:login-error',
-    group: 'Pantallas',
-    label: 'Login (error de conexión)',
-    description: 'Error del slice de sesión traducido en la caja de login.',
+    group: 'Screens',
+    label: 'Login (connection error)',
+    description: 'Session-slice error rendered in the login box.',
     phase: 'idle',
-    error: 'No se pudo conectar al proxy',
+    error: 'Could not connect to the proxy',
   })
   entries.push({
     id: 'screen:lobby-error',
-    group: 'Pantallas',
+    group: 'Screens',
     label: 'Lobby (error)',
-    description: 'ErrorBanner del lobby con el lobby cargado detrás.',
+    description: 'Lobby ErrorBanner with the lobby loaded behind.',
     screen: 'lobby',
     lobby: LOBBY_OVERFLOW,
     conn: GALLERY_CONN,
-    error: 'No se pudo conectar al proxy',
+    error: 'Could not connect to the proxy',
   })
   entries.push({
     id: 'screen:wizard',
-    group: 'Pantallas',
-    label: 'Crear mesa (wizard)',
+    group: 'Screens',
+    label: 'Create table (wizard)',
     description:
-      'Formulario persistido «Draft MH3 (8P)»: rama de torneo limitado con resumen y 8 asientos. (La combinación inválida no es representable: los setters la auto-corrigen.)',
+      'Persisted form «Draft MH3 (8P)»: limited-tournament branch with a summary and 8 seats. (The invalid combination is not representable: the setters auto-correct it.)',
     phase: 'game',
     screen: 'wizard',
     storageSeed: { [CREATE_TABLE_STORAGE_KEY]: WIZARD_DRAFT_FORM },
   })
   entries.push({
     id: 'screen:staging-player',
-    group: 'Pantallas',
-    label: 'Sala de espera (jugador)',
-    description: 'Mesa 2/2 con roster, listo/no listo y cambio de mazo.',
+    group: 'Screens',
+    label: 'Staging room (player)',
+    description: '2/2 table with roster, ready/not-ready and deck switch.',
     phase: 'game',
     screen: 'staging',
     conn: GALLERY_CONN,
@@ -1241,9 +1240,9 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'screen:staging-pod',
-    group: 'Pantallas',
-    label: 'Sala de espera (pod Commander)',
-    description: 'Mesa multijugador 3/4 con bot y plaza libre alrededor de la mesa.',
+    group: 'Screens',
+    label: 'Staging room (Commander pod)',
+    description: '3/4 multiplayer table with a bot and a free seat around the table.',
     phase: 'game',
     screen: 'staging',
     conn: GALLERY_CONN,
@@ -1254,9 +1253,9 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'screen:staging-spectator',
-    group: 'Pantallas',
-    label: 'Sala de espera (espectador)',
-    description: 'Espectando una mesa 1/2 que espera rival.',
+    group: 'Screens',
+    label: 'Staging room (spectator)',
+    description: 'Spectating a 1/2 table waiting for an opponent.',
     phase: 'game',
     screen: 'staging',
     stagingMode: 'spectator',
@@ -1267,9 +1266,9 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'screen:tournament-panel',
-    group: 'Pantallas',
-    label: 'Torneo (panel en partida)',
-    description: 'TournamentPanel durante una partida de torneo (cuadro + chat).',
+    group: 'Screens',
+    label: 'Tournament (in-game panel)',
+    description: 'TournamentPanel during a tournament game (bracket + chat).',
     phase: 'game',
     game: GANG_BLOCK_FRAME?.gameView ?? null,
     gameId: GANG_BLOCK_FRAME?.gameId ?? null,
@@ -1277,9 +1276,9 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'screen:gameend-game',
-    group: 'Pantallas',
-    label: 'Fin de partida (el match sigue)',
-    description: 'Derrota en el juego 1 de un Bo3 con marcador y "el match continúa".',
+    group: 'Screens',
+    label: 'Game over (match continues)',
+    description: 'Loss in game 1 of a Bo3 with a score and "the match continues".',
     screen: 'gameend',
     game: GANG_BLOCK_FRAME?.gameView ?? null,
     gameId: GANG_BLOCK_FRAME?.gameId ?? null,
@@ -1287,9 +1286,9 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'screen:gameend-match',
-    group: 'Pantallas',
-    label: 'Fin de match (victoria)',
-    description: 'Match Bo3 ganado 2-1: ganador, marcador y volver al lobby.',
+    group: 'Screens',
+    label: 'Match over (victory)',
+    description: 'Bo3 match won 2-1: winner, score and return to the lobby.',
     screen: 'gameend',
     game: GANG_BLOCK_FRAME?.gameView ?? null,
     gameId: GANG_BLOCK_FRAME?.gameId ?? null,
@@ -1297,44 +1296,44 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'screen:settings',
-    group: 'Pantallas',
-    label: 'Ajustes',
-    description: 'SettingsModal (idioma, interfaz, tablero, sonido, juego).',
+    group: 'Screens',
+    label: 'Settings',
+    description: 'SettingsModal (language, interface, board, sound, game).',
     phase: 'game',
     screen: 'settings',
   })
   entries.push({
     id: 'screen:appearance',
-    group: 'Pantallas',
-    label: 'Apariencia',
-    description: 'Zoom, disposición de tablero y fundas.',
+    group: 'Screens',
+    label: 'Appearance',
+    description: 'Zoom, board layout and card sleeves.',
     phase: 'game',
     screen: 'appearance',
   })
   entries.push({
     id: 'screen:about',
-    group: 'Pantallas',
-    label: 'Acerca de',
-    description: 'Versión, créditos y enlaces (sin pestaña de noticias: usa red).',
+    group: 'Screens',
+    label: 'About',
+    description: 'Version, credits and links (no news tab: it uses the network).',
     phase: 'idle',
     screen: 'about',
   })
   entries.push({
     id: 'screen:help',
-    group: 'Pantallas',
-    label: 'Ayuda / wiki',
-    description: 'Glosario de keywords, fases y atajos.',
+    group: 'Screens',
+    label: 'Help / wiki',
+    description: 'Glossary of keywords, phases and shortcuts.',
     phase: 'game',
     screen: 'help',
   })
 
-  // Variantes de tablero: settings.boardLayout real decide el layout efectivo
-  // (`effectiveBoardLayout`: pod/arena solo con rivales; >4 jugadores ⇒ standard).
+  // Board variants: the real settings.boardLayout decides the effective layout
+  // (`effectiveBoardLayout`: pod/arena only with opponents; >4 players ⇒ standard).
   entries.push({
     id: 'board:pod-4',
-    group: 'Tablero',
-    label: 'Pod 2×2 (4 jugadores)',
-    description: 'FFA de 4 con layout pod: rejilla 2×2 y anillo de turno.',
+    group: 'Board',
+    label: 'Pod 2×2 (4 players)',
+    description: '4-player FFA with pod layout: 2×2 grid and turn ring.',
     phase: 'game',
     game: FOUR_PLAYER_GAME,
     gameId: GANG_BLOCK_FRAME?.gameId ?? null,
@@ -1410,9 +1409,9 @@ export function buildGalleryEntries(): GalleryEntry[] {
   }
   entries.push({
     id: 'board:arena-4',
-    group: 'Tablero',
-    label: 'Arena (4 jugadores)',
-    description: 'Mismo FFA de 4 con layout arena: rivales en columnas compactas.',
+    group: 'Board',
+    label: 'Arena (4 players)',
+    description: 'Same 4-player FFA with arena layout: opponents in compact columns.',
     phase: 'game',
     game: FOUR_PLAYER_GAME,
     gameId: GANG_BLOCK_FRAME?.gameId ?? null,
@@ -1420,9 +1419,9 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'board:pod-4-crowded',
-    group: 'Tablero',
-    label: 'Pod 2×2 con el campo lleno',
-    description: '4 jugadores con 16 criaturas y 14 tierras cada uno: las bandas encogen las cartas (y se reparten en líneas) en vez de hacer scroll.',
+    group: 'Board',
+    label: 'Pod 2×2 with a full battlefield',
+    description: '4 players with 16 creatures and 14 lands each: the bands shrink the cards (and wrap them into lines) instead of scrolling.',
     phase: 'game',
     game: CROWDED_POD_GAME,
     gameId: GANG_BLOCK_FRAME?.gameId ?? null,
@@ -1430,9 +1429,9 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'board:arena-4-crowded',
-    group: 'Tablero',
-    label: 'Arena con el campo lleno',
-    description: 'Mismo campo lleno con layout arena (rivales en columnas compactas).',
+    group: 'Board',
+    label: 'Arena with a full battlefield',
+    description: 'Same full battlefield with arena layout (opponents in compact columns).',
     phase: 'game',
     game: CROWDED_POD_GAME,
     gameId: GANG_BLOCK_FRAME?.gameId ?? null,
@@ -1440,9 +1439,9 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'board:pod-commander',
-    group: 'Tablero',
-    label: 'Pod Commander (3 jugadores)',
-    description: 'Commander Free For All de 3: zona de mando por rival y anillo.',
+    group: 'Board',
+    label: 'Commander pod (3 players)',
+    description: '3-player Commander Free For All: command zone per opponent and ring.',
     phase: 'game',
     game: THREE_PLAYER_COMMANDER,
     gameId: COMMANDER_FRAME?.gameId ?? null,
@@ -1450,16 +1449,16 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'game:hand-15',
-    group: 'Tablero',
-    label: 'Mano de 15 cartas',
-    description: 'Mano desbordada (15 cartas) sobre el frame gang-block.',
+    group: 'Board',
+    label: '15-card hand',
+    description: 'Overflowing hand (15 cards) over the gang-block frame.',
     phase: 'game',
     game: HAND_15_GAME,
     gameId: GANG_BLOCK_FRAME?.gameId ?? null,
   })
   entries.push({
     id: 'game:top-card-peek',
-    group: 'Tablero',
+    group: 'Board',
     label: 'Top card peek',
     description: '"Look at the top card of your library any time" (Future Sight…): the card sits small left of the library, no blocking viewer.',
     phase: 'game',
@@ -1468,20 +1467,20 @@ export function buildGalleryEntries(): GalleryEntry[] {
   })
   entries.push({
     id: 'game:long-names',
-    group: 'Tablero',
-    label: 'Nombres largos',
-    description: 'Jugadores y cartas con nombres muy largos (desbordado de etiquetas).',
+    group: 'Board',
+    label: 'Long names',
+    description: 'Players and cards with very long names (label overflow).',
     phase: 'game',
     game: LONG_NAMES_GAME,
     gameId: GANG_BLOCK_FRAME?.gameId ?? null,
   })
 
-  // Estados globales: idioma, zoom y conexión (slices reales de la app).
+  // Global states: language, zoom and connection (real app slices).
   entries.push({
     id: 'global:lang-lobby-ru',
     group: 'Global',
-    label: 'Lobby en ruso (idioma largo)',
-    description: 'Traducción ru sobre el lobby desbordado: etiquetas más largas.',
+    label: 'Lobby in Russian (long language)',
+    description: 'ru translation over the overflowing lobby: longer labels.',
     screen: 'lobby',
     lobby: LOBBY_OVERFLOW,
     conn: GALLERY_CONN,
@@ -1490,8 +1489,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
   entries.push({
     id: 'global:lang-game-ja',
     group: 'Global',
-    label: 'Partida en japonés (CJK)',
-    description: 'Traducción ja + cjkBoost sobre un frame real.',
+    label: 'Game in Japanese (CJK)',
+    description: 'ja translation + cjkBoost over a real frame.',
     phase: 'game',
     game: GANG_BLOCK_FRAME?.gameView ?? null,
     gameId: GANG_BLOCK_FRAME?.gameId ?? null,
@@ -1501,8 +1500,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
   entries.push({
     id: 'global:zoom-lobby-125',
     group: 'Global',
-    label: 'Lobby a zoom 125%',
-    description: 'settings.uiScale = 1.25 (el tablero lo compensa con inverseZoom).',
+    label: 'Lobby at 125% zoom',
+    description: 'settings.uiScale = 1.25 (the board compensates with inverseZoom).',
     screen: 'lobby',
     lobby: LOBBY_OVERFLOW,
     conn: GALLERY_CONN,
@@ -1511,8 +1510,8 @@ export function buildGalleryEntries(): GalleryEntry[] {
   entries.push({
     id: 'global:reconnecting',
     group: 'Global',
-    label: 'Desconectado (reconectando)',
-    description: 'connecting + wsAlive:false: banner de reconexión de la app.',
+    label: 'Disconnected (reconnecting)',
+    description: 'connecting + wsAlive:false: the app reconnect banner.',
     screen: 'lobby',
     lobby: LOBBY_OVERFLOW,
     conn: GALLERY_CONN,

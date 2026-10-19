@@ -173,3 +173,35 @@ describe('i18n system', () => {
     }
   })
 })
+
+describe('translateError — el fallback de un FAILED desnudo depende de la superficie', () => {
+  beforeEach(async () => {
+    await switchLanguage('es')
+  })
+
+  it('un FAILED sin acción en el login se lee como login fallido, no como fallo al crear mesa', async () => {
+    // El proxy puede contestar un rechazo de versión como {"error":"FAILED","errorCode":"FAILED"}:
+    // sin acción, la rama FAILED caía en errors.create_table_failed ("No se pudo crear la mesa").
+    const loginCopy = t('errors.login_failed')
+    expect(translateError('FAILED', 'login')).toBe('Error de inicio de sesión: credenciales incorrectas o servidor no disponible')
+    expect(translateError('FAILED', 'login')).toBe(loginCopy)
+    expect(translateError('FAILED', 'login')).not.toBe(t('errors.create_table_failed'))
+    // el mismo rechazo puede llegar con errorCode FAILED en vez de sin código
+    expect(translateError('FAILED', 'login', 'FAILED')).toBe(loginCopy)
+  })
+
+  it('no cambia los mapeos existentes por acción ni el fallback sin acción', async () => {
+    expect(translateError('FAILED', 'joinTable')).toBe(t('errors.join_table_failed'))
+    expect(translateError('FAILED', 'watchTable')).toBe(t('errors.table_not_found'))
+    expect(translateError('FAILED', 'startMatch')).toBe(t('errors.start_game_failed'))
+    // sin superficie (create table y cualquier llamador sin acción) sigue siendo el fallback de mesa
+    expect(translateError('FAILED')).toBe(t('errors.create_table_failed'))
+  })
+
+  it('un texto ya traducido (p. ej. el de version mismatch) pasa intacto por la superficie login', async () => {
+    const mismatch = t('errors', 'server_version_mismatch', { server: '1.4.63-V1', proxy: '1.4.62-V1' })
+    expect(mismatch).toContain('1.4.63-V1')
+    expect(translateError(mismatch, 'login')).toBe(mismatch)
+    expect(translateError(mismatch, 'login')).toBe(translateError(mismatch))
+  })
+})

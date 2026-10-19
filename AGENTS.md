@@ -43,16 +43,18 @@ triage. See `web/INTERACTION_COVERAGE.md`.
 - Full build (server + plugins + proxy): `node scripts/build.mjs` (engine
   steps run inside the fork checkout; the proxy builds standalone in this repo)
 - XMage version: **1.4.62-V1** (upstream magefree/mage; merge of tag `xmage_1.4.62V1`).
-  Proxy jar: `Mage.Proxy/target/mage-proxy-1.4.62.jar`. A second proxy flavor is built against the
+  Proxy jar: `Mage.Proxy/target/mage-proxy-1.4.62.jar` — the proxy compiles against
+  the LLMage `1.4.62` artifacts, which carry the fork-only `COMPUTER_LLM`/`LLMPlayerConfig`
+  symbols (`Mage.Proxy/pom.xml` `mage.version`; the stock `1.4.62` artifacts lack them).
+  A second proxy flavor is built against the
   **XDHS fork** (xenohedron/mage, tag `1.5.8-XDHS-r1`) for `mage.xdhs.net`:
   `mage-proxy-1.5.8.jar` + `patches/xdhs/*.patch` + `-Dmage.version=1.5.8`
   (see `patches/xdhs/README.md`; launcher component `proxy-xdhs`, host script
   `scripts/deploy/host-xdhs.sh`). The proxy's default server is **`beta.xmage.today:17171`** (current official server; `beta.xmage.de` is obsolete).
   If the remote server changes release (strict version check `MAGE_VERSION_RELEASE_INFO_MUST_BE_SAME`),
   the proxy won't connect: the fork must be updated (fetch upstream + merge, in
-  `../xmage-fork`) and everything rebuilt. The `Upstream XMage release` workflow
-  (`scripts/check-upstream-release.mjs`, every 6 h) fails as soon as magefree/mage tags a newer
-  release than the fork's `MageVersion`; that failure email is the signal to do it.
+  `../xmage-fork`) and everything rebuilt. `scripts/check-upstream-release.mjs` reports when
+  magefree/mage tags a newer release than the fork's `MageVersion`; run it from cron or by hand.
 - Smoke test against the public server: works via the proxy (WS probe: login, SIM table, WATCHGAME/GAME_INIT/updates).
   **Anonymous login to `beta.xmage.today` is stable** (measured 2026-09-20: 17/17 logins, ~1.6 s each).
   The former "intermittent beta handshake bug" was a **misdiagnosis**: the server rejects any username
@@ -294,10 +296,8 @@ for `mechanics.spec.ts`, so a fixture change must be checked against every spec 
 - **After touching `web`**: run `unit` and `typecheck` (and `build` if
   the build changed). After touching proxy Java: `java` + rebuild jar
   (`build.mjs proxy`) + restart proxy.
-- **Before declaring a task "done"**: the full suite (`node scripts/test.mjs`) with the stack up, **and the
-  remote CI green afterwards** (`gh run list -R Adamychen/xmage-nexus -L 5`). `Web client CI` once sat red on
-  `master` for a week while the local suite was 9/9, because CI's Maven cache held old `org.mage` artifacts.
-  If the fork is touched, publish `origin/nexus` first: CI and `release.yml` build from there.
+- **Before declaring a task "done"**: the full suite (`node scripts/test.mjs`) with the stack up.
+  This repository ships no CI, so the local run is the whole gate — do not wait for a remote run.
 - **Restart the stack right before** (`node scripts/ctl.mjs restart all`): a server that accumulated orphan
   sessions and matches degrades the callback channel and makes `warmup`/`self-test`/`human-test` flaky
   (`WATCHGAME` never arrives, `GAME_PLAY_MANA` expires). On a freshly restarted, warm stack: self-test
@@ -340,7 +340,7 @@ for `mechanics.spec.ts`, so a fixture change must be checked against every spec 
 (test layers, coverage, roadmap phases, feature-parity matrix, anti-drift guards).
 
 - Generator: `scripts/gen-dashboard.mjs` (merges `site/content.json` + test artefacts).
-- CI orchestrator: `scripts/dashboard-ci.mjs` (unit+coverage, typecheck, build, fake-e2e, proxy java).
+- Local orchestrator: `scripts/dashboard-ci.mjs` (unit+coverage, typecheck, build, fake-e2e, proxy java).
 - Red gate: `scripts/check-status.mjs` runs as the **last** Pages step and exits non-zero when any
   layer of `status.json` is `fail`. It runs after the deploy on purpose: the page publishes the
   truth and the run is red with it. Before 2026-10-10 every nightly step carried
@@ -350,9 +350,9 @@ for `mechanics.spec.ts`, so a fixture change must be checked against every spec 
   `reports/integration-result.json`). It waits for the proxy's `/ready` and runs one warm-up game
   first, like `test.mjs` does: without those gates it reported 0.3 s failures against a cold proxy
   ("Proxy is still loading card data") as an integration red.
-- Published by `.github/workflows/pages.yml` (push = lightweight layers; nightly cron = also integration).
-  Pages **source must be "GitHub Actions"** (Settings → Pages).
-- **Interactive demo** (`site/demo/`, built in `pages.yml`): the real web client with
+- **No CI ships with this repository**: the dashboard is built with `scripts/gen-dashboard.mjs` and
+  `site/` is deployed by hand to any static host (GitHub Pages also works from a branch).
+- **Interactive demo** (`site/demo/`, built by `scripts/dashboard-ci.mjs`): the real web client with
   `vite build --mode demo` (`npm --prefix web run build:demo`, `__DEMO__` true), talking to the
   e2e `FakeServerCore` in the browser through `web/src/demo/DemoSocket.ts` — no proxy, no Java.
   `src/demo/` holds the seed (`boot.ts`), invented roster/tables/EDHREC page (`data.ts`), the 12

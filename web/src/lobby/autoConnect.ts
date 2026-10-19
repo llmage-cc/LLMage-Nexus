@@ -6,6 +6,17 @@ export interface AutoConnectParams {
   username?: string
 }
 
+/**
+ * Whether a boot reload may re-attach with the saved connection. A gated
+ * deployment (`authRequired`) only re-attaches when this tab still holds its
+ * token; without one it must land on the login form's prompt instead of firing
+ * a tokenless connect the proxy closes with 4401. An ungated deployment always
+ * auto-attaches (the stock-proxy behavior).
+ */
+export function canAutoConnect(authRequired: boolean, hasToken: boolean): boolean {
+  return !authRequired || hasToken
+}
+
 function parsePort(raw: string | null | undefined): number | undefined {
   const n = Number(raw)
   return Number.isInteger(n) && n > 0 && n <= 65535 ? n : undefined

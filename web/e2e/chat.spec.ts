@@ -66,10 +66,10 @@ chatTest(
     // the message should appear in the chat list
     await expect(page.locator('.chat-list')).toContainText('Hello from lobby!', { timeout: 5_000 })
     if (FAKE_MODE) {
-      // el eco de otro usuario solo existe en el escenario chatScenario
+      // another user's echo exists only in the chatScenario scenario
       await expect(page.locator('.chat-list')).toContainText('player-1:', { timeout: 5_000 })
     }
-    // U5-2: cada mensaje muestra su hora tenue
+    // every message shows its timestamp in a subdued tone
     await expect(page.locator('.chat-list .chat-time').first()).toContainText(/\d{1,2}:\d{2}/, { timeout: 5_000 })
   },
 )
@@ -181,8 +181,10 @@ fakeOnly()
 
     await openDrawerTab(page, 'chat')
 
-    // click a quick reaction button
-    const thumbsUp = page.locator('.quick-reaction-btn', { hasText: '👍' })
+    // click a quick reaction button — select it by its stable data-reaction hook:
+    // the button draws an SVG icon rather than the emoji glyph (a colour-emoji font
+    // is not guaranteed on every client), so matching on text would break.
+    const thumbsUp = page.locator('.quick-reaction-btn[data-reaction="agree"]')
     await expect(thumbsUp).toBeVisible({ timeout: 10_000 })
     await thumbsUp.click()
 

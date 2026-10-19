@@ -5,16 +5,20 @@ import {
   defaultTournamentType,
   getEffectiveMaxPlayers,
   isHumanSeatType,
+  isLlmSeatType,
   isNativeAiSeatType,
   isSimSeatType,
   normalizeSeatType,
   normalizeTournamentType,
   recommendedFreeMulligans,
   seatTypeLabel,
+  gameTypeLabel,
+  seatDeckIsEmpty,
   tournamentTypeNameOf,
 } from './constants'
+import { deckRef } from '../decks'
 
-describe('seat types (U3 plazas HUMAN)', () => {
+describe('seat types (HUMAN seats)', () => {
   it('normalizes enum names, descriptions and legacy aliases', () => {
     expect(normalizeSeatType('HUMAN')).toBe('HUMAN')
     expect(normalizeSeatType('Human')).toBe('HUMAN')
@@ -53,6 +57,58 @@ describe('seat types (U3 plazas HUMAN)', () => {
     expect(seatTypeLabel('HUMAN')).toMatch(/espera/i)
     expect(seatTypeLabel('SIM')).toBe('SIM')
     expect(seatTypeLabel('COMPUTER_DRAFT_BOT')).toMatch(/draftbot/i)
+  })
+})
+
+describe('COMPUTER_LLM seat type (LLMage fork)', () => {
+  it('normalizes the enum name and its aliases', () => {
+    expect(normalizeSeatType('COMPUTER_LLM')).toBe('COMPUTER_LLM')
+    expect(normalizeSeatType('Computer - LLM')).toBe('COMPUTER_LLM')
+    expect(normalizeSeatType('computer_llm_seat')).toBe('COMPUTER_LLM')
+    expect(normalizeSeatType('COMPUTER_LLM_SEAT')).toBe('COMPUTER_LLM')
+  })
+
+  it('isLlmSeatType is true only for the LLM seat and is not SIM/HUMAN', () => {
+    expect(isLlmSeatType('COMPUTER_LLM')).toBe(true)
+    expect(isLlmSeatType('Computer - LLM')).toBe(true)
+    expect(isLlmSeatType('COMPUTER_MAD')).toBe(false)
+    expect(isLlmSeatType('HUMAN')).toBe(false)
+    expect(isLlmSeatType('SIM')).toBe(false)
+    expect(isHumanSeatType('COMPUTER_LLM')).toBe(false)
+    expect(isSimSeatType('COMPUTER_LLM')).toBe(false)
+  })
+
+  it('is counted as a native AI seat (joins the bot-seat path)', () => {
+    expect(isNativeAiSeatType('COMPUTER_LLM')).toBe(true)
+    expect(aiSeatTypes(['HUMAN', 'SIM', 'COMPUTER_MAD', 'COMPUTER_LLM'])).toEqual(['COMPUTER_MAD', 'COMPUTER_LLM'])
+  })
+
+  it('labels the LLM seat through the i18n helper', () => {
+    expect(seatTypeLabel('COMPUTER_LLM')).toMatch(/llm/i)
+  })
+
+  it('maps the raw game-type enum to a translated label, else passes it through', () => {
+    // Without `t` the raw server name is kept (no crash, still selectable).
+    expect(gameTypeLabel('Two Player Duel')).toBe('Two Player Duel')
+    // With `t` the known enum maps to its catalog key.
+    const t = ((_cat: string, key: string) => `«${key}»`) as never
+    expect(gameTypeLabel('Two Player Duel', t)).toBe('«game_type_two_player_duel»')
+    expect(gameTypeLabel('Free For All', t)).toBe('«game_type_free_for_all»')
+    // An unmapped/unknown server game type falls through to its raw name.
+    expect(gameTypeLabel('Custom Pillar of the Paruns Two Player Duel', t)).toBe('Custom Pillar of the Paruns Two Player Duel')
+  })
+
+  it('a seat is "empty" only when nothing can resolve to a deck', () => {
+    const deck = { id: 'mwb', name: 'Mage Web bolt', cards: [{ cardName: 'X', setCode: 'A', cardNumber: '1', amount: 60 }], sideboard: [] }
+    const ref = deckRef(deck as never)
+    // A resolvable per-seat deck ref is never empty (the transient false warning).
+    expect(seatDeckIsEmpty(ref, [deck as never], null)).toBe(false)
+    // An empty seat with a global sim deck falls back -> NOT empty.
+    expect(seatDeckIsEmpty('', [], deck as never)).toBe(false)
+    // Positive control: an empty seat with no deck at all IS empty.
+    expect(seatDeckIsEmpty('', [], null)).toBe(true)
+    // Positive control: a deck ref that resolves to nothing IS empty.
+    expect(seatDeckIsEmpty('gone:deck', [deck as never], deck as never)).toBe(true)
   })
 })
 

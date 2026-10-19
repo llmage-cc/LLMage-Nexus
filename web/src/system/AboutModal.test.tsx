@@ -50,9 +50,11 @@ describe('AboutModal', () => {
   it('loads both feeds on the news tab and marks them seen', async () => {
     mockReleases()
     render(<AboutModal onClose={() => {}} initialTab="news" />)
-    await waitFor(() => expect(screen.getByTestId('about-feed-nexus')).toBeTruthy())
-    expect(screen.getByText('Nine')).toBeTruthy()
-    expect(screen.getByText('Xm')).toBeTruthy()
+    // `about-feed-nexus` renders before the fetch resolves, so wait for the content.
+    await waitFor(() => {
+      expect(screen.getByText('Nine')).toBeTruthy()
+      expect(screen.getByText('Xm')).toBeTruthy()
+    })
     expect(screen.getByText('fix')).toBeTruthy()
     const seen = JSON.parse(mockStorage['mage-web-news-seen'] as string)
     expect(seen).toEqual({ nexus: 'v9.9', xmage: 'xmage_9' })
@@ -78,7 +80,7 @@ describe('AboutModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('exporta el diagnóstico al pulsar el botón (P7)', () => {
+  it('exports the diagnostics when the button is pressed', () => {
     vi.stubGlobal('URL', { createObjectURL: vi.fn().mockReturnValue('blob:diag'), revokeObjectURL: vi.fn() })
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     render(<AboutModal onClose={() => {}} />)

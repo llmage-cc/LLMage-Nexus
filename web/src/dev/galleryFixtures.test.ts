@@ -16,7 +16,7 @@ function allCardIds(game: GalleryEntry['game']): string[] {
   return ids
 }
 
-describe('galería de estados (P3)', () => {
+describe('state gallery', () => {
   const entries = buildGalleryEntries()
 
   it('incluye todos los frames de juego del registro', () => {
@@ -30,10 +30,10 @@ describe('galería de estados (P3)', () => {
     const ids = entries.map((entry) => entry.id)
     expect(new Set(ids).size).toBe(ids.length)
     expect([...new Set(entries.map((entry) => entry.group))]).toEqual([
-      'Frames reales',
+      'Real frames',
       'Prompts',
-      'Pantallas',
-      'Tablero',
+      'Screens',
+      'Board',
       'Dialogs',
       'Global',
     ])

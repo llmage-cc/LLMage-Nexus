@@ -1,5 +1,7 @@
 # Code map — where things live (counts verified 2026-10-09)
 
+> **LLMage Nexus documentation:** for the current guide see [Code map](developer-guide/code-map.md). This page is inherited from upstream XMage Nexus and may lag behind the client.
+
 Counts are `wc -l` / `find | wc -l` output from the working tree, so re-run them before trusting a number
 here (`find web/src -name '*.ts' -o -name '*.tsx' -o -name '*.css' | wc -l`, etc.). The **refactor queue**
 of the 2026-09-05 version of this file is finished: every file it listed at 1 000+ lines was split then. In the proxy the only hand-written source still above 1 000 lines is `ProxyClient.java`, and it has grown back

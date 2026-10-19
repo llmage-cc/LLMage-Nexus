@@ -5,6 +5,27 @@
   align-items: center;
   gap: var(--sp-2h);
   padding: 0 var(--sp-2);
+  /* Hit-transparent full-width box: the strip island (z 30, body level) paints
+     over every prompt bar crossing the divider band (mulligan bar over the
+     hand, dock confirm) — the strip root must never eat their clicks; only
+     the painted pieces below take the pointer again. Hit-testing only: the
+     paint order (what the user sees) is untouched. */
+  pointer-events: none;
+}
+
+/* Content-hugging pieces: their box wraps the painted widgets, so the whole
+   piece can take the pointer and its children inherit. */
+.game-strip-left,
+.game-strip-right {
+  pointer-events: auto;
+}
+
+/* The center piece stretches (flex: 1) across the WHOLE middle of the band:
+   re-enabling it would re-create the invisible click sponge in the middle.
+   Only the widgets rendered inside it (pills, ring seats) become live; with
+   no widgets the middle stays fully click-transparent. */
+.game-strip-center > * {
+  pointer-events: auto;
 }
 
 .game-strip-left {

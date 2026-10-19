@@ -1,113 +1,74 @@
 import { test, expect } from './fixtures'
+import { fakeOnly } from './support/fake-mode'
+import { TABLE } from '../fixtures/table-names'
+import { DECK } from '../fixtures/deck-names'
 import { withFakeServer } from './support/fake-backend'
-import { proxyPort } from './dual'
-import { dismissSetupWizard } from './support/start-game'
-import { decksGalleryScenario } from '../fixtures/scenarios/decksGallery'
+import { startGame } from './support/start-game'
+import { cardInspectorScenario } from '../fixtures/scenarios/cardInspector'
 
-const CARD_COUNT = 60
-const MAX_PER_SECOND = 10
-const MAX_CONCURRENT = 4
+// Guard evolution (2026-10-09): the old spec asserted the client-side RATE was
+// kept under Scryfall's API limits. The image path no longer talks to
+// api.scryfall.com at all — board/token/lobby art resolves from the offline
+// index (web/src/cards/offlineIndex.ts) to direct cards.scryfall.io CDN URLs,
+// and a map miss renders the placeholder. This spec now guards that contract:
+// a rendered board must produce ZERO api.scryfall.com image-resolution
+// requests. If someone reintroduces a live lookup, this fails.
 
-interface ScryfallLog {
-  starts: number[]
-  peak: number
+fakeOnly()
+
+const svg = (w: number, h: number, fill: string, label: string) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="${fill}"/>` +
+  `<text x="50%" y="50%" font-size="${Math.round(h / 8)}" text-anchor="middle" fill="#000">${label}</text></svg>`
+
+/** Requests that would count as live per-card image resolution against the API. */
+function isImageResolutionRequest(url: string): boolean {
+  if (!url.includes('api.scryfall.com')) return false
+  if (url.includes('/cards/named')) return true
+  if (url.includes('/cards/search')) {
+    // localized-name enrichment searches (`name:/^...$/`) are a different
+    // feature; image lookups used the plain / include:extras query shapes.
+    return !url.includes('name%3A%2F%5E')
+  }
+  // /cards/{set}/{num}?format=json (two path segments — a lang segment means
+  // the localized-printing feature, not image resolution)
+  return /\/cards\/[^/?]+\/[^/?]+\?format=json/.test(url)
 }
 
-test.describe('Scryfall request budget', () => {
-  test('opening a large deck in the editor stays under the API rate limit @decks', async ({ page }) => {
-    await withFakeServer(decksGalleryScenario, async () => {
-      await page.addInitScript(() => {
-        const log = { starts: [] as number[], peak: 0 }
-        let inFlight = 0
-        const w = window as unknown as { __scryfallLog: typeof log }
-        w.__scryfallLog = log
-        const original = window.fetch.bind(window)
-        window.fetch = async (input, init) => {
-          const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input)
-          if (!url.includes('api.scryfall.com')) return original(input, init)
-          log.starts.push(performance.now())
-          inFlight++
-          log.peak = Math.max(log.peak, inFlight)
-          try {
-            return await original(input, init)
-          } finally {
-            inFlight--
-          }
-        }
+test.describe('Scryfall image resolution (offline index)', () => {
+  test('a rendered board resolves art from the CDN with zero api.scryfall.com image requests @game', async ({ page }) => {
+    const apiCalls: string[] = []
+    await page.route('**/api.scryfall.com/**', (route) => {
+      apiCalls.push(route.request().url())
+      return route.fulfill({ status: 418, body: 'api.scryfall.com must not be used for images' })
+    })
+    await page.route('**/cards.scryfall.io/**', (route) => {
+      const url = route.request().url()
+      void route.fulfill({
+        contentType: 'image/svg+xml',
+        body: svg(488, 680, url.includes('art_crop') ? '#ffb347' : '#9ecbff', url.includes('art_crop') ? 'ART' : 'CARD'),
       })
-      await page.route('**/api.scryfall.com/**', async (route) => {
-        const url = route.request().url()
-        await new Promise((r) => setTimeout(r, 60))
-        if (url.includes('/cards/search')) {
-          await route.fulfill({ json: { object: 'list', data: [], has_more: false } })
-          return
-        }
-        const m = /\/cards\/([a-z0-9]+)\/(\d+)/i.exec(url)
-        if (!m || /\/cards\/[a-z0-9]+\/\d+\/[a-z]{2}\b/i.test(url)) {
-          await route.fulfill({ status: 404, body: 'not found' })
-          return
-        }
-        await route.fulfill({
-          json: {
-            object: 'card',
-            name: `Card ${m[2]}`,
-            mana_cost: '{1}',
-            cmc: 1,
-            type_line: 'Artifact',
-            colors: [],
-            image_uris: { normal: 'https://img.test/n.jpg', art_crop: 'https://img.test/a.jpg' },
-          },
-        })
+    })
+
+    await withFakeServer(cardInspectorScenario, async () => {
+      const { pageErrors } = await startGame(page, {
+        prefix: 'imgbudget',
+        tableName: TABLE.cardInspector,
+        deck: DECK.lands,
       })
+      await expect(page.locator('.game-board')).toBeVisible({ timeout: 20_000 })
 
-      await page.goto(`/?proxyPort=${proxyPort()}`)
-      await dismissSetupWizard(page)
-      await page.getByPlaceholder(/Usuario|Username/i).fill(`budget_${String(Date.now()).slice(-7)}`)
-      await page.getByPlaceholder(/Contraseña|Password/i).fill('pass')
-      await page.getByRole('button', { name: /Conectar/i }).click()
-      await expect(page.getByRole('button', { name: /Mesas/ })).toBeVisible({ timeout: 15000 })
-      await page.getByRole('button', { name: /Mis Mazos|Mazos/i }).click()
-      await expect(page.locator('.decks-gallery')).toBeVisible({ timeout: 8000 })
-      await page.locator('.deck-box-create').click()
-      await expect(page.locator('.deck-builder')).toBeVisible({ timeout: 8000 })
+      const img = page.locator('.player-zone .card-slot[data-card-name="The One Ring"] img.card-image').first()
+      await expect(img).toBeVisible()
+      const src = await img.getAttribute('src')
+      expect(src ?? '', 'the board image resolves to the Scryfall CDN').toContain('cards.scryfall.io')
+      expect(src ?? '').toMatch(/\/(normal|small|large|art_crop)\/front\//)
 
-      const before = await page.evaluate(() => (window as unknown as { __scryfallLog: ScryfallLog }).__scryfallLog.starts.length)
-      const list = Array.from({ length: CARD_COUNT }, (_, i) => `1 [LEA:${100 + i}] Card ${100 + i}`).join('\n')
-      await page.getByRole('button', { name: /Importar Mazo/i }).click()
-      await page.locator('.deck-import-textarea').fill(list)
-      await page.locator('[data-testid="import-submit-btn"]').click()
-      await expect(page.locator('.arena-card-strip').first()).toBeVisible({ timeout: 5000 })
+      // let any straggler request land before asserting the budget
+      await page.waitForTimeout(300)
 
-      await expect.poll(async () => {
-        const n = await page.evaluate(() => (window as unknown as { __scryfallLog: ScryfallLog }).__scryfallLog.starts.length)
-        return n - before
-      }, { timeout: 30_000, intervals: [500] }).toBeGreaterThanOrEqual(CARD_COUNT)
-
-      await expect.poll(() => page.evaluate(() => new Promise<number>((resolve) => {
-        const req = indexedDB.open('xmage-scryfall-cache')
-        req.onerror = () => resolve(0)
-        req.onsuccess = () => {
-          const db = req.result
-          if (!db.objectStoreNames.contains('cards')) {
-            resolve(0)
-            return
-          }
-          const count = db.transaction('cards', 'readonly').objectStore('cards').count()
-          count.onsuccess = () => resolve(count.result)
-          count.onerror = () => resolve(0)
-        }
-      })), { timeout: 40_000, intervals: [500] }).toBeGreaterThanOrEqual(CARD_COUNT)
-
-      const log = await page.evaluate(() => (window as unknown as { __scryfallLog: ScryfallLog }).__scryfallLog)
-      const starts = [...log.starts].sort((a, b) => a - b)
-      let worstWindow = 0
-      for (let i = 0; i < starts.length; i++) {
-        let n = 0
-        while (i + n < starts.length && starts[i + n] < starts[i] + 1000) n++
-        worstWindow = Math.max(worstWindow, n)
-      }
-      expect(worstWindow).toBeLessThanOrEqual(MAX_PER_SECOND)
-      expect(log.peak).toBeLessThanOrEqual(MAX_CONCURRENT)
+      const imageCalls = apiCalls.filter(isImageResolutionRequest)
+      expect(imageCalls, `live image lookups leaked: ${imageCalls.join(' | ')}`).toEqual([])
+      expect(pageErrors, `pageerrors: ${pageErrors.map(String).join(' | ')}`).toEqual([])
     })
   })
 })

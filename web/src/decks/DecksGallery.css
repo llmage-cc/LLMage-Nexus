@@ -104,6 +104,18 @@
 .decks-counter { font-weight: 700; opacity: 0.85; letter-spacing: 0.04em; font-size: var(--fs-md); }
 .decks-enriching { font-size: var(--fs-sm); opacity: 0.75; font-style: italic; white-space: nowrap; }
 
+/* With no user decks the action bar is all-disabled; this hint explains
+   why and points at the Create/Import affordances. */
+.decks-empty-hint {
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-2h) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--fg-2);
+  background: rgb(var(--ink-2-rgb) / 0.5);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-mid);
+}
+
 .decks-gallery-header-right {
   display: flex;
   align-items: center;
@@ -187,3 +199,12 @@
 }
 
 .decks-browser-pane { padding: var(--sp-4) var(--sp-4h); flex: 1; min-height: 0; overflow-y: auto; }
+
+.decks-truncated-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--fg-2);
+  text-align: center;
+}

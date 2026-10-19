@@ -13,7 +13,7 @@ The **XMage Nexus MCP server** (`mcp/`) is a standalone Model Context Protocol (
 * **Token Context Efficiency:** Raw XMage network frames contain massive Java DTOs (thousands of lines of JSON per event). The MCP digests these into clean, compact state views (`mage_game_state`) containing only what is needed: life totals, hand, board state with stats/tapped status/damage/summoning sickness, stack contents, and playable card IDs.
 * **Priority Flooding Mitigation (Auto-Pass):** MTG requires dozens of priority passes per turn (across steps, phases, and opponent turns). The MCP handles meaningless priority passes automatically in the background via `mage_auto_pass` (enabled by default). It only yields control to the LLM when there is an active decision to be made.
 * **Normalized Prompts:** Complex game choices (mulligans, mana payments, declaring attackers/blockers, target selections, modes, stack ordering) are normalized into standardized decision modes (`select`, `boolean`, `combat`, `mana`, `order`, `integer`, `uuid`, `string`).
-* **Verified End-to-End Tests:** Fully verified in automated integration tests (e.g., [`mcp/test/realGame.test.ts`](../mcp/test/realGame.test.ts)), where a headless agent plays against a simulation bot through all game phases until `gameOver`.
+* **Verified End-to-End Tests:** Fully verified in automated integration tests (e.g., [`mcp/test/realGame.test.ts`](../../mcp/test/realGame.test.ts)), where a headless agent plays against a simulation bot through all game phases until `gameOver`.
 
 ---
 
@@ -208,7 +208,7 @@ The MCP server supports running multiple concurrent agents or games inside a sin
    }
    ```
 3. **Core Integration Files to Review:**
-   * [`mcp/src/xmage/session.ts`](../mcp/src/xmage/session.ts): Complete implementation of session state, auto-pass, and tool handlers.
-   * [`mcp/src/xmage/promptView.ts`](../mcp/src/xmage/promptView.ts): Normalization logic for all MTG prompt types.
-   * [`mcp/src/xmage/compactView.ts`](../mcp/src/xmage/compactView.ts): Token-efficient game state compression.
-   * [`mcp/test/realGame.test.ts`](../mcp/test/realGame.test.ts): End-to-end integration test demonstrating autonomous play.
+   * [`mcp/src/xmage/session.ts`](../../mcp/src/xmage/session.ts): Complete implementation of session state, auto-pass, and tool handlers.
+   * [`mcp/src/xmage/promptView.ts`](../../mcp/src/xmage/promptView.ts): Normalization logic for all MTG prompt types.
+   * [`mcp/src/xmage/compactView.ts`](../../mcp/src/xmage/compactView.ts): Token-efficient game state compression.
+   * [`mcp/test/realGame.test.ts`](../../mcp/test/realGame.test.ts): End-to-end integration test demonstrating autonomous play.

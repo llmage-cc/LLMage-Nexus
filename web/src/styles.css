@@ -26,13 +26,13 @@
   --fx-speed: 1;
   --cjk-boost: 1;
 
-  /* ── Dialog system (D0: feedback-dialog wins; additive only) ── */
+  /* ── Dialog system (the feedback dialog wins; additive only) ── */
   --dlg-backdrop: rgb(var(--ink-rgb) / 0.78);
   --dlg-backdrop-blur: 8px;
   --dlg-z: 90;
-  /* Por encima del rango dinámico de Modal.tsx (nextModalZ, 501-1999): turno/fase
-     y vidas/reloj de prioridad no deben quedar tapados por ningún backdrop modal
-     (docs/history/qa/p5-1-prompt-checklist.md hallazgo #1). Por debajo de los toasts (9999). */
+  /* Above Modal.tsx's dynamic range (nextModalZ, 501-1999): turn/phase
+     and priority lives/clock must not be covered by any modal backdrop
+     (docs/history/qa/p5-1-prompt-checklist.md, finding #1). Below the toasts (9999). */
   --game-header-z: 2000;
   --dlg-radius: var(--r-xl);
   --dlg-padding: 24px 28px 28px;
@@ -43,7 +43,10 @@
   --dlg-width-sm: min(440px, 94vw);
   --dlg-width-md: min(600px, 94vw);
   --dlg-width-lg: min(1100px, 96vw);
-  --dlg-max-h: 70vh;
+  /* Gutter the dialog cap leaves free at the top of the window: the cap stops
+     being a blind 90vh and respects the visible height (100dvh) instead. */
+  --dlg-viewport-gutter: 24px;
+  --dlg-max-h: min(780px, 90vh, calc(100dvh - var(--dlg-viewport-gutter)));
   --dlg-kicker-fg: var(--gold-300);
   --dlg-kicker-bg: var(--gold-soft);
   --dlg-kicker-border: var(--gold-line);
@@ -265,6 +268,25 @@ select option { background: var(--ink-2); color: var(--fg-1); }
   border-radius: var(--r-xs);
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--line-3); }
+
+/* ── Shared remedy: a real scroll pane for an inner, height-capped region ──
+   An inner pane nested in a height-capped parent silently turns into a scroller
+   that hides content: the wizard body clipped to ~297px, and the replay LLM
+   drawer whose bottom rows are click-dead because a nested summary straddles its
+   bottom edge. A pane that MUST keep scrolling opts in here: real bar (stable
+   gutter = the affordance is always visible), overscroll-behavior: contain so
+   the wheel can never chain out to the board behind, and a max-height bounded by
+   the VISIBLE viewport (--scroll-pane-chrome-h = chrome left free) instead of a
+   pixel value tuned to one window size.
+   The other half of the remedy is not being a pane at all: no cap, no overflow
+   and flex: none, so the outer dialog keeps the single scroll owner. */
+.scroll-pane {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  scrollbar-gutter: stable;
+  max-height: min(var(--scroll-pane-max-h, 100%), calc(100dvh - var(--scroll-pane-chrome-h, var(--sp-6))));
+}
 
 /* Tab fade-in animation (used by lobby body children) */
 @keyframes tabFadeIn {

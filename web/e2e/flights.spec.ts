@@ -58,6 +58,17 @@ test('animaciones de movimiento: diagnóstico de vuelos por transición @flights
       expect(setup.landId, 'tierra en campo').toBeTruthy()
 
       const report: string[] = []
+      let diagFlushed = false
+      // La telemetría se adjunta una sola vez. `push` la vuelca al final, pero la
+      // sección F la vuelca ANTES de sus aserciones: un fallo ahí no puede
+      // llevarse por delante el diagnóstico que lo explica (el fallo original de
+      // esta spec solo dejaba el volcado en la traza).
+      const flushDiag = async () => {
+        if (diagFlushed) return
+        diagFlushed = true
+        await test.info().attach('flights-diag', { body: report.join('\n'), contentType: 'text/plain' })
+        console.log(report.join('\n'))
+      }
       const push = async (label: string, mutate: string, waitMs = 700): Promise<DiagEntry[]> => {
         const before = (await flightLog(page)).length
         await page.evaluate(
@@ -190,68 +201,137 @@ test('animaciones de movimiento: diagnóstico de vuelos por transición @flights
         'E: el descarte debe iniciar un vuelo (rama G del engine)',
       ).toBeTruthy()
 
-      // F) Ráfaga real: la misma carta cambia de zona 3 veces con 50ms
-      // entre updates (como una ráfaga del servidor real). Observa cancels.
+      // F) Ráfaga real: la misma carta cambia de zona 3 veces (mano -> pila ->
+      // campo -> cementerio), como una ráfaga del servidor real. Los tres
+      // updates se entregan DESDE LA PÁGINA (un `page.evaluate` por update
+      // costaba ~170 ms de ida y vuelta medidos 2026-10-13: el "50 ms" de
+      // `waitForTimeout(50)` llegaba al motor con 220-490 ms, así que la spec
+      // medía el retardo de su arnés) separados por un macrotask, que es la
+      // separación mínima con la que la app ve tres transiciones y no una.
       const burstId = await page.evaluate(() => {
         const w = window as unknown as { __mageStore?: { getState: () => any } }
         return Object.keys(w.__mageStore?.getState().game?.myHand ?? {})[0] ?? null
       })
       if (burstId) {
         const b0 = (await flightLog(page)).length
-        const burstSteps = [
-          `view => {
-            const me = view.players.find(p => p.controlled);
-            const card = view.myHand['${burstId}'];
-            delete view.myHand['${burstId}'];
-            view.stack = { ...(view.stack ?? {}), ['${burstId}']: { ...card, controllerId: me.playerId, controllerName: me.name } };
-          }`,
-          `view => {
-            const me = view.players.find(p => p.controlled);
-            const spell = (view.stack ?? {})['${burstId}'];
-            if (spell) {
-              delete view.stack['${burstId}'];
-              me.battlefield['${burstId}'] = { ...spell, tapped: false };
-            }
-          }`,
-          `view => {
-            const me = view.players.find(p => p.controlled);
-            const perm = (me.battlefield ?? {})['${burstId}'];
-            if (perm) {
-              delete me.battlefield['${burstId}'];
-              me.graveyard = { ...(me.graveyard ?? {}), ['${burstId}']: perm };
-            }
-          }`,
-        ]
+        // Vigilancia del fantasma EN EL DOM: qué vuelo representa a la carta en
+        // cada instante y si su animación sigue corriendo. El proxy de
+        // telemetría (`kind === 'cancel'`) no distingue un fantasma que aún
+        // vuela de uno ya aterrizado y re-barrido; el DOM sí.
+        await page.evaluate((cardId) => {
+          const w = window as unknown as {
+            __mageFlights?: { active: () => Array<{ cardId: string; flightId: string; startTime: number; duration: number }> }
+            __burstWatch?: unknown[]
+          }
+          const samples: Array<Record<string, unknown>> = []
+          w.__burstWatch = samples
+          const t0 = Date.now()
+          const iv = setInterval(() => {
+            const rec = (w.__mageFlights?.active() ?? []).find((f) => f.cardId === cardId) ?? null
+            const el = rec ? document.querySelector(`.flying-card-item[data-flight-id="${rec.flightId}"]`) : null
+            const anim = el ? el.getAnimations()[0] : null
+            samples.push({
+              t: Date.now() - t0,
+              id: rec?.flightId ?? null,
+              age: rec ? Math.round(performance.now() - rec.startTime) : null,
+              recDur: rec ? Math.round(rec.duration) : null,
+              animDur: anim?.effect ? Number(anim.effect.getTiming().duration) : null,
+              ct: anim ? Math.round(Number(anim.currentTime ?? 0)) : null,
+              play: anim ? anim.playState : null,
+              opacity: el ? getComputedStyle(el).opacity : null,
+            })
+          }, 10)
+          setTimeout(() => clearInterval(iv), 3000)
+        }, burstId)
         await page.evaluate(
-          async ({ gameId, steps, gapMs }) => {
+          async ({ gameId, cardId }) => {
             const w = window as unknown as {
               __mageStore?: { getState: () => any; handleMessage: (m: any) => void }
             }
             const st = w.__mageStore
             if (!st) throw new Error('sin __mageStore')
-            for (let i = 0; i < steps.length; i++) {
+            const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+            const send = (mutate: (view: any) => void) => {
               const next = structuredClone(st.getState().game)
-              const apply = new Function('view', `return (${steps[i]})(view)`) as (v: any) => void
-              apply(next)
+              mutate(next)
               st.handleMessage({ type: 'event', method: 'GAME_UPDATE', messageId: Date.now(), objectId: gameId, data: { gameView: next } })
-              if (i < steps.length - 1) await new Promise((resolve) => setTimeout(resolve, gapMs))
             }
+            send((view) => {
+              const me = view.players.find((p: any) => p.controlled)
+              const card = view.myHand[cardId]
+              delete view.myHand[cardId]
+              view.stack = { ...(view.stack ?? {}), [cardId]: { ...card, controllerId: me.playerId, controllerName: me.name } }
+            })
+            await sleep(0)
+            send((view) => {
+              const me = view.players.find((p: any) => p.controlled)
+              const spell = (view.stack ?? {})[cardId]
+              if (spell) {
+                delete view.stack[cardId]
+                me.battlefield[cardId] = { ...spell, tapped: false }
+              }
+            })
+            await sleep(0)
+            send((view) => {
+              const me = view.players.find((p: any) => p.controlled)
+              const perm = (me.battlefield ?? {})[cardId]
+              if (perm) {
+                delete me.battlefield[cardId]
+                me.graveyard = { ...(me.graveyard ?? {}), [cardId]: perm }
+              }
+            })
           },
-          { gameId: setup.gameId, steps: burstSteps, gapMs: 50 },
+          { gameId: setup.gameId, cardId: burstId },
         )
-        await page.waitForTimeout(900)
+        // 2,4 s: cubre el vuelo encadenado, su fade y el re-barrido del clon.
+        await page.waitForTimeout(2_400)
+        interface WatchSample {
+          t: number
+          id: string | null
+          age: number | null
+          recDur: number | null
+          animDur: number | null
+          ct: number | null
+          play: string | null
+          opacity: string | null
+        }
+        const watch = await page.evaluate(() => {
+          const w = window as unknown as { __burstWatch?: unknown[] }
+          return (w.__burstWatch ?? []) as WatchSample[]
+        })
+        // Un vuelo «en curso» es un clon cuya animación sigue corriendo: si el
+        // fantasma desaparece (o es sustituido por otro vuelo) con la animación
+        // aún en `running`, la ráfaga canceló un vuelo en curso. Un cancel de un
+        // clon ya aterrizado (animación terminada, carta real ya revelada) es el
+        // re-barrido de diseño, no una cancelación.
+        const vanishedInFlight: string[] = []
+        for (let i = 0; i < watch.length; i++) {
+          const s = watch[i]
+          if (!s.id) continue
+          const next = watch[i + 1]
+          if (!next || next.id === s.id) continue
+          if (s.play === 'running' && s.ct != null && s.animDur != null && s.ct < s.animDur) {
+            vanishedInFlight.push(
+              `${s.id} age-${s.age}ms ct-${s.ct}/${s.animDur}ms opacity-${s.opacity} t-${s.t}ms`,
+            )
+          }
+        }
+        report.push(`F: vuelos vigilados en el DOM = ${watch.filter((s) => s.id).length} muestras, cancelados en vuelo = ${vanishedInFlight.length}`)
         const burstEntries = (await flightLog(page)).slice(b0)
         const burstForCard = burstEntries.filter((e) => e.cardId === burstId)
         report.push(
-          `--- F rafaga real 50ms (misma carta x3) ---\n` +
+          `--- F rafaga real (misma carta x3) ---\n` +
             burstEntries.map((e) => `${e.kind}${e.reason ? `:${e.reason}` : ''} ${e.cardId} ${e.detail ?? ''}`).join('\n'),
         )
-        // La ráfaga debe encadenar UN fantasma continuo: sin cancels y con
-        // al menos un chain; el destino final es el cementerio.
+        // La telemetría se adjunta ANTES de las aserciones: un fallo aquí no
+        // puede llevarse por delante el diagnóstico que lo explica.
+        await flushDiag()
+        // La ráfaga debe encadenar UN fantasma continuo —sin cancelar el vuelo
+        // en curso— y el destino final es el cementerio.
         expect(
-          burstForCard.some((e) => e.kind === 'cancel'),
+          vanishedInFlight,
           'F: la ráfaga no debe cancelar vuelos en curso',
-        ).toBe(false)
+        ).toEqual([])
         expect(
           burstForCard.some((e) => e.kind === 'chain'),
           'F: la ráfaga debe encadenar el fantasma al nuevo destino',
@@ -275,8 +355,7 @@ test('animaciones de movimiento: diagnóstico de vuelos por transición @flights
         })
       }
 
-      await test.info().attach('flights-diag', { body: report.join('\n'), contentType: 'text/plain' })
-      console.log(report.join('\n'))
+      await flushDiag()
       expect(pageErrors, `pageerrors: ${pageErrors.map(String).join(' | ')}`).toEqual([])
     },
   )

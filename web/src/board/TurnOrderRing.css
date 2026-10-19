@@ -188,6 +188,16 @@
    font the platform resolves, not of the layout: 94.9 px with macOS's system-ui,
    ~101 px with a wide fallback, and a fixed `max-width` fit only the narrow one. */
 .turn-order-ring.lane .tor-seat-name {
+  /* the server caps names at 14 chars, and the walkway is where you read who
+     is playing: a truncated name is the whole point lost. A fixed pixel cap
+     cannot hold that contract — 96px only held for the app's own face at 12px,
+     and it is the ROOT font that scales (CJK boost 1.15 -> --fs-xs 13.8px), so
+     the same name came back ellipsized on a ja/zh client. Upstream's
+     `useLaneFit.ts` measures the real rendered width of the row in the
+     platform-resolved font, which covers the CJK boost case too, so the name
+     simply never clips here; what gives way is the seats, through the
+     data-lane-fit degradation below (and the narrow-band container query
+     further down). */
   max-width: none;
 }
 

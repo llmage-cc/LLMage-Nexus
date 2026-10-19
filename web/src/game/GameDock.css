@@ -4,10 +4,16 @@
   bottom: var(--dock-bottom, 104px);
   width: 250px;
   max-width: calc(100% - 16px);
-  /* Debajo de la franja de control (.board-shell-divider.has-strip, z 30): su
-     menú de configuración y el cajón son popups que deben pintar sobre el botón
-     de acción; a igual z ganaba el dock por orden del DOM y lo tapaba. */
-  z-index: 29;
+  /* No stacking context of its own: z-index auto (was 29) so the prompt
+     segment can rise ABOVE the control strip
+     (.board-shell-divider.has-strip, z 30 island from body). With the dock as an
+     island (z 29) its children never rose above the strip's island and the icons
+     at its right end painted over the confirmation's "1 Sí" row
+     ("¿Pasar igualmente?"), swallowing clicks (soft lock). The order is now per
+     segment: the action button (auto) stays under the strip (its settings menu
+     and the drawer, internal islands of the strip, must keep painting over it),
+     and only the prompt rises (z 31). */
+  z-index: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -33,6 +39,28 @@
 
 .game-dock-prompt > * {
   pointer-events: auto;
+}
+
+/* La confirmación no-modal («¿Pasar igualmente?», pago de maná…) vive en el
+   segmento prompt del dock: sube a la capa inmediatamente sobre la franja de
+   control (isla z 30 desde body — por eso el dock ya no es una isla propia,
+   ver arriba) y tapa los iconos que la franja solapaba sobre la fila "1 Sí".
+   El slot vacío no pinta ni captura nada (`:empty` oculto, pointer-events
+   none). Los popups del dock (menú de pase, z 150; cajón, z 40) quedan aún
+   más arriba; no modal: nunca por encima de los backdrops de modales (500+). */
+.game-dock > .game-dock-prompt {
+  position: relative;
+  z-index: 31;
+}
+
+/* With a non-interactive viewer open (card inspector z 12000, stack/revealed
+   viewers z 100 in the body-level overlayRoot) the mana-pool confirmation
+   stayed underneath — and it was the turn's only exit; the user watched it
+   disappear when opening the inspector and had no way to answer. Raise the
+   wall above the segment while the viewer is open (GameDock.tsx publishes
+   the state). */
+.game-dock[data-prompt-above-modal] > .game-dock-prompt {
+  z-index: 12001;
 }
 
 .game-dock .action-prompt-bar {

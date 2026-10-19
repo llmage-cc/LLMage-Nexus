@@ -64,6 +64,8 @@ const WHITELIST = new Set<string>([
   'game.booster_label',
   'game.tab_chat',
   'game.tab_log',
+  // LLM is an acronym in every locale — nothing to translate.
+  'game.tab_llm',
   'game.visual_feed',
   'lobby.create_option_booster_draft',
   'lobby.create_option_elimination',
@@ -89,6 +91,57 @@ const WHITELIST = new Set<string>([
   'keywords.mentor_name',
   'keywords.modular_name',
   'keywords.ninjutsu_name',
+  // Replay position label is a pure numeric format ("3 / 12") — nothing to translate.
+  'game.replay_position_label',
+  // "Match" is the German word too (loanword) — not an English leak.
+  'lobby.match_badge',
+  // "Format" is the German and French word as well (the deck picker's Format
+  // dropdown) — not an English leak.
+  'decks.picker_format',
+  // v0.4.7-riding German cognates/loanwords — identical in de by language, not
+  // by leak: "Hand", "Land", "Name", "Set", "Pause", "Deck {n}", "Blitz",
+  // "Champion", "Echo", "Mill", "Opus", "Partner", "Warp", "Bronze", "Gold",
+  // "Cube", "Online", "Offline", "Version", "Streaming", "Commander", "Skill",
+  // "Phase", "Standard", "Limited", "Constructed".
+  'common.online',
+  'common.offline',
+  'lobby.filter_format_limited',
+  'lobby.filter_tourney_constructed',
+  'lobby.filter_tourney_limited',
+  'lobby.create_field_seat_skill',
+  'lobby.create_tourney_limited',
+  'lobby.create_tourney_constructed',
+  'lobby.create_field_cube',
+  'lobby.create_llm_field_streaming',
+  'lobby.tier_bronze',
+  'lobby.tier_gold',
+  'lobby.board_standard',
+  'lobby.ui_scale_cjk',
+  'game.phase',
+  'game.replay_pause',
+  'game.hand',
+  'game.type_land',
+  'game.hand_rail_label',
+  'game.pile_hand',
+  'game.tracker_sort_name',
+  'game.tab_commander',
+  'decks.commander',
+  'decks.suggestions_cat_manaartifacts',
+  'decks.box_new_deck',
+  'decks.sample_land',
+  'decks.filter_set',
+  'decks.sort_name',
+  'decks.import_setup_format',
+  'board.zone_hand',
+  'board.zone_sideboard',
+  'board.pile_hand',
+  'system.app_version',
+  'keywords.blitz_name',
+  'keywords.champion_name',
+  'keywords.echo_name',
+  'keywords.opus_name',
+  'keywords.partner_name',
+  'keywords.warp_name',
 ])
 
 function flatten(obj: TranslationSchema): Record<string, string> {
@@ -134,10 +187,15 @@ describe('i18n coverage guard', () => {
     expect(identicalAfterWhitelist).toBe(0)
   })
 
-  it('other languages do not regress beyond baseline (threshold 500 identical* after whitelist)', () => {
+  it('other languages do not regress beyond their measured baseline of English-identical values', () => {
     const base = flatten(en)
-    const thresholdOther = 500
-    for (const lang of ['de', 'fr', 'it', 'pt', 'ja', 'ru', 'zhs'] as const) {
+    // Measured after the v0.4.7 upstream merge (2026-10-14): upstream added new
+    // untranslated keys across all locales (join-notification, chat-lobby toggle,
+    // rendered-card/hand-column labels, seat-type names). Baselines are raw
+    // identical-after-whitelist counts; any new key that is legitimately identical
+    // to English (cognates, proper nouns, acronyms) belongs in WHITELIST.
+    const baseline: Record<string, number> = { de: 58, fr: 63, it: 24, pt: 22, ja: 8, ru: 6, zhs: 8 }
+    for (const [lang, max] of Object.entries(baseline)) {
       const flat = flatten(locales[lang])
       let identicalAfterWhitelist = 0
       for (const k of Object.keys(base)) {
@@ -145,8 +203,49 @@ describe('i18n coverage guard', () => {
       }
       expect(
         identicalAfterWhitelist,
-        `${lang} identical* ${identicalAfterWhitelist} exceeds threshold ${thresholdOther} — traduce o ajusta whitelist`
-      ).toBeLessThanOrEqual(thresholdOther)
+        `${lang} identical* ${identicalAfterWhitelist} exceeds baseline ${max} — traduce o ajusta whitelist`
+      ).toBeLessThanOrEqual(max)
+    }
+  })
+
+  it('reported leaks render translated in every locale (connection screen + saved replays)', () => {
+    const base = flatten(en)
+    // The an earlier pass saw these English on the FR connection screen and in the DE/FR/etc.
+    // saved-replays panel; the guard fails if any locale falls back to the English value.
+    const mustDiffer = [
+      'login.auth_token',
+      'login.auth_token_placeholder',
+      'login.pinned_target',
+      'errors.proxy_rejected',
+      'lobby.replay_files_tab',
+      'lobby.replay_files_title',
+      'lobby.replay_files_subtitle',
+      'lobby.replay_files_empty',
+      'lobby.replay_files_load_failed',
+      'wiki.shortcuts_f11',
+    ]
+    for (const [lang, dict] of Object.entries(locales)) {
+      if (lang === 'en') continue
+      const flat = flatten(dict)
+      const leaked = mustDiffer.filter((k) => flat[k] === base[k])
+      expect(leaked, `${lang} still renders English for: ${leaked.join(', ')}`).toEqual([])
+    }
+  })
+
+  it('the reported German leakers are no longer identical to English', () => {
+    const base = flatten(en)
+    const deFlat = flatten(de)
+    // Each key was reported rendering its English value in the de UI.
+    const reported = [
+      'errors.proxy_rejected',
+      'login.auth_token',
+      'login.auth_token_placeholder',
+      'login.pinned_target',
+      'lobby.create_tab_general',
+    ]
+    for (const k of reported) {
+      expect(deFlat[k], `${k} still identical to en`).toBeDefined()
+      expect(deFlat[k], `${k} still identical to en`).not.toBe(base[k])
     }
   })
 
@@ -154,7 +253,7 @@ describe('i18n coverage guard', () => {
     const base = flatten(en)
     const total = Object.keys(base).length
     expect(total).toBeGreaterThan(800)
-    // es debe estar cerca de 100% tras whitelist
+    // es must be near 100% after the whitelist
     const esFlat = flatten(es)
     let identicalAfterWhitelist = 0
     for (const k of Object.keys(base)) if (esFlat[k] === base[k] && !WHITELIST.has(k)) identicalAfterWhitelist++

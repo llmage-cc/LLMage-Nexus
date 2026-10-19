@@ -9,6 +9,8 @@
  * UUID/enums are strings, maps have string keys, dates are epoch millis.
  */
 
+import type { LlmPromptFrame } from './types.generated'
+
 export type UUID = string
 
 // ─── Generated view types (from JsonUtil wire format) ────────────────────────
@@ -24,6 +26,8 @@ export type {
   PlayableObjectsList, PlayableObjectStats, PlayableObjectRecord,
   DraftView, DraftPickView, DraftClientMessage, DeckView, TableClientMessage,
   TournamentView, TournamentPlayerView, TournamentGameView, RoundView,
+  LLMConversationView, LLMMessageView,
+  LlmPromptFrame,
 } from './types.generated'
 
 // ─── Proxy envelope types (proxy → cliente) ─────────────────────────────────
@@ -33,6 +37,8 @@ export type ProxyMessage =
   | { type: 'disconnected'; reason?: string; seq?: number }
   | { type: 'info'; message: string; seq?: number }
   | { type: 'error'; message: string; seq?: number }
+  | LlmListErrorEnvelope
+  | LlmPromptEnvelope
   | ServerLinkEnvelope
   | LobbyEnvelope
   | ResultEnvelope
@@ -81,6 +87,35 @@ export interface EventEnvelope {
   messageId: number
   objectId?: UUID | null
   data?: unknown
+}
+
+/**
+ * Typed failure frame for an LLM list verb (`fetchModels` / `fetchPersonalities`).
+ * The proxy answers a list-verb failure with THIS frame — carrying the requestId —
+ * and never with the generic `error` frame: the picker's loading flag is cleared
+ * only by a typed reply, so a generic error would leave it spinning forever. The
+ * Gateway resolves the pending request from this frame (see `typedErrorToResult`).
+ */
+export interface LlmListErrorEnvelope {
+  type: 'models_error' | 'personalities_error'
+  action?: string
+  requestId?: string | number
+  ok?: boolean
+  errorCode?: string
+  message: string
+}
+
+/**
+ * Typed server→client frame: the server asks THIS browser to run an LLM
+ * provider call with the user's locally-stored key. The frame shape is
+ * `LlmPromptFrame` in schema/contract.schema.json; the proxy relays
+ * the fork-only `LLM_PROMPT` callback as this envelope, never as the generic
+ * `event` envelope. The payload carries NO key: the browser attaches the key
+ * it stored under `clientKeyTag`. The client answers with the `llm_decision`
+ * or `llm_error` transport verbs (see net/commands.ts).
+ */
+export interface LlmPromptEnvelope extends LlmPromptFrame {
+  seq?: number
 }
 
 // ─── Chat ────────────────────────────────────────────────────────────────────

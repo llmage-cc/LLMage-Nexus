@@ -105,6 +105,33 @@ describe('Gateway', () => {
     expect((await second).data).toEqual(['second'])
   })
 
+  it('a typed models_error frame resolves the pending fetchModels promise (never hangs)', async () => {
+    const g = new Gateway()
+    await connectOpen(g)
+    const p = g.send('fetchModels', { apiEndpoint: 'https://api.example.com/v1/chat/completions' })
+    currentWs(g).triggerMessage(JSON.stringify({
+      type: 'models_error', action: 'fetchModels', requestId: '0', ok: false,
+      errorCode: 'INVALID_ARGUMENT', message: 'host blocked',
+    }))
+    const r = await p
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('host blocked')
+    expect(r.errorCode).toBe('INVALID_ARGUMENT')
+  })
+
+  it('a typed personalities_error frame resolves the pending fetchPersonalities promise', async () => {
+    const g = new Gateway()
+    await connectOpen(g)
+    const p = g.send('fetchPersonalities', {})
+    currentWs(g).triggerMessage(JSON.stringify({
+      type: 'personalities_error', action: 'fetchPersonalities', requestId: '0', ok: false,
+      errorCode: 'CAPABILITY_UNAVAILABLE', message: 'no llm',
+    }))
+    const r = await p
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('no llm')
+  })
+
   it('sends actions of different names without cross-matching results', async () => {
     const g = new Gateway()
     await connectOpen(g)
@@ -143,7 +170,7 @@ describe('Gateway', () => {
     const onClose = vi.fn()
     g.events.onClose = onClose
     first.triggerClose('gone', 1006)
-    expect(onClose).toHaveBeenCalledWith('gone')
+    expect(onClose).toHaveBeenCalledWith('gone', 1006)
     expect(FakeWebSocket.instances).toHaveLength(1)
     expect(g.isOpen).toBe(false)
     await vi.advanceTimersByTimeAsync(1000)
@@ -187,7 +214,7 @@ describe('Gateway', () => {
       const pending = g.send('sendPlayerUUID', { gameId: 'g-1' })
       await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + HEARTBEAT_TIMEOUT_MS + 200)
       expect(pings(ws)).toHaveLength(1)
-      expect(onClose).toHaveBeenCalledWith('heartbeat timeout')
+      expect(onClose).toHaveBeenCalledWith('heartbeat timeout', undefined)
       await expect(pending).resolves.toMatchObject({ ok: false, error: 'heartbeat timeout' })
       await vi.advanceTimersByTimeAsync(1100)
       expect(FakeWebSocket.instances).toHaveLength(2)

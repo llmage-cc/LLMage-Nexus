@@ -1,3 +1,4 @@
+// @vitest-environment node — this guard reads Mage.Server/config/config.xml from the XMage fork and the committed schema with node:fs.
 import { describe, expect, it } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'

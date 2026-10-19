@@ -25,6 +25,10 @@ export interface PlayerZoneProps {
   compactPod?: boolean
   className?: string
   showHand?: boolean
+  /** Force the own-side rendering (player-zone) even when the seat is not
+   *  `controlled` in the frame — a replay viewing perspective. Defaults to the
+   *  seat's own `controlled` flag. */
+  isControlled?: boolean
 }
 
 export default function PlayerZone(props: PlayerZoneProps) {
@@ -32,7 +36,7 @@ export default function PlayerZone(props: PlayerZoneProps) {
     <BoardZone
       {...props}
       position="bottom"
-      isControlled={props.player?.controlled ?? true}
+      isControlled={props.isControlled ?? props.player?.controlled ?? true}
     />
   )
 }

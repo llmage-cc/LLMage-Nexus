@@ -11,7 +11,7 @@ import type { DeckV2 } from './types'
 import { MAX_DECKS, deckMainCount, makeDeckId } from './types'
 import { ALL_FORMATS } from './formatRules'
 import { exportDck, exportArena, exportTxt, exportDek } from './parseDck'
-import { bundledDecks, type DeckCard } from '../lobby/decks'
+import { bundledDecks, ensureBundledDecksLoaded, type Deck, type DeckCard } from '../lobby/decks'
 import Icon from '../ui/Icon'
 import { DeckBrowser } from './DeckBrowser'
 import { cloneDeckForEdit } from './cloneDeck'
@@ -42,11 +42,11 @@ function inferDeckColors(cards: DeckCard[]): ('W' | 'U' | 'B' | 'R' | 'G')[] {
   return [...set].sort()
 }
 
-function preconToV2(): DeckV2[] {
+function preconToV2(decks: Deck[]): DeckV2[] {
   const now = Date.now()
-  return bundledDecks().map((d, i) => ({
+  return decks.map((d, i) => ({
     ...d,
-    id: `precon-${i}-${d.name}`,
+    id: d.id ? `precon-${d.id}` : `precon-${i}-${d.name}`,
     format: d.cards.reduce((s, c) => s + c.amount, 0) >= 99 ? 'Commander' as const : 'Freeform' as const,
     colors: inferDeckColors(d.cards),
     coverCard: d.cards[0],
@@ -87,6 +87,11 @@ export function mergeEnrichedColors(current: DeckV2[], enriched: DeckV2[]): Deck
   return changed ? merged : current
 }
 
+/** Bounds the rendered built-in corpus boxes. The bundled corpus is browsable, not scannable:
+ *  rendering every DeckBox (~5,000, each running a format check + local art resolve) hangs the
+ *  page, so render the first N and let the search/filters narrow. */
+const GALLERY_RENDER_CAP = 200
+
 export default function DecksGallery({ onEdit }: { onEdit: (id: string) => void }) {
   const { t } = useTranslation()
   const [mainView, setMainView] = useState<'my-decks' | 'browser'>('my-decks')
@@ -103,7 +108,19 @@ export default function DecksGallery({ onEdit }: { onEdit: (id: string) => void 
   const [enriching, setEnriching] = useState(false)
 
   const storage = useMemo(() => getDeckStorage(), [])
-  const precon = useMemo(() => preconToV2(), [])
+  const [precon, setPrecon] = useState<DeckV2[]>(() => preconToV2(bundledDecks()))
+  const [corpusReady, setCorpusReady] = useState(false)
+  // The ~5,000-deck bundled corpus loads lazily off the login path; re-map the
+  // precons when it lands so the gallery fills in without blocking the first paint.
+  useEffect(() => {
+    let cancelled = false
+    void ensureBundledDecksLoaded().then(() => {
+      if (cancelled) return
+      setPrecon(preconToV2(bundledDecks()))
+      setCorpusReady(true)
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const load = async () => {
     const custom = await storage.list()
@@ -114,7 +131,7 @@ export default function DecksGallery({ onEdit }: { onEdit: (id: string) => void 
       return custom.length > 0 ? custom[0].id : null
     })
   }
-  useEffect(() => { void load() }, [])
+  useEffect(() => { void load() }, [precon])
 
   const selected = useMemo(() => decks.find((d) => d.id === selectedId) ?? null, [decks, selectedId])
 
@@ -249,7 +266,7 @@ export default function DecksGallery({ onEdit }: { onEdit: (id: string) => void 
 
   const handleClone = async () => {
     if (!selected) return
-    const clone: DeckV2 = { ...selected, id: makeDeckId(), name: `${selected.name} ${t('common', 'copy')}`, createdAt: Date.now(), updatedAt: Date.now(), source: 'custom' as const }
+    const clone: DeckV2 = { ...selected, id: makeDeckId(), name: `${selected.name} ${t('common', 'copy')}`, createdAt: Date.now(), updatedAt: Date.now(), source: 'custom' as const, group: undefined }
     await storage.put(clone)
     await load()
     setSelectedId(clone.id)
@@ -361,10 +378,13 @@ export default function DecksGallery({ onEdit }: { onEdit: (id: string) => void 
               <Icon name="download" size={14} /> {t('decks', 'import_deck')}
             </Button>
             {mainView === 'my-decks' && (
-              <div className="decks-counter">{customCount}/{MAX_DECKS}</div>
+              <div className="decks-counter" data-testid="decks-counter" title={t('decks', 'decks_counter', { count: customCount, max: MAX_DECKS })} aria-label={t('decks', 'decks_counter', { count: customCount, max: MAX_DECKS })}>{t('decks', 'decks_counter', { count: customCount, max: MAX_DECKS })}</div>
             )}
             {enriching && mainView === 'my-decks' && (
               <span className="decks-enriching" role="status" aria-live="polite">{t('common', 'loading')}…</span>
+            )}
+            {!corpusReady && mainView === 'my-decks' && (
+              <span className="decks-enriching" role="status" aria-live="polite" data-testid="decks-corpus-loading">{t('decks', 'corpus_loading')}</span>
             )}
           </div>
         </div>
@@ -406,13 +426,23 @@ export default function DecksGallery({ onEdit }: { onEdit: (id: string) => void 
 
       {mainView === 'my-decks' ? (
         <>
+          {customCount === 0 && decks.length === 0 && filtered.length === 0 && (
+            <p className="decks-empty-hint" role="status" data-testid="decks-empty-hint">
+              {t('decks', 'decks_empty_hint')}
+            </p>
+          )}
+          {customCount === 0 && decks.length > 0 && (
+            <p className="decks-empty-hint" role="status" data-testid="decks-empty-hint-own">
+              {t('decks', 'decks_empty_hint_own')}
+            </p>
+          )}
           <div className="decks-grid" onDragOver={(e) => e.preventDefault()} onDrop={async (e) => {
             e.preventDefault()
             const f = e.dataTransfer.files?.[0]
             if (f) await handleFile(f)
           }}>
             <DeckBoxCreate onClick={handleCreate} />
-            {filtered.map((d) => (
+            {filtered.slice(0, GALLERY_RENDER_CAP).map((d) => (
               <DeckBox
                 key={d.id}
                 deck={d}
@@ -421,6 +451,11 @@ export default function DecksGallery({ onEdit }: { onEdit: (id: string) => void 
                 onDoubleClick={() => setInspectingDeck(d)}
               />
             ))}
+            {filtered.length > GALLERY_RENDER_CAP && (
+              <p className="decks-truncated-hint" role="status" data-testid="decks-truncated-hint">
+                {t('decks', 'decks_truncated_hint', { shown: String(GALLERY_RENDER_CAP), total: String(filtered.length) })}
+              </p>
+            )}
           </div>
 
           <footer className="decks-footer">

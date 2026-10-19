@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as cmds from '../../net/commands'
-import type { GameTypeInfo } from '../../net/commands'
+import type { GameTypeInfo, P1DeckEntry } from '../../net/commands'
 import { useStore } from '../../state/store'
-import { deckRef, type Deck } from '../decks'
+import { deckRef, PRESET_DEFAULT_DECK_NAME, findPresetDefaultDeck, type Deck } from '../decks'
 import { deckFitForTable, isGoodFit, tableFormatProfile } from '../joinDeckFit'
 import { useTranslation } from '../../i18n'
 import {
@@ -22,11 +22,17 @@ import {
   DEFAULT_DRAFT_TOURNAMENT_TYPE,
   HUMAN_SEAT,
   SIM_SEAT,
+  LLM_SEAT,
+  P1_SEAT,
   aiSeatTypes,
   defaultTournamentType,
   isDraftTournamentType,
   isConstructedTournamentType,
+  isHumanSeatType,
+  isLlmSeatType,
+  isP1SeatType,
   normalizeSeatType,
+  simSeatsEnabled,
   recommendedFreeMulligans,
   type CreateTab,
   type DraftTiming,
@@ -36,6 +42,8 @@ import {
   type TournamentCategory,
   WIZARD_STEPS_BASE,
 } from './constants'
+import { defaultLlmConfig, stripApiKeyFromSeatConfigs } from './llmConfig'
+import { p1DefaultDeckText, p1SeatDeckIsTraining } from './p1Decks'
 import {
   resolveTableKind,
   clampNumPlayers,
@@ -44,7 +52,7 @@ import {
   tournamentTypeForCategory,
   uniformDraftSet,
 } from './tableKind'
-import type { CreateTableForm } from './types'
+import type { CreateTableForm, P1PoolStatus } from './types'
 import { useDeckChoices } from './useDeckChoices'
 import { submitCreateTable, runDemoTable as runDemoTableCommand } from './submitTable'
 
@@ -74,10 +82,62 @@ function readSaved(): SavedForm {
   }
 }
 
+/** Discard the persisted draft of the create-table wizard (if any). */
+function discardDraft() {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {}
+}
+
+/** Keys handled by `applyPreset` (the wizard's quick-preset chips). */
+const PRESET_KEYS: readonly string[] = ['modern_bo3', 'commander_4p', 'draft_8p', 'modern_swiss_8p']
+
+/**
+ * Switching a seat to COMPUTER_LLM materialises its LLM config with the
+ * section defaults (reference behaviour: slot.llmConfig starts filled);
+ * switching away drops it — the config belongs to the LLM seat only.
+ */
+function seatWithLlmDefaults(seat: SeatConfig, nextType: string): SeatConfig {
+  if (isLlmSeatType(nextType)) {
+    return { ...seat, type: nextType, llmConfig: seat.llmConfig ?? defaultLlmConfig() }
+  }
+  if (seat.llmConfig === undefined) return { ...seat, type: nextType }
+  const { llmConfig: _dropped, ...rest } = seat
+  return { ...rest, type: nextType }
+}
+
+/** A fresh filler seat for the all-bot LLM preset: no deck of its own (the
+ *  preset stamps the curated bundled deck into the seat directly). */
+function emptyLlmSeat(): SeatConfig {
+  return { type: SIM_SEAT, deckName: '', skill: 2 }
+}
+
+/**
+ * Retype a seat applying BOTH fork seat defaults: the LLM config materialization
+ * and the P1 training-deck default. A switch TO COMPUTER_P1 materializes the
+ * training default (a P1 seat must never carry an arbitrary/empty list); a switch
+ * AWAY from COMPUTER_P1 clears that training text so the seat falls back to the
+ * saved-deck path. `p1Decks` empty (pool not fetched / server without the
+ * capability) leaves the deck empty — the seat is not offered anyway.
+ */
+function seatWithTypeDefaults(seat: SeatConfig, nextType: string, p1Decks: P1DeckEntry[], p1Default: string): SeatConfig {
+  const wasP1 = isP1SeatType(seat.type)
+  const withLlm = seatWithLlmDefaults(seat, nextType)
+  if (isP1SeatType(nextType)) {
+    if (p1SeatDeckIsTraining(p1Decks, seat.deckName)) return withLlm
+    return { ...withLlm, deckName: p1DefaultDeckText(p1Decks, p1Default) }
+  }
+  if (wasP1) return { ...withLlm, deckName: '' }
+  return withLlm
+}
+
 export function useCreateTableForm(onClose: () => void): CreateTableForm {
   const { t, tError } = useTranslation()
   const username = useStore((s) => s.conn?.username ?? 'player')
   const storeDeck = useStore((s) => s.myDeck)
+  const capabilities = useStore((s) => s.capabilities)
+  const llmEnabled = capabilities?.llm === true
+  const p1Enabled = capabilities?.p1 === true
 
   const wizardSteps: WizardStep[] = useMemo(() => {
     const steps = [...WIZARD_STEPS_BASE]
@@ -133,6 +193,15 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
   const [playerTypes, setPlayerTypes] = useState<string[]>(DEFAULT_PLAYER_TYPES)
   const [tournamentTypes, setTournamentTypes] = useState<string[]>(DEFAULT_TOURNAMENT_TYPES)
   const [draftCubes, setDraftCubes] = useState<string[]>(DEFAULT_DRAFT_CUBES)
+  // Argentum-P1 training deck pool (getP1Decks). Fetched ONCE per form open
+  // when capabilities.p1 (never polled), held here like the other option lists.
+  const [p1Decks, setP1Decks] = useState<P1DeckEntry[]>([])
+  const [p1Default, setP1Default] = useState('')
+  // Lifecycle of the once-per-open pool fetch: 'error' surfaces a refused/failed
+  // getP1Decks (typed CAPABILITY_UNAVAILABLE, not connected) in the picker instead
+  // of leaving it on "loading…" forever. `p1ReloadKey` re-runs the effect on retry.
+  const [p1PoolStatus, setP1PoolStatus] = useState<P1PoolStatus>('loading')
+  const [p1ReloadKey, setP1ReloadKey] = useState(0)
 
   // General tab
   const [tableCategory, setTableCategoryState] = useState<TableCategory>(() => (saved.tableCategory === 'duel' || saved.tableCategory === 'multi' || saved.tableCategory === 'tourney') ? saved.tableCategory as TableCategory : 'duel')
@@ -181,6 +250,20 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
   const [draftTiming, setDraftTiming] = useState<DraftTiming>('REGULAR')
   const [singleGame, setSingleGame] = useState(false)
 
+  // The summary chip / CTA / submit branch must follow the CURRENT form, not a
+  // preset explored earlier: preset- and mode-switch paths scrub the state
+  // `resolveTableKind`'s tournament disjuncts read, instead of leaving whatever
+  // the last tournament shape set (the gold swiss chip + tournament
+  // CTA survived Swiss→Bo3 and the submit REALLY created a tournament).
+  // Scrubs use the RAW setter — the `setTournamentType` wrapper coalesces every
+  // falsy value back to the draft default, which is exactly the refill a
+  // scrub must not trigger.
+  const tournamentTypeScrub = useRef<null | 'clear'>(null)
+  const scrubTournamentType = () => {
+    tournamentTypeScrub.current = 'clear'
+    setTournamentTypeState('')
+  }
+
   const setTableCategory = (cat: TableCategory) => {
     setTableCategoryState(cat)
     if (cat === 'duel') {
@@ -211,6 +294,11 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
         }
       }
     }
+    // Leaving the tournament branch must not leave its type behind: outside
+    // `tourney` the type is pure dead state (the tourney tabs, the sync
+    // effect and the submit builder only act on it inside a tournament), and
+    // stale strings are what fabricated tournaments on plain duels.
+    if (cat !== 'tourney') scrubTournamentType()
   }
 
   const setTournamentCategory = (cat: TournamentCategory) => {
@@ -234,12 +322,66 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
     setTableCategory(cat)
   }
 
+  /**
+   * One-click all-bot LLM duel ("LLM vs LLM"): the creator becomes a spectator
+   * (`humanSeat=false`) and BOTH seats become COMPUTER_LLM, each with the
+   * section defaults (which inherit the server's provider/keys). This is the
+   * discoverable shape of a capability the backend already accepts —
+   * `createTable {playerTypes:['COMPUTER_LLM','COMPUTER_LLM']}` — that the
+   * `humanSeat` toggle otherwise hides (with it ON, seat 0 is forced HUMAN).
+   * Gated by capabilities.llm: without it this is a no-op and the
+   * chip is never rendered.
+   */
+  const applyLlmVsLlm = () => {
+    if (!llmEnabled) return
+    setTableCategoryState('duel')
+    setUseDraftTournament(false)
+    setGameTypeState('Two Player Duel')
+    setDeckTypeState((curr) => (isGameAndDeckCompatible(curr, 'Two Player Duel') ? curr : 'Constructed - Modern'))
+    setNumPlayers(2)
+    setWins(1)
+    // The stale tournament type is scrubbed so this duel cannot fire the
+    // tournament disjuncts; the win-flip (Bo3→Bo1) itself is NOT changed.
+    scrubTournamentType()
+    setHumanSeat(false)
+    setPlayerTypesSel([LLM_SEAT])
+    // The preset is discoverable one-click play: seat the curated REAL bundled
+    // corpus deck (Boros Burn) into the LLM seats — UNCONDITIONALLY, because the
+    // wizard fills fresh seats with the global sim deck, whose own default
+    // (bundled list head) is still the e2e lands deck ('Mage Web bolt'): a
+    // "keep any non-empty choice" rule would silently keep it. A preset that
+    // forces the seat types forces the deck; the user can adjust after.
+    const presetDeck = findPresetDefaultDeck() ?? { name: PRESET_DEFAULT_DECK_NAME, cards: [], sideboard: [] }
+    const presetRef = deckRef(presetDeck)
+    setSeatConfigs((prev) => {
+      const target = [
+        ...(prev.length > 0 ? prev : [emptyLlmSeat()]),
+        ...Array.from({ length: Math.max(0, 2 - Math.max(prev.length, 1)) }, () => emptyLlmSeat()),
+      ].slice(0, 2)
+      return target.map((s) => seatWithLlmDefaults({ ...s, deckName: presetRef }, LLM_SEAT))
+    })
+  }
+
   const setUseDraftTournamentChecked = (v: boolean) => {
     setUseDraftTournament(v)
     if (tableCategory === 'tourney') setTournamentCategory(v ? 'limited' : 'constructed')
   }
 
   const applyPreset = (key: string) => {
+    // Every preset sets its COMPLETE shape on a clean base: a preset out of a
+    // tournament must never inherit the previous shape's `tournamentType` /
+    // `useDraftTournament` / seat shortcut (Swiss → Bo3 left the
+    // gold swiss chip and the tournament CTA on a Bo3 duel). The swiss/draft
+    // presets rebuild their tournament branch on top of the same reset, so
+    // their own type still lands after the sync effect's one-shot scrub honor.
+    if (PRESET_KEYS.includes(key)) {
+      setTableCategoryState('duel')
+      setTournamentCategoryState('limited')
+      setUseDraftTournament(false)
+      scrubTournamentType()
+      setHumanSeat(true)
+      setPlayerTypesSel(['SIM'])
+    }
     if (key === 'modern_bo3') {
       setTableCategoryState('duel')
       setUseDraftTournament(false)
@@ -301,11 +443,21 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
   const [edhPowerLevel, setEdhPowerLevel] = useState(100)
 
   const [numPlayers, setNumPlayers] = useState<number>(() => typeof saved.numPlayers === 'number' && saved.numPlayers >= 2 && saved.numPlayers <= 10 ? saved.numPlayers : 2)
-  // the proxy-side SIM bot is dev-only: a form persisted by an older client loses its SIM seats,
-  // which become open human seats (bots are now opt-in native AI)
   const [seatConfigs, setSeatConfigs] = useState<SeatConfig[]>(() => Array.isArray(saved.seatConfigs) ? (saved.seatConfigs as SeatConfig[]).map((s) => {
-    const t = normalizeSeatType(String(s.type ?? ''))
-    return { type: t === SIM_SEAT ? HUMAN_SEAT : t, deckName: s.deckName, skill: typeof s.skill === 'number' ? s.skill : 2 }
+    // Upstream v0.4.7 (4fe0f8ab8a): the proxy-side SIM bot is dev-only — a form
+    // persisted by an older client loses its SIM seats, which become open human
+    // seats (bots are now opt-in native AI). Where the fork's SIM channel is
+    // enabled (`simSeatsEnabled`, VITE_SIM_SEATS/dev), the SIM seat survives the
+    // restore: the SIM-deck fallback chain and the demo/e2e harnesses ride it.
+    // The fork's llmConfig survives the restore either way.
+    const simOn = simSeatsEnabled()
+    const t = normalizeSeatType(String(s.type ?? (simOn ? SIM_SEAT : HUMAN_SEAT)))
+    return {
+      type: !simOn && t === SIM_SEAT ? HUMAN_SEAT : t,
+      deckName: s.deckName,
+      skill: typeof s.skill === 'number' ? s.skill : 2,
+      ...(s.llmConfig && typeof s.llmConfig === 'object' ? { llmConfig: { ...(s.llmConfig as Record<string, unknown>) } } : {}),
+    }
   }) : [])
   const recommendedMulligans = useMemo(
     () => recommendedFreeMulligans(gameType, numPlayers),
@@ -384,6 +536,38 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
     }
   }, [])
 
+  // Argentum-P1 training deck pool: fetched ONCE per form open, only when the
+  // connected server reported capabilities.p1. A rejection/throw marks
+  // the pool 'error' (surfaced in the picker, with a retry that re-runs this
+  // effect via p1ReloadKey); an ok answer carrying no decks marks it 'ready' with
+  // an empty pool. NOT polled.
+  useEffect(() => {
+    if (!p1Enabled) return
+    let active = true
+    setP1PoolStatus('loading')
+    void (async () => {
+      try {
+        const pool = await cmds.getP1Decks()
+        if (!active) return
+        setP1Decks(pool.decks)
+        setP1Default(pool.default)
+        setP1PoolStatus(pool.ok ? 'ready' : 'error')
+      } catch (err) {
+        console.warn('Could not fetch the P1 training deck list', err)
+        if (active) setP1PoolStatus('error')
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [p1Enabled, p1ReloadKey])
+
+  const reloadP1Decks = () => {
+    if (!p1Enabled) return
+    setP1PoolStatus('loading')
+    setP1ReloadKey((k) => k + 1)
+  }
+
   const effectiveGameTypes = useMemo(() => {
     const list = [...gameTypes]
     if (gameType && !list.some((g) => g.name === gameType)) {
@@ -391,6 +575,45 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
     }
     return list
   }, [gameTypes, gameType])
+
+  /**
+   * Seat types offered in the dropdowns: COMPUTER_LLM is filtered out entirely
+   * unless the connected server reported capabilities.llm;
+   * COMPUTER_P1 likewise unless it reported capabilities.p1. The
+   * P1 option is never in `getPlayerTypes()` (it is fork-only), so it is APPENDED
+   * when the capability is present.
+   */
+  const visiblePlayerTypes = useMemo(() => {
+    let list = playerTypes
+    if (!llmEnabled) list = list.filter((pt) => !isLlmSeatType(pt))
+    list = list.filter((pt) => !isP1SeatType(pt))
+    if (p1Enabled && !list.includes(P1_SEAT)) list = [...list, P1_SEAT]
+    return list
+  }, [playerTypes, llmEnabled, p1Enabled])
+
+  // A seat left as COMPUTER_LLM without the capability (stale persisted state
+  // or a connect without capability) degrades to SIM: nothing referencing the
+  // LLM seat may be sent. The shortcut selection is
+  // stripped too — it is the fallback that fills seats when seatConfigs is empty.
+  useEffect(() => {
+    if (llmEnabled) return
+    setSeatConfigs((prev) => {
+      if (!prev.some((s) => isLlmSeatType(s.type))) return prev
+      return prev.map((s) => (isLlmSeatType(s.type) ? seatWithLlmDefaults(s, SIM_SEAT) : s))
+    })
+    setPlayerTypesSel((prev) => (prev.some((pt) => isLlmSeatType(pt)) ? prev.filter((pt) => !isLlmSeatType(pt)) : prev))
+  }, [llmEnabled, seatConfigs])
+
+  // Same double gating for COMPUTER_P1: without capabilities.p1 the seat degrades
+  // to SIM and is stripped from the shortcut.
+  useEffect(() => {
+    if (p1Enabled) return
+    setSeatConfigs((prev) => {
+      if (!prev.some((s) => isP1SeatType(s.type))) return prev
+      return prev.map((s) => (isP1SeatType(s.type) ? { ...seatWithTypeDefaults(s, SIM_SEAT, p1Decks, p1Default) } : s))
+    })
+    setPlayerTypesSel((prev) => (prev.some((pt) => isP1SeatType(pt)) ? prev.filter((pt) => !isP1SeatType(pt)) : prev))
+  }, [p1Enabled, seatConfigs, p1Decks, p1Default])
 
   useEffect(() => {
     if (!isGameAndDeckCompatible(deckType, gameType)) {
@@ -477,7 +700,7 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
 
   useEffect(() => {
     try {
-      const payload = { tableCategory, tournamentCategory, useDraftTournament, name, gameType, deckType, wins, skillLevel, rated, numPlayers, seatConfigs, mySkill, bannedUsersRaw, numberRounds, freeMulligans, mulliganType, customStartLifeEnabled, customStartLife, customStartHandSizeEnabled, customStartHandSize, planeChase }
+      const payload = { tableCategory, tournamentCategory, useDraftTournament, name, gameType, deckType, wins, skillLevel, rated, numPlayers, seatConfigs: stripApiKeyFromSeatConfigs(seatConfigs), mySkill, bannedUsersRaw, numberRounds, freeMulligans, mulliganType, customStartLifeEnabled, customStartLife, customStartHandSizeEnabled, customStartHandSize, planeChase }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     } catch {}
   }, [tableCategory, tournamentCategory, useDraftTournament, name, gameType, deckType, wins, skillLevel, rated, numPlayers, seatConfigs, mySkill, bannedUsersRaw, numberRounds, freeMulligans, mulliganType, customStartLifeEnabled, customStartLife, customStartHandSizeEnabled, customStartHandSize, planeChase])
@@ -489,6 +712,15 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
   }, [])
 
   useEffect(() => {
+    // A just-executed scrub ('clear' one-shot) is honoured instead of
+    // back-filled: with `tableCategory` off tourney the sync must not refill
+    // the swept '' with a type (which would re-fire the stale tournament
+    // state). Inside a tournament the tourney-branch setters have just
+    // installed their own valid type, so the sync still normalizes it.
+    if (tournamentTypeScrub.current) {
+      tournamentTypeScrub.current = null
+      if (tableCategory !== 'tourney') return
+    }
     const synced = tournamentTypeForCategory({ tableCategory, tournamentCategory, tournamentType })
     if (synced !== tournamentType) setTournamentType(synced)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -504,13 +736,31 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
     const n = normalizeSeatType(pt)
     setPlayerTypesSel((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n]))
   }
+  /**
+   * A seat that becomes a bot needs a playable deck at once (upstream v0.4.7's
+   * bots-are-opt-in flow asserts it): with the SIM channel off the fresh seats
+   * are HUMAN with no deck stamp, so the opt-in switch (HUMAN → bot) is the
+   * moment to fill an empty bot seat from the global sim deck (the
+   * fallback the submit path would ride anyway). Deliberately NOT on a
+   * bot → bot switch: the P1 path clears the training-deck text when
+   * leaving COMPUTER_P1 so the seat falls back to the saved-deck path, and a
+   * refill here would stomp that clearing. An existing choice is never
+   * rewritten.
+   */
+  const withBotDeckDefault = (prev: SeatConfig, next: SeatConfig): SeatConfig =>
+    isHumanSeatType(prev.type) && !isHumanSeatType(next.type) && !next.deckName && simDeck
+      ? { ...next, deckName: deckRef(simDeck) }
+      : next
   const applySeatTypeToAll = (pt: string) => {
     const n = normalizeSeatType(pt)
-    setSeatConfigs((prev) => prev.map((s) => ({ ...s, type: n })))
+    setSeatConfigs((prev) => prev.map((s) => withBotDeckDefault(s, seatWithTypeDefaults(s, n, p1Decks, p1Default))))
   }
   const setSeatType = (idx: number, type: string) => {
     const n = normalizeSeatType(type)
-    setSeatConfigs((prev) => prev.map((s, i) => (i === idx ? { ...s, type: n } : s)))
+    setSeatConfigs((prev) => prev.map((s, i) => (i === idx ? withBotDeckDefault(s, seatWithTypeDefaults(s, n, p1Decks, p1Default)) : s)))
+  }
+  const setSeatLlmConfig = (idx: number, llmConfig: Record<string, unknown>) => {
+    setSeatConfigs((prev) => prev.map((s, i) => (i === idx ? { ...s, llmConfig } : s)))
   }
   const setSeatDeck = (idx: number, deckRefValue: string) => {
     setSeatConfigs((prev) => prev.map((s, i) => (i === idx ? { ...s, deckName: deckRefValue } : s)))
@@ -519,7 +769,21 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
     setSeatConfigs((prev) => prev.map((s, i) => (i === idx ? { ...s, skill: Math.min(10, Math.max(1, skill)) } : s)))
   }
 
-  const runDemoTable = () => runDemoTableCommand({ skipInitShuffling, skipStartingPlayerChoice }, { setBusy, onClose })
+  const runDemoTable = () => runDemoTableCommand({ skipInitShuffling, skipStartingPlayerChoice }, { setBusy, setError, onClose })
+
+  /**
+   * Cancel discards the unsaved selection state like the rest of the
+   * unsubmitted form: the draft persistence effect keeps `localStorage` in sync
+   * with the CURRENT form while the wizard is open (a Tournament preset applies
+   * `tableCategory:'tourney'` at once), so a mere close would re-open with the
+   * stale preset selected. Removing the persisted draft
+   * here — the hook that owns the effect — makes Cancel a real discard; a
+   * closed submit re-persists its draft on the next open.
+   */
+  const cancel = () => {
+    discardDraft()
+    onClose()
+  }
 
   const submit = () => submitCreateTable({
     name, gameType, deckType, wins, skillLevel, rated,
@@ -546,7 +810,13 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
     isFirstStep,
     gameTypes,
     deckTypes,
-    playerTypes,
+    playerTypes: visiblePlayerTypes,
+    llmEnabled,
+    p1Enabled,
+    p1Decks,
+    p1Default,
+    p1PoolStatus,
+    reloadP1Decks,
     tournamentTypes,
     draftCubes,
     name,
@@ -637,6 +907,7 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
     setSeatType,
     setSeatDeck,
     setSeatSkill,
+    setSeatLlmConfig,
     mySkill,
     setMySkill,
     skipInitShuffling,
@@ -656,6 +927,7 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
     setTournamentCategory,
     applyMode,
     applyPreset,
+    applyLlmVsLlm,
     isLimited,
     isDraftLimited,
     isTournament,
@@ -664,5 +936,6 @@ export function useCreateTableForm(onClose: () => void): CreateTableForm {
     validateStep,
     submit,
     runDemoTable,
+    cancel,
   }
 }

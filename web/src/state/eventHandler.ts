@@ -1,7 +1,9 @@
 import type { ProxyMessage } from '../net/types'
 import { parseFeedback } from '../game/feedback'
 import { getState, setState, addLog } from './state'
-import { translateError } from '../i18n'
+import { translateError, t } from '../i18n'
+import * as cmds from '../net/commands'
+import { handleLlmPrompt, flushUndeliveredLlmAnswers } from '../llm/bridge'
 import { attributeStackControllers } from '../game/stackAttribution'
 import {
   gameViewFrom, isOlderThanCurrentGame, gameEventOrder, noteGameEvent, resetGameEventOrder,
@@ -34,6 +36,10 @@ export function handleMessage(msg: ProxyMessage) {
   switch (msg.type) {
     case 'connected': {
       resetGameEventOrder()
+      // The socket is live again — re-send any answer produced while it was
+      // down (the server still correlates it by requestId). Fire and forget: the
+      // answer path never blocks the message loop.
+      void flushUndeliveredLlmAnswers()
       // A re-attach after a network blip also announces `connected`: keep the
       // board of the game in progress (the rejoin replay refreshes it) instead
       // of dropping the player into the lobby.
@@ -43,7 +49,7 @@ export function handleMessage(msg: ProxyMessage) {
       break
     }
     case 'disconnected':
-      setState({ link: 'ok', linkAttempt: 0, phase: 'idle', connecting: false, game: null, gameId: null, gameChatId: null, tableChatId: null, tableChatTableId: null, tournamentChatId: null, tournamentChatTournamentId: null, playableIds: [], playableWindow: null, combat: null, feedback: null, lobby: null, roomChatId: null, sideboardScreen: null, pendingSideboardScreen: null, rollbackPendingFor: null, rollbackPendingAt: null, rollbackVote: null, resumingGameId: null, turnRecap: null, enteredThisTurn: {}, elimination: null })
+      setState({ link: 'ok', linkAttempt: 0, phase: 'idle', connecting: false, game: null, gameId: null, gameChatId: null, tableChatId: null, tableChatTableId: null, tournamentChatId: null, tournamentChatTournamentId: null, playableIds: [], playableWindow: null, combat: null, feedback: null, lobby: null, roomChatId: null, sideboardScreen: null, pendingSideboardScreen: null, rollbackPendingFor: null, rollbackPendingAt: null, rollbackVote: null, resumingGameId: null, turnRecap: null, enteredThisTurn: {}, replay: null, elimination: null })
       break
     case 'info':
       addLog('servidor', msg.message)
@@ -92,6 +98,28 @@ export function handleMessage(msg: ProxyMessage) {
       perfMark('event', msg.method, undefined, { gameId: msg.objectId ?? null })
       handleEvent(msg.method, msg.objectId ?? null, msg.data, msg.messageId)
       break
+    case 'llm_prompt': {
+      // Client-key bridge: the server asks THIS browser to run
+      // the provider call with the user's locally-stored key. Fire-and-forget
+      // (the bridge sends llm_decision/llm_error on its own); the server-side
+      // future owns the timeout. An LLMage server only sends llm_prompt for
+      // LLM seats, which cannot exist when capabilities.llm is false — a
+      // desynced/forged frame must NOT reach the provider bridge: drop it and
+      // log, the exchange times out server-side.
+      if (getState().capabilities?.llm !== true) {
+        addLog('error', t('game', 'llm_prompt_without_capability'))
+        break
+      }
+      // An inbound llm_prompt proves the socket is live — flush an answer
+      // held from a socket that had dropped before asking the provider again.
+      void flushUndeliveredLlmAnswers()
+      handleLlmPrompt(msg, {
+        sendDecision: (args) => cmds.llmDecision(args),
+        sendError: (args) => cmds.llmError(args),
+        log: (from, text, channel) => addLog(from, text, undefined, channel),
+      })
+      break
+    }
   }
 }
 
@@ -116,6 +144,14 @@ function handleEvent(method: string, objectId: string | null, data: unknown, mes
 
   const embeddedGame = gameViewFrom(data)
   if (embeddedGame) {
+    // A replay frame (REPLAY_INIT/REPLAY_UPDATE) carries a full GameView and hits
+    // this branch like a live frame, but it is OWNED by the REPLAY_* switch cases
+    // below (which also fill the replay slice). Painting it twice is harmless but
+    // the side effects are not: transitions/sounds/alerts/turn-recap must not fire
+    // for a detached historical view. Skip the embedded path entirely for replays.
+    if (method === 'REPLAY_INIT' || method === 'REPLAY_UPDATE') {
+      // fall through to the switch (still record the event + feedback parse below)
+    } else {
     // START_GAME/GAME_INIT de OTRA partida (Bo3/torneo): la vista en pantalla es
     // de la partida anterior; comparar turno/paso contra ella clasificaría el
     // estado nuevo como "viejo" y lo descartaría (mesa congelada al arrancar la
@@ -190,6 +226,7 @@ function handleEvent(method: string, objectId: string | null, data: unknown, mes
       }
       // La partida re-unida ya está adoptada: el guard de lobby vuelve a aplicar.
       if (objectId && getState().resumingGameId === objectId) setState({ resumingGameId: null })
+    }
     }
   }
   if (method !== 'GAME_UPDATE' && method !== 'GAME_UPDATE_AND_INFORM') {
@@ -296,11 +333,11 @@ function handleEvent(method: string, objectId: string | null, data: unknown, mes
     }
     case 'REPLAY_INIT':
     case 'REPLAY_UPDATE': {
-      handleReplayUpdate(data)
+      handleReplayUpdate(objectId, data)
       break
     }
     case 'REPLAY_DONE': {
-      handleReplayDone(data)
+      handleReplayDone(objectId, data)
       break
     }
     case 'GAME_TARGET': {

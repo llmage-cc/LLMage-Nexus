@@ -1,51 +1,96 @@
-# Docs — XMage Nexus
+# XMage Nexus documentation
 
-Start here. This folder is the onboarding path for contributors and users.
-Canonical references live elsewhere; this folder indexes them instead of duplicating them.
+XMage Nexus is a modern web and desktop client for [XMage](https://github.com/magefree/mage).
+It connects to any XMage server through a WebSocket proxy, runs in a browser or as a packaged
+desktop app, and adds a visual board, a deck builder, replays, and optional LLM-seat controls
+when the server supports them.
 
-## Reading order
+> **New here?** Read the [overview](getting-started/overview.md), then
+> [Play in a browser](getting-started/play-in-browser.md) or
+> [Self-hosting quickstart](getting-started/self-hosting-quickstart.md).
 
-1. `readme.md` (repo root) — what the project is, stack versions.
-2. `AGENTS.md` (repo root) — daily operations: stack control, ports, fake vs real E2E, Sim + WS helper.
-3. `docs/architecture.md` — how the three tiers fit together.
-4. `docs/code-map.md` — where everything lives, with the current file counts and the biggest files (a locator, not a refactor queue).
-5. `CONTRIBUTING.md` (repo root) — how to add an event, action, or type.
-6. `Mage.Proxy/README.md` — full protocol reference (actions, events, serialization).
-7. `docs/testing.md` — how to run and interpret the suite.
-8. `docs/user-manual.md` — how to play (for users, also useful for testers).
-9. `docs/deployment.md` — running the stack and publishing the dashboard.
-10. `docs/enhancements.md` — open client-only feature specs (board rewind, draft pick helper). The full historic catalog is archived in `docs/history/enhancements-catalog.md`.
-11. `docs/lessons.md` — durable cross-cutting lessons worth re-reading before debugging.
-12. `mcp/README.md` — MCP server: gameplay loop, the 38 `mage_*` tools, and autonomous LLM play notes (archived long-form overview in `docs/history/mcp-overview.md`).
+## Getting started
 
-## Status docs (what is authoritative for what)
-
-| Doc | Answers | Freshness rule |
-|---|---|---|
-| `ROADMAP.md` | Vision, current state, parity matrix and **the single live list of pending work** (§4) | Update §4 when something is finished or a new pending item appears; the closed phase plan is archived in `docs/history/roadmap-phases.md` |
-| `docs/lessons.md` | Durable cross-cutting lessons (one line each) | Add a line only when the lesson is reusable; the dated narrative lives in `git log` (no work log) |
-| `web/INTERACTION_COVERAGE.md` | Per-callback and per-mechanic coverage: implemented + tested + test ref + date | Update with every handler/interaction change; enforced by `callbackCoverage.test.ts` |
-| `docs/enhancements.md` | Open client-only feature specs (board rewind, draft pick helper) | Statuses verified against the code; pending items are summarized in `ROADMAP.md` §4.2; the built/dropped catalog is archived in `docs/history/enhancements-catalog.md` |
-| `docs/history/` | The closed plan (`plan4`), the archived phase plan (`roadmap-phases.md`), the closed lobby roadmap (`lobby_roadmap.md`), the archived enhancement catalog (`enhancements-catalog.md`) and MCP overview (`mcp-overview.md`), and QA evidence logs (`qa/`) | Historical, **not normative**. Current behavior is defined by code + `INTERACTION_COVERAGE.md` + recorded fixtures; what is still open lives in `ROADMAP.md` §4 |
-| `site/content.json` | Dashboard copy (phases, features, guards) | Keep in sync with `ROADMAP.md` when phases change |
-
-## Ports (do not change without updating `AGENTS.md`, `scripts/lib.mjs`, `docs/deployment.md`)
-
-| Service | Address |
+| Page | What it covers |
 |---|---|
-| XMage server (testMode) | `localhost:17171` |
-| Proxy WS | `ws://127.0.0.1:8787` |
-| Proxy HTTP test page | `http://127.0.0.1:8788/index.html` |
-| Vite dev | `http://localhost:5173` |
-| FakeServer (fake-mode E2E) | port `8789` (per-test dynamic port in practice: `FakeServer.start(0)`) |
-| Fake-mode E2E Vite | port `5175` (`strictPort`, `reuseExistingServer:false`) |
-| `xmage-status` (ops dashboard, LAN-only, no tunnel) | `http://<host>:8790` — `ops/status/`, see `ROADMAP.md` §4.6 |
+| [XMage Nexus overview](getting-started/overview.md) | What the client is, how the three tiers fit together, and what it adds |
+| [Play in a browser](getting-started/play-in-browser.md) | A hosted or self-hosted URL, the login screen, and the first table |
+| [Desktop app](getting-started/desktop-app.md) | Installing the launcher, bundled components, updates, and data location |
+| [Self-hosting quickstart](getting-started/self-hosting-quickstart.md) | The shortest path to a working stack |
 
-## Quick commands
+## Player guide
 
-```bash
-node scripts/ctl.mjs start all     # server + proxy + vite (non-blocking)
-node scripts/ctl.mjs stop all
-node scripts/test.mjs              # full suite (see docs/testing.md)
-node scripts/tail.mjs proxy        # tail proxy logs (.run/*.log)
-```
+| Page | What it covers |
+|---|---|
+| [The lobby](player-guide/lobby.md) | Tables, filters, users, chat, finished matches, and the leaderboard |
+| [Creating a game](player-guide/creating-a-game.md) | The create-table wizard, formats, seats, timers, and passwords |
+| [Joining a game](player-guide/joining-a-game.md) | Deck selection, validation, the waiting room, and spectating |
+| [Chat and social features](player-guide/chat-and-social.md) | Table chat, game log, floating chat, and invite links |
+| [Deck builder](player-guide/deck-builder.md) | Search syntax, filters, import/export, sideboard, and validation |
+| [Settings](player-guide/settings.md) | Gameplay, board, interface, sound, language, and accessibility |
+| [Card images and art](player-guide/card-images-and-art.md) | Scryfall images, printings, showcase art, tokens, and custom art |
+| [Board and controls](player-guide/board-and-controls.md) | Zones, priority, mana, targeting, combat, prompts, and shortcuts |
+| [Game modes and formats](player-guide/game-modes.md) | Constructed, Commander, 2HG, draft, sealed, tournaments, and FFA |
+| [Replay viewer](player-guide/replay-viewer.md) | Opening a replay, playback, seeking, and the LLM sidecar |
+
+## Operator guide
+
+| Page | What it covers |
+|---|---|
+| [Deploying XMage Nexus](operator-guide/deployment.md) | Docker, static web, the proxy, TLS, tunnels, and scaling |
+| [Configuration](operator-guide/configuration.md) | Proxy flags, environment variables, ports, and build-time options |
+| [Desktop launcher](operator-guide/desktop-launcher.md) | Packaging, bundled components, manifests, and updates |
+| [Operations](operator-guide/operations.md) | Logs, health endpoints, the status dashboard, backups, and upgrades |
+
+## Developer guide
+
+| Page | What it covers |
+|---|---|
+| [Architecture](developer-guide/architecture.md) | The three tiers, data flow, rendering, fake mode, and i18n |
+| [Code map](developer-guide/code-map.md) | Where each part of the repository lives |
+| [The proxy](developer-guide/proxy.md) | Sessions, multi-tenancy, callbacks, serialization, and the watchdog |
+| [The WebSocket protocol](developer-guide/protocol.md) | Connection, messages, actions, events, types, and versioning |
+| [Web client](developer-guide/web-client.md) | React structure, state, board rendering, and test hooks |
+| [Testing](developer-guide/testing.md) | Test layers, fake and real backends, fixtures, and the recorder |
+| [MCP server](developer-guide/mcp.md) | The `mage_*` automation tools and the gameplay loop |
+| [Contributing](developer-guide/contributing.md) | Workflow, adding events and types, style, and tests |
+| [Lessons learned](lessons.md) | Durable engineering lessons behind specific fixes |
+
+## Reference
+
+| Page | What it covers |
+|---|---|
+| [Keyboard shortcuts](reference/keyboard-shortcuts.md) | Global, game, chat, deck builder, and replay shortcuts |
+| [Settings reference](reference/settings-reference.md) | Every setting, its default, and where it is stored |
+| [Commands](reference/commands.md) | Development, build, test, and deployment commands |
+| [Ports](reference/ports.md) | Default ports, what uses them, and conflict fixes |
+| [Troubleshooting](reference/troubleshooting.md) | Symptom, cause, and fix for common failures |
+| [Frequently asked questions](reference/faq.md) | Cost, accounts, self-hosting, devices, privacy, and contributing |
+| [Glossary](reference/glossary.md) | Terms used across the docs |
+
+## Conventions
+
+- Commands and configuration examples use placeholders such as `<server-host>`, `<proxy-host>`,
+  `<port>`, and `<path-to-project>`. Replace them with your own values.
+- LLM seats, replay-scrubber support, and related controls appear only when the connected
+  XMage server advertises the capability. The client is usable against a stock XMage server.
+- Screenshots use generic player, table, and deck names. They are illustrative, not a record of
+  a particular deployment.
+
+## Legacy documentation
+
+The pages below predate this wiki and are retained as reference for upstream behaviour. They
+may contain dated or environment-specific material; use the pages above instead.
+
+| Legacy page | Superseded by |
+|---|---|
+| [`user-manual.md`](user-manual.md) | [Player guide](player-guide/lobby.md) |
+| [`architecture.md`](architecture.md) | [Architecture](developer-guide/architecture.md) |
+| [`code-map.md`](code-map.md) | [Code map](developer-guide/code-map.md) |
+| [`deployment.md`](deployment.md) | [Deploying XMage Nexus](operator-guide/deployment.md) |
+| [`deploy-tunnels.md`](deploy-tunnels.md) | [Deploying XMage Nexus](operator-guide/deployment.md) |
+| [`testing.md`](testing.md) | [Testing](developer-guide/testing.md) |
+| [`protocol.md`](protocol.md) | [The WebSocket protocol](developer-guide/protocol.md) |
+| [`enhancements.md`](enhancements.md) | [Game modes and formats](player-guide/game-modes.md) |
+| [`history/`](history/) and [`plans/`](plans/) | Historical design notes, not normative |
+

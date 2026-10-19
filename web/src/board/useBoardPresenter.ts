@@ -229,7 +229,10 @@ export function useBoardPresenter(args: BoardPresenterArgs): BoardPresenter {
   })
 
   const gameId = useStore((s) => s.gameId)
-  useGameTransitions(game, gameId)
+  // Replay mode: a detached historical view whose whole board changes at once on
+  // every step — suppress the transition FX rather than animating each scrub jump.
+  const replayActive = useStore((s) => s.replay != null)
+  useGameTransitions(replayActive ? null : game, gameId)
 
   return {
     boardRef,
@@ -248,11 +251,60 @@ export interface BoardPlayers {
   me: PlayerView | undefined
   opps: PlayerView[]
   isSpectator: boolean
+  /** True when `me` is a REPLAY viewing perspective (the frame has no controlled
+   *  seat): the bottom zone must render as the viewer's own side even though the
+   *  seat is not `controlled` (reuse the controlled rendering, no frame mutation). */
+  perspective: boolean
+}
+
+export interface PerspectiveInput {
+  /** The store is in replay mode (`state.replay` non-null). */
+  replay: boolean
+  /** Signed-in username (`state.conn.username`), for the seat-name preference. */
+  username?: string | null
+  /** Explicit "view as" seat id picked in the replay chrome (`state.replay.perspectivePlayerId`). */
+  perspectivePlayerId?: string | null
+}
+
+/**
+ * The seat to present as the viewer's own side (bottom/"you" seat) without
+ * mutating the frame:
+ *  - a `controlled` seat always wins (a live game is unaffected);
+ *  - with no controlled seat but a REPLAY open, an explicit "view as" pick wins
+ *    when it names a seat in the frame; otherwise the seat whose `name` matches
+ *    the signed-in username when one does, else `players[0]`. An unknown or
+ *    absent pick id therefore falls back to the automatic default (never a
+ *    blank board);
+ *  - a NON-replay game with no controlled seat keeps the spectator layout
+ *    (`undefined` → `isSpectator` in `useBoardPlayers`).
+ */
+export function pickPerspectivePlayer(
+  players: PlayerView[],
+  { replay, username, perspectivePlayerId }: PerspectiveInput,
+): PlayerView | undefined {
+  const controlled = players.find((p) => p.controlled)
+  if (controlled) return controlled
+  if (!replay || players.length === 0) return undefined
+  if (perspectivePlayerId) {
+    const chosen = players.find((p) => p.playerId === perspectivePlayerId)
+    if (chosen) return chosen
+  }
+  const user = (username ?? '').trim().toLowerCase()
+  if (user) {
+    const named = players.find((p) => (p.name ?? '').trim().toLowerCase() === user)
+    if (named) return named
+  }
+  return players[0]
 }
 
 /** Jugadores del tablero. En modo espectador GameBoard deriva pseudo-jugadores
- *  desde `watchedHands` cuando el servidor no envía `players`; pod/arena no. */
+ *  desde `watchedHands` cuando el servidor no envía `players`; pod/arena no.
+ *  En un REPLAY (sin asiento `controlled`) elige un asiento de perspectiva por
+ *  defecto y lo presenta como propio (`perspective`) sin tocar el frame. */
 export function useBoardPlayers(game: GameView | null, spectatorFallbackFromWatched = false): BoardPlayers {
+  const replay = useStore((s) => s.replay != null)
+  const username = useStore((s) => s.conn?.username ?? null)
+  const perspectivePlayerId = useStore((s) => s.replay?.perspectivePlayerId ?? null)
   return useMemo(() => {
     let allPlayers: PlayerView[] = game?.players ?? []
     if (spectatorFallbackFromWatched && allPlayers.length === 0 && game?.watchedHands) {
@@ -267,8 +319,11 @@ export function useBoardPlayers(game: GameView | null, spectatorFallbackFromWatc
         } as unknown as PlayerView))
       }
     }
-    const me = allPlayers.find((p) => p.controlled)
-    const opps = allPlayers.filter((p) => !p.controlled)
-    return { allPlayers, me, opps, isSpectator: !me }
-  }, [game?.players, game?.watchedHands, spectatorFallbackFromWatched])
+    const me = pickPerspectivePlayer(allPlayers, { replay, username, perspectivePlayerId })
+    // A perspective seat is not `controlled` in the frame: the other seats are
+    // every other player, and the seat is presented as own side by the boards.
+    const perspective = !!me && !me.controlled
+    const opps = perspective ? allPlayers.filter((p) => p !== me) : allPlayers.filter((p) => !p.controlled)
+    return { allPlayers, me, opps, isSpectator: !me, perspective }
+  }, [game?.players, game?.watchedHands, spectatorFallbackFromWatched, replay, username, perspectivePlayerId])
 }

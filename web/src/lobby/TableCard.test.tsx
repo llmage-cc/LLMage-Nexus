@@ -92,3 +92,35 @@ describe('TableCard estado de mesa (i18n)', () => {
     expect(container.querySelector('.table-state-badge')?.textContent).toBe('Custom state')
   })
 })
+
+describe('TableCard info strip (localized server payload)', () => {
+  it('does not show "Wins:"/"Score:"/", SP" in German: it replaces them with the local segments', async () => {
+    const { switchLanguage } = await import('../i18n')
+    await switchLanguage('de')
+    const { container } = render(
+      <TableCard
+        tTable={tableOf({
+          additionalInfoShort: 'Wins:1 Score: -0-0, SP',
+          additionalInfoFull: 'Wins required:1 (Best of 1)<br>Seats: 2<br>Spectators allowed (SP)<br>Game type: Two Player Duel',
+        })}
+        users={[]} stagingTableId={null} busyTable={null} {...handlers}
+      />
+    )
+    const strip = container.querySelector('.table-info-strip') as HTMLElement
+    const text = strip.querySelector('.info-strip-text')?.textContent ?? ''
+    expect(text).toBe('Match-Siege: 1 Punktestand: -0-0')
+    expect(text).not.toMatch(/Wins|Score|SP/)
+    expect(strip.getAttribute('title')).toBe(
+      'Match-Siege:1 (Best of 1)<br>Seats: 2<br>Zuschauer<br>Game type: Two Player Duel',
+    )
+    await switchLanguage('es')
+  })
+
+  it('deja el texto del servidor desconocido intacto', () => {
+    const { container } = render(
+      <TableCard tTable={tableOf({ additionalInfoShort: 'Casual EDH fun', additionalInfoFull: '' })} users={[]} stagingTableId={null} busyTable={null} {...handlers} />,
+    )
+    const text = container.querySelector('.table-info-strip .info-strip-text')?.textContent ?? ''
+    expect(text).toBe('Casual EDH fun')
+  })
+})

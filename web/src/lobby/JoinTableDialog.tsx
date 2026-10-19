@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef, type CSSProperties } from 'react'
 import type { TableView } from '../net/types'
 import {
   getAllAvailableDecks,
+  ensureBundledDecksLoaded,
   saveCustomDecks,
   loadSavedCustomDecks,
   deckRef,
@@ -143,6 +144,9 @@ export default function JoinTableDialog({
     let cancelled = false
     void (async () => {
       try {
+        // The bundled corpus (~5,000 decks) may still be in flight; wait for it so
+        // the join deck list shows it, not just the 9 samples + storage decks.
+        await ensureBundledDecksLoaded()
         const mod = await import('../decks/storage')
         const v2 = await mod.getDeckStorage().list()
         if (cancelled) return

@@ -24,7 +24,22 @@ final class TableCommands {
                     ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, false, ProxyProtocol.ERR_INVALID_ARGUMENT, "SIM seats are disabled on this proxy (dev only, start it with --sim on)"));
                     return true;
                 }
-                MatchOptions options = MatchOptionsParser.parseMatchOptions(args);
+                // An LLM-carrying request against a server without the llm capability is
+                // rejected before any server RPC (typed CAPABILITY_UNAVAILABLE).
+                if (CapabilityGate.rejectCreateWithoutLlm(args, ctx, conn, action, requestId)) {
+                    return true;
+                }
+                MatchOptions options;
+                try {
+                    options = MatchOptionsParser.parseMatchOptions(args, ctx.gateway().getConfig().getAllowedModelHosts());
+                } catch (IllegalArgumentException ex) {
+                    // llmConfigs validation (endpoint URL/allowlist, key exclusivity, client-key
+                    // tag, field types): Fail Fast with the real reason, typed INVALID_ARGUMENT,
+                    // before any server RPC.
+                    ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, false,
+                            ProxyProtocol.ERR_INVALID_ARGUMENT, ex.getMessage()));
+                    return true;
+                }
                 UUID roomId = JsonArgs.uuid(args, "roomId", ctx.session().getMainRoomId());
                 Object result = ctx.session().createTable(roomId, options);
                 boolean ok = result != null;
@@ -40,10 +55,15 @@ final class TableCommands {
             }
             case "joinTable": {
                 long start = System.currentTimeMillis();
+                String playerTypeRaw = JsonArgs.str(args, "playerType", "HUMAN");
+                // An LLM seat cannot join a server without the llm capability.
+                if (CapabilityGate.rejectJoinWithoutLlm(playerTypeRaw, ctx, conn, action, requestId)) {
+                    return true;
+                }
                 UUID roomId = JsonArgs.uuid(args, "roomId", ctx.session().getMainRoomId());
                 UUID tableId = JsonArgs.uuid(args, "tableId", null);
                 String playerName = JsonArgs.str(args, "playerName", ctx.session().getUserName());
-                PlayerType playerType = PlayerType.valueOf(JsonArgs.str(args, "playerType", "HUMAN").toUpperCase(Locale.ROOT));
+                PlayerType playerType = PlayerType.valueOf(playerTypeRaw.toUpperCase(Locale.ROOT));
                 int skill = JsonArgs.getInt(args, "skill", 0);
                 DeckCardLists deck = DeckJson.parse(args.getAsJsonObject("deck"));
                 deck = DeckValidation.normalizeForXMage(deck, JsonArgs.str(args, "deckType", null), JsonArgs.str(args, "gameType", null));

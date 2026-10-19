@@ -35,7 +35,7 @@ export default function ArenaBoard({
   crossZonePlayables = [],
   onPlayCrossZone,
 }: BoardProps) {
-  const { me, opps, isSpectator } = useBoardPlayers(game, true)
+  const { me, opps, isSpectator, perspective } = useBoardPlayers(game, true)
   const presenter = useBoardPresenter({
     game,
     targetIds,
@@ -54,9 +54,11 @@ export default function ArenaBoard({
   const { handleCardHover, handleCardClick, targetIdSet, playableIdSet } = presenter
 
   // Espectador: mismo convenio que GameBoard/pod — un jugador abajo (el último)
-  // con su mano si es visible, y el resto arriba en columnas.
+  // con su mano si es visible, y el resto arriba en columnas. En un replay con
+  // perspectiva, el asiento elegido ocupa el fondo a ancho completo como el mío.
   const spectatorBottom = isSpectator ? (opps.length >= 2 ? opps[opps.length - 1] : opps[0]) : undefined
-  const spectatorBottomHand = useSpectatorBottomHand(game, isSpectator, spectatorBottom)
+  const bottomSeat = isSpectator ? spectatorBottom : me
+  const bottomHand = useSpectatorBottomHand(game, isSpectator || perspective, bottomSeat)
   const switchedHand = useSwitchedHand(game)
   const { seatState, toggleSeat } = useSeatStates()
 
@@ -70,13 +72,13 @@ export default function ArenaBoard({
       className="arena-board"
       testId="arena-board"
       presenter={presenter}
-      handBar={!isSpectator ? {
+      handBar={isSpectator || perspective ? null : {
         cards: switchedHand ?? game?.myHand ?? {},
         onCardClick: onPlayableClick,
         onHover: (card, rect) => handleCardHover(card, rect, { fromHand: true }),
         playableIds: playableIdSet,
         targetIds: targetIdSet,
-      } : null}
+      }}
     >
       <div className="arena-opp-row">
         {oppRow.map((opp, i) => {
@@ -116,8 +118,9 @@ export default function ArenaBoard({
       <BoardDivider />
 
       <PlayerZone
-        player={me ?? spectatorBottom}
-        hand={me ? (game?.myHand ?? {}) : spectatorBottomHand}
+        player={isSpectator ? spectatorBottom : me}
+        hand={isSpectator || perspective ? bottomHand : (game?.myHand ?? {})}
+        isControlled={perspective ? true : undefined}
         onCardClick={handleCardClick}
         onHandCardClick={onPlayableClick}
         onCardHover={handleCardHover}
@@ -130,10 +133,10 @@ export default function ArenaBoard({
         combatChosen={combatChosen}
         attackingIds={attackingIds}
         blockingIds={blockingIds}
-        crossZonePlayables={isSpectator ? [] : crossZonePlayables}
+        crossZonePlayables={isSpectator && !perspective ? [] : crossZonePlayables}
         onPlayCrossZone={onPlayCrossZone}
         helperEmblems={game?.myHelperEmblems}
-        showHand={isSpectator}
+        showHand={isSpectator || perspective}
       />
     </BoardShell>
   )

@@ -11,6 +11,17 @@
   font-size: var(--fs-sm);
 }
 
+/* Errores de la partida (plays rechazados, fallos de envío) sobre el tablero: */
+.game-error-banner {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2100; /* sobre el header de juego (2000) y los modales (1900), bajo los toasts */
+  max-width: min(560px, 92vw);
+  pointer-events: auto;
+}
+
 .game-turn {
   color: var(--gold-500);
   font-weight: 700;

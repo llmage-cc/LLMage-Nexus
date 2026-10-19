@@ -17,6 +17,7 @@ import {
   CONSTRUCTED_TOURNAMENT_TYPES,
   isConstructedTournamentType,
   tournamentTypeNameOf,
+  gameTypeLabel,
 } from './constants'
 import type { CreateTableForm } from './useCreateTableForm'
 import Field from '../../ui/Field'
@@ -114,7 +115,7 @@ export default function GeneralTab({ form }: { form: CreateTableForm }) {
           <select value={form.gameType} onChange={(e) => form.setGameType(e.target.value)}>
             {form.effectiveGameTypes.map((g) => (
               <option key={g.name} value={g.name}>
-                {g.name} ({g.minPlayers}-{g.maxPlayers})
+                {gameTypeLabel(g.name, t)} ({g.minPlayers}-{g.maxPlayers})
               </option>
             ))}
           </select>

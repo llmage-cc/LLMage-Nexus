@@ -1,0 +1,274 @@
+.replay-files-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  flex: 1;
+  min-height: 0;
+  animation: fadeIn 0.15s ease-out;
+}
+
+/* Header & Controls */
+.replay-files-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  background: rgb(var(--ink-2-rgb) / 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--veil-2);
+  border-radius: var(--r-mid);
+  padding: var(--sp-4) var(--sp-4h);
+}
+
+.replay-files-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.replay-files-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2h);
+}
+
+.replay-files-title {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  color: var(--fg-hi);
+  letter-spacing: -0.01em;
+}
+
+.replay-files-subtitle {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--fg-3);
+}
+
+.replay-files-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2h);
+}
+
+.replay-files-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.replay-files-search-input {
+  padding: var(--sp-2) var(--sp-6) var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  min-width: 220px;
+}
+
+.replay-files-search-clear {
+  position: absolute;
+  right: 4px;
+}
+
+.replay-files-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1h);
+}
+
+.replay-files-refresh-btn.spinning .refresh-icon {
+  animation: spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .replay-files-refresh-btn.spinning .refresh-icon {
+    animation: none;
+  }
+}
+
+/* Resolved directory line */
+.replay-files-dir {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+}
+
+.replay-files-dir.missing {
+  color: var(--err);
+}
+
+.replay-files-dir-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-weight: 700;
+  color: var(--fg-2);
+  white-space: nowrap;
+}
+
+.replay-files-dir-path {
+  font-family: var(--font-mono, monospace);
+  color: var(--fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Rows */
+.replay-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: var(--sp-1);
+}
+
+.replay-files-row {
+  display: grid;
+  grid-template-columns: 11rem 2fr 1.4fr 5rem 8rem;
+  gap: var(--sp-2h);
+  align-items: center;
+}
+
+.replay-files-header-row {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--sp-1) var(--sp-2);
+  background: rgb(var(--ink-2-rgb) / 0.9);
+  border-bottom: 1px solid var(--veil-2);
+}
+
+.replay-sort-header {
+  justify-content: flex-start;
+  font-weight: 600;
+  color: var(--fg-3);
+}
+
+.replay-sort-header.active {
+  color: var(--fg-hi);
+  font-weight: 800;
+}
+
+.replay-files-item {
+  padding: var(--sp-2h) var(--sp-3);
+  background: rgb(var(--ink-2-rgb) / 0.7);
+  border: 1px solid var(--veil-1);
+  border-radius: var(--r-mid);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.replay-files-item:hover {
+  border-color: rgb(var(--brand-rgb) / 0.3);
+  background: rgb(var(--ink-2-rgb) / 0.85);
+}
+
+.replay-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-0h);
+  font-size: var(--fs-sm);
+  color: var(--fg-2);
+}
+
+.replay-cell-date {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1h);
+}
+
+.replay-date-abs {
+  color: var(--fg-2);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-xs);
+}
+
+.replay-date-rel {
+  color: var(--fg-3);
+  font-size: var(--fs-2xs);
+}
+
+.replay-rated {
+  color: var(--gold-300);
+}
+
+.replay-name-line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1h);
+  min-width: 0;
+}
+
+.replay-name {
+  font-weight: 700;
+  color: var(--fg-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-id {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--fg-3);
+}
+
+.replay-type-line {
+  font-size: var(--fs-2xs);
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-cell-winner {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-cell-size {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+}
+
+.replay-muted {
+  color: var(--fg-3);
+}
+
+.replay-cell-action {
+  flex-direction: row;
+  justify-content: flex-end;
+}
+
+/* Download rides beside Watch Replay: same visual language (soft button),
+   real anchor so the BROWSER owns the transfer (progress, resume, no JS-heap
+   copy of a possibly-huge save). Text-decoration reset only affects the label. */
+.replay-download-btn {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Row-level failure of THIS row's Watch Replay (a refused load must be visible
+   where it was clicked, not only on the page banner). Spans the whole row grid. */
+.replay-row-error {
+  grid-column: 1 / -1;
+  margin-top: var(--sp-1h);
+}
+
+.replay-icon {
+  font-size: var(--fs-sm);
+}

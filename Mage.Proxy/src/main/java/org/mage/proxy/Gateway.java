@@ -28,21 +28,21 @@ import com.google.gson.JsonParser;
 /**
  * WebSocket server: transport between the web client and the proxy logic.
  * <p>
- * Seguridad local-first (todo aplicado en el transporte):
- * - bind a 127.0.0.1 por defecto (configurable con --bind)
- * - rechazo de orígenes WebSocket que no sean localhost (o --allowedOrigins)
- * - límite de tamaño de mensaje y de frecuencia por conexión
+ * Local-first security, all enforced at the transport:
+ * - bind to 127.0.0.1 by default (configurable with --bind)
+ * - reject WebSocket origins that are not localhost (or --allowedOrigins)
+ * - per-connection message size and rate limits
  */
 public class Gateway extends WebSocketServer {
 
     private static final Logger logger = Logger.getLogger(Gateway.class.getName());
     private final Config config;
-    /** conn -> su ProxyClient (sesión propia o compartida por cuenta). */
+    /** conn -> its ProxyClient (a dedicated session, or one shared per account). */
     private final Map<WebSocket, ProxyClient> byConn = Collections.synchronizedMap(new IdentityHashMap<WebSocket, ProxyClient>());
-    /** host|username -> ProxyClient conectado (para re-adjuntar ventanas de la misma cuenta). */
+    /** host|username -> connected ProxyClient (to re-attach windows of the same account). */
     private final Map<String, ProxyClient> byAccount = new ConcurrentHashMap<>();
 
-    /** recuento de mensajes por conexión (ventana deslizante de 1 s) */
+    /** per-connection message count (1 s sliding window) */
     private final Map<WebSocket, String> connIp = Collections.synchronizedMap(new IdentityHashMap<WebSocket, String>());
 
     /** WebSocket transport errors, only to throttle the log: one stack, then one line per minute. */
@@ -72,11 +72,20 @@ public class Gateway extends WebSocketServer {
         this(config, config.getWsPort());
     }
 
+    /** Deployment gating knobs (auth token, pin, hide, branding), resolved once at startup. */
+    private final DeploymentConfig deployment;
+
     public Gateway(Config config, int port) {
         super(new InetSocketAddress(config.getBindAddress(), port), drafts());
         this.config = config;
+        this.deployment = DeploymentConfig.from(config);
         this.simRoster = SimRoster.fromConfig(config);
         setReuseAddr(true);
+    }
+
+    /** The deployment gating config (auth token, pinned target, branding) resolved at startup. */
+    public DeploymentConfig deployment() {
+        return deployment;
     }
 
     private final SimRoster simRoster;
@@ -221,8 +230,8 @@ public class Gateway extends WebSocketServer {
         connIp.put(conn, ip);
         conn.setAttachment(new Object());
         Activity.wsOpen(ip, origin);
-        // Lazy: la sesión se crea en handleConnect (al recibir `connect`), para poder
-        // re-adjuntar la conexión a una sesión existente de la misma cuenta.
+        // Lazy: the session is created in handleConnect (on `connect`), so the connection can be
+        // re-attached to an existing session of the same account.
         sendReady(conn);
     }
 
@@ -348,12 +357,14 @@ public class Gateway extends WebSocketServer {
 
     private final Object fallbackSendLock = new Object();
 
-    /** Intercepta `connect` para decidir create-vs-attach antes de crear la sesión. */
-    private void handleConnect(WebSocket conn, String message) {
+    /** Intercepts `connect` to decide create-vs-attach before creating the session. */
+    void handleConnect(WebSocket conn, String message) {
         String requestId = "";
         String host;
         int port;
         String username;
+        String browserId;
+        String authToken;
         String resumeStream;
         long resumeSeq;
         try {
@@ -366,12 +377,36 @@ public class Gateway extends WebSocketServer {
             host = args.has("host") ? args.get("host").getAsString() : config.getServerHost();
             port = args.has("port") ? args.get("port").getAsInt() : config.getServerPort();
             username = args.has("username") ? args.get("username").getAsString() : config.getUsername();
+            browserId = args.has("browserId") && !args.get("browserId").isJsonNull()
+                    ? args.get("browserId").getAsString() : "";
+            authToken = args.has("authToken") && !args.get("authToken").isJsonNull()
+                    ? args.get("authToken").getAsString() : "";
             resumeStream = ProxyClient.resumeStream(args);
             resumeSeq = ProxyClient.resumeSeq(args);
         } catch (Exception ex) {
             send(conn, ProxyProtocol.resultJson("connect", requestId, false, ProxyProtocol.ERR_BAD_JSON, "Bad JSON: " + ex.getMessage()));
             return;
         }
+
+        // Deployment gating, BEFORE any session create/attach. The auth token is
+        // presented on EVERY connect including a reload's auto-attach, so the gate runs first and
+        // an attach does not bypass it. A missing/wrong token answers the typed connect_error AND
+        // closes 4401: the browser will not retry while the socket is open, so the close is
+        // mandatory. An OPEN proxy (no token configured) is a no-op — localhost dev unchanged.
+        if (!deployment.tokenAccepted(authToken)) {
+            logger.warning("connect rejected: bad or missing auth token");
+            send(conn, ProxyProtocol.connectErrorJson(DeploymentConfig.BAD_AUTH_TOKEN_MESSAGE));
+            closeForRejection(conn, DeploymentConfig.AUTH_REJECTED_CLOSE_REASON);
+            return;
+        }
+
+        // Pinned target: the proxy FORCES it on every connect, ignoring the
+        // client's host/port. Applied here so the account key, the attach match and the dial all
+        // agree on the same effective target.
+        DeploymentConfig.Target effective = deployment.effectiveTarget(host, port);
+        host = effective.host;
+        port = effective.port;
+
         DeckValidation.State dbState = DeckValidation.getState();
         if (dbState == DeckValidation.State.NOT_STARTED || dbState == DeckValidation.State.BUILDING) {
             send(conn, ProxyProtocol.resultJson("connect", requestId, false, ProxyProtocol.ERR_WARMING_UP,
@@ -382,6 +417,18 @@ public class Gateway extends WebSocketServer {
         host = ProxyClient.normalizeHost(host);
         ProxyClient existing = byAccount.get(key);
         if (existing != null && (existing.isConnected() || existing.isRelinking()) && existing.isSameSession(host, port, username)) {
+            // Cross-browser same-name refusal on the ATTACH path. Without this the
+            // same-name collision guard is bypassed entirely: any other browser that guesses a name
+            // gets attached to the holder's live session (its games, its chat) instead of being
+            // refused. The guard's own same-browserId takeover exception is the legitimate reconnect
+            // (a second tab / a reload) and still passes — browserId is per-BROWSER.
+            if (!AnonNameGuard.shared().matches(host, port, username, browserId)) {
+                logger.warning("connect rejected: anon name '" + username + "' is held at "
+                        + host + ":" + port + " by a different browser");
+                send(conn, ProxyProtocol.connectErrorJson(DeploymentConfig.ANON_NAME_IN_USE_MESSAGE));
+                closeForRejection(conn, DeploymentConfig.ANON_NAME_IN_USE_CLOSE_REASON);
+                return;
+            }
             // a session that is logging in again after losing the server keeps its clients:
             // they get the relink progress and the restored games on the same stream
             logger.info("connect: attach conn to existing session key=" + key);
@@ -402,6 +449,23 @@ public class Gateway extends WebSocketServer {
                 + (existing == null ? "null" : ("connected=" + existing.isConnected()
                         + " sameSession=" + existing.isSameSession(host, port, username))) + ")");
         ProxyClient pc = newClient();
+        // Anon same-name collision guard: register-and-check is ATOMIC per
+        // host:port, BEFORE the dial. A connect whose anon name is already held at that target by a
+        // DIFFERENT browserId is refused with the typed connect_error + 4401; the older session is
+        // never touched. A same-browserId retake is the legitimate reconnect takeover (allowed,
+        // replacing the entry). Both browserIds empty = the old behaviour (do not block).
+        AnonNameGuard.Decision guard = AnonNameGuard.shared()
+                .checkAndRegister(pc, host, port, username, browserId);
+        if (!guard.allowed) {
+            logger.warning("connect rejected: anon name '" + username + "' already held at "
+                    + host + ":" + port + " by a different browserId");
+            send(conn, ProxyProtocol.connectErrorJson(DeploymentConfig.ANON_NAME_IN_USE_MESSAGE));
+            closeForRejection(conn, DeploymentConfig.ANON_NAME_IN_USE_CLOSE_REASON);
+            pc.dispose();
+            return;
+        }
+        // The entry (if new) is released on EVERY teardown path via ProxyClient.dispose().
+        pc.setActiveConnect(guard.active);
         byConn.put(conn, pc);
         // registered before its login ends: a second connect of this account meanwhile (a
         // retry, another tab) queues behind this login and attaches to it instead of opening a
@@ -412,6 +476,23 @@ public class Gateway extends WebSocketServer {
             byAccount.replace(key, existing, pc);
         }
         pc.onClientMessage(conn, message);
+    }
+
+    /**
+     * Closes a connection after a connect rejection the user can fix by resubmitting the form. The
+     * browser's WS manager treats an OPEN socket as "already connected" and silently drops a
+     * retried connect, so the close is mandatory; 4401 tells the client not to auto-reconnect (an
+     * auto-reconnect would resend the SAME rejected frame and loop). The typed error is delivered
+     * before this close.
+     */
+    void closeForRejection(WebSocket conn, String reason) {
+        try {
+            if (conn != null && conn.isOpen()) {
+                conn.close(DeploymentConfig.CLOSE_CODE_AUTH_REJECTED, reason);
+            }
+        } catch (Throwable t) {
+            logger.warning("Failed to close socket after connect rejection: " + t.getMessage());
+        }
     }
 
     /** A {@code leaving} notice: the page is being closed or navigated away. */
@@ -428,7 +509,7 @@ public class Gateway extends WebSocketServer {
     }
 
     ProxyClient newClient() {
-        return new ProxyClient(config, this);
+        return new ProxyClient(config, this, deployment);
     }
 
     /** requestId of a `ping` command ("" when it has none), or null for any other message. */
@@ -455,16 +536,15 @@ public class Gateway extends WebSocketServer {
     }
 
     /**
-     * Permite conexiones sin Origin (node/self-test) y orígenes de localhost.
-     * Si --allowedOrigins está definido, solo se aceptan esos valores exactos.
+     * Allows connections without an Origin (node/self-test) and localhost origins.
+     * When --allowedOrigins is set, only those exact values are accepted.
      * <p>
-     * El launcher de escritorio (Tauri) cuenta como "localhost" aunque su
-     * Origin no lo sea literalmente: en macOS/Linux usa el esquema custom
-     * {@code tauri://localhost} (host ya "localhost"), pero en Windows
-     * WebView2 no soporta esquemas custom y Tauri sirve la app vía un
-     * "virtual host" {@code http://tauri.localhost} — mismo proceso local,
-     * pero con host distinto — por eso se acepta explícitamente además del
-     * propio "localhost".
+     * The desktop launcher (Tauri) counts as "localhost" even when its Origin is
+     * not literally localhost: on macOS/Linux it uses the custom scheme
+     * {@code tauri://localhost} (host already "localhost"), but on Windows
+     * WebView2 does not support custom schemes and Tauri serves the app through a
+     * "virtual host" {@code http://tauri.localhost} — same local process, different
+     * host — so it is accepted explicitly in addition to "localhost" itself.
      */
     boolean originAllowed(String origin) {
         if (origin == null || origin.isEmpty()) {

@@ -5,6 +5,8 @@ import DialogShell from '../ui/DialogShell'
 import { useTranslation } from '../i18n'
 import { formatMatchDuration } from '../lobby/FinishedMatchesPanel'
 import { downloadLatestGameLog, toSavedEntries } from '../system/gameLogs'
+import { isLlmTabOffered } from './llmTab'
+import { downloadLlmTranscript } from './llmTranscript'
 import { localizeGameEndMessage } from './serverMessageTranslation'
 import { getMatchStats, keyCardOf } from './matchStats'
 import { useCardImageUrl } from '../cards/useCardImageUrl'
@@ -56,6 +58,8 @@ export default function GameEndDialog() {
   const log = useStore((s) => s.log)
   const watchedGameId = useStore((s) => s.gameId)
   const lobbyTables = useStore((s) => s.lobby?.tables)
+  const capabilities = useStore((s) => s.capabilities)
+  const gameEndLlmSeats = useStore((s) => s.gameEndLlmSeats)
   const { t } = useTranslation()
 
   if (!end || sideboardScreen) return null
@@ -63,8 +67,8 @@ export default function GameEndDialog() {
   const me = game?.players?.find((p) => p.controlled)
   const isSpectator = !me
   const matchOver = end.matchView?.endTime != null || /won the match/i.test(end.matchInfo ?? '') || isSpectator
-  // B.10: la mesa puede tener ya otra partida (Bo3/torneo); sin auto-follow,
-  // solo aviso + botón Seguir (claves game.spectator_game_changed / game.follow_game).
+  // The table may already have another game running (Bo3/tournament); without
+  // auto-follow, only a notice + Follow button (game.spectator_game_changed / game.follow_game).
   const followGameId = isSpectator ? findFollowGameId(lobbyTables, watchedGameId) : null
   const duration = formatMatchDuration(end.startTime, end.endTime ?? end.matchView?.endTime ?? undefined)
 
@@ -74,6 +78,19 @@ export default function GameEndDialog() {
       entries: toSavedEntries(log),
     })
   }
+
+  // Discoverability: the LLM tab buries the transcript in
+  // a per-seat drawer section; the end dialog is where the player actually looks.
+  // While the game is still open (the "match continues" dialog) the seats come
+  // from the live view, filtered per viewer exactly as the LLM tab serves them.
+  // The match-over paths null `game` AND `gameId` BEFORE this
+  // dialog renders, so there both come from the event-time snapshot the game-end
+  // handlers took under the same gate (`gameEndLlmSeats`).
+  const liveSeats =
+    game && isLlmTabOffered({ capabilities, game, replay: null }) ? (game.llmDebug ?? []) : []
+  const fromSnapshot = liveSeats.length === 0
+  const seats = fromSnapshot ? (gameEndLlmSeats?.seats ?? []) : liveSeats
+  const transcriptGameId = fromSnapshot ? (gameEndLlmSeats?.gameId ?? null) : watchedGameId
 
   let winnerName: string | null = null
   const rawEndInfo = end.gameInfo || end.matchInfo || ''
@@ -165,6 +182,16 @@ export default function GameEndDialog() {
         {hint && <p className="end-hint">{hint}</p>}
 
         <div className="end-actions">
+          {seats.map((llm, idx) => (
+            <Button
+              key={`${llm.playerName}-${idx}`}
+              variant="subtle"
+              data-testid="end-download-transcript"
+              onClick={() => downloadLlmTranscript(llm, { gameId: transcriptGameId })}
+            >
+              {t('game', 'llm_download_transcript')}
+            </Button>
+          ))}
           <Button variant="subtle" data-testid="end-download-log" onClick={handleDownloadLog}>
             {t('system', 'log_download')}
           </Button>

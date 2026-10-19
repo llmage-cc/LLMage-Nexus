@@ -1,5 +1,5 @@
 /**
- * P3 — galería de estados (`#/gallery`, solo dev).
+ * State gallery (`#/gallery`, dev only).
  *
  * Siempre: recorre TODAS las entradas y exige que cada una monte sin errores de
  * página (el número lo fija el builder; hoy 160+).
@@ -88,7 +88,13 @@ async function openGallery(page: Page) {
   // trazos sólidos → capturas deterministas.
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/#/gallery')
-  await expect(page.locator('[data-gallery]')).toBeVisible()
+  // The first navigation under the dev server builds the module graph on demand:
+  // measured 6.6 s to `load` and ~12 s to the gallery root on a cold vite, well under
+  // the default 5 s once an earlier spec has warmed it. Budget the mount, not the
+  // compiler — this is a dev-only surface, so the number should measure "the app
+  // mounted", not how much vite still had queued. Reproduced on the untouched base,
+  // so it is a pre-existing cold-start fragility, not a product regression.
+  await expect(page.locator('[data-gallery]')).toBeVisible({ timeout: 60_000 })
   // Espera a las fuentes antes de montar entradas: las medidas de layout
   // (`useZoneScale`, tarjetas) usan métricas finales y no las de reserva.
   await page.evaluate(() => document.fonts.ready)
@@ -120,7 +126,7 @@ async function showEntry(page: Page, id: string) {
   await page.waitForTimeout(150)
 }
 
-test.describe('galería de estados (P3)', () => {
+test.describe('state gallery', () => {
   test('todas las entradas montan sin errores de página', async ({ page }) => {
     const pageErrors: string[] = []
     page.on('pageerror', (error) => pageErrors.push(String(error)))
@@ -195,6 +201,8 @@ test.describe('galería de estados (P3)', () => {
           viewportHeight: window.innerHeight,
           backdropAlign: getComputedStyle(backdrop).alignItems,
           bodyOverflowY: getComputedStyle(body).overflowY,
+          panelOverflowY: getComputedStyle(panel).overflowY,
+          panelScrolls: panel.scrollHeight > panel.clientHeight + 1,
           submitBottom: (() => {
             const btn = document.querySelector('.create-submit-btn') as HTMLElement | null
             if (!btn) return null
@@ -208,21 +216,31 @@ test.describe('galería de estados (P3)', () => {
         }
       })
 
-      expect(metrics, `el wizard no montó el panel`).not.toBeNull()
+      expect(metrics, `the wizard did not mount the panel`).not.toBeNull()
       const m = metrics!
-      // El panel completo dentro del viewport: el complaint era "no puedo ver
-      // todo el menú a la vez".
+      // The whole panel inside the viewport: the complaint was "I cannot see
+      // the whole menu at once".
       expect(m.top).toBeGreaterThanOrEqual(0)
       expect(m.bottom).toBeLessThanOrEqual(m.viewportHeight + 1)
-      // El fondo conserva el `safe center` (si `.overlay` vuelve, esto falla).
+      // The backdrop keeps `safe center` (if `.overlay` comes back, this fails).
       expect(m.backdropAlign).toBe('safe center')
-      // El scroll vive en el cuerpo del paso, para que el stepper y el botón
-      // Crear Mesa sigan a mano sin desplazar el panel entero.
-      expect(m.bodyOverflowY).toBe('auto')
-      // Pasos del wizard de igual anchura: si una etiqueta larga ensancha un
-      // paso, el conector (positionado en %) se desalinea.
+      // The panel is the ONLY scroll axis and the step body is an intrinsically
+      // sized item, with no `overflow` of its own: that is the invariant pinned
+      // by `DialogShell.overflow.test.ts` (`.create-table-body` has
+      // `flex: none` and no `overflow-y`). The earlier assertion required
+      // `overflow-y: auto` on the body — the upstream design, which scrolls the
+      // step inside the panel — but that inner pane collapsed to ~297 px (36 px
+      // at 1280×577) under the panel's height cap and hid every field below
+      // the fold; that is why the body stopped being a pane.
+      // What the claim requires — that the wizard is not clipped — is checked
+      // where it actually happens: the panel scrolls and the content fits.
+      expect(m.bodyOverflowY).toBe('visible')
+      expect(m.panelOverflowY).toBe('auto')
+      expect(m.panelScrolls).toBe(true)
+      // Wizard steps of equal width: if a long label widens a step, the
+      // connector (positioned in %) falls out of alignment.
       expect(new Set(m.stepWidths).size).toBe(1)
-      // El botón Crear Mesa queda dentro del viewport sin desplazar el panel.
+      // The Create Table button stays inside the viewport without moving the panel.
       if (m.submitBottom !== null) {
         expect(m.submitBottom).toBeLessThanOrEqual(m.viewportHeight + 1)
       }

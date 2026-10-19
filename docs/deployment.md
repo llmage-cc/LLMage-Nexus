@@ -1,5 +1,7 @@
 # Deployment — stack, logs, builds, dashboard
 
+> **LLMage Nexus documentation:** for the current guide see [Deployment](operator-guide/deployment.md). This page is inherited from upstream XMage Nexus and may lag behind the client.
+
 ## Stack control
 
 - `node scripts/ctl.mjs start|stop|restart|status [server|proxy|vite|all]` — normal control (non-blocking).
@@ -19,6 +21,35 @@ XMage `17171` (testMode) · proxy WS `8787` · proxy HTTP page `8788/index.html`
 - Requirements: JDK 17 (Homebrew `openjdk@17`; `/usr/bin/java` stub breaks daemons — `scripts/lib.mjs` resolves the real binary), Maven 3.9, Node 20+ for the web client and the scripts (**Node ≥24 for `mcp/`**, which runs TypeScript directly via native type stripping). Server and proxy must run with `--add-opens=java.base/java.io=ALL-UNNAMED` (jboss-serialization on JDK 17).
 - XMage version `1.4.62-V1` (upstream tag `xmage_1.4.62V1`). Release bumps are a one-line pom change + recompile, but strict version checks mean a mismatched server rejects the proxy. Default target server: `beta.xmage.today:17171`.
 
+## LLM-capable dev server (`NEXUS_FORK_DIR`)
+
+`forkDir()` (`scripts/lib.mjs`) resolves the engine checkout in this order:
+`NEXUS_FORK_DIR` → `../xmage-fork` (the **stock** Adamychen fork — no
+`COMPUTER_LLM`/`COMPUTER_P1`, so `capabilities.llm` is `false`) → this repo.
+For LLM-live work point it at the LLM trunk, e.g.
+`NEXUS_FORK_DIR=/path/to/llmage-engine node scripts/ctl.mjs start all`.
+This is a deliberate dev-only affordance, not a default: the stock fork stays the
+default so the dev stack matches what upstream ships.
+
+Three gotchas when flipping an existing runtime:
+
+- `local-server/config/config.xml` is seeded **once** from whatever fork `forkDir()`
+  resolved to at first start. After switching forks, delete `local-server/` (gitignored
+  runtime) so the seed re-reads the new fork's release config (the LLM trunk's registers
+  `Computer - LLM`).
+- `.run/server-deps.txt` (server 3rd-party classpath cache) is keyed by pom mtime and
+  survives fork switches — delete it too when changing `NEXUS_FORK_DIR`.
+- The seeded config expects **versioned** plugin jars (`mage-player-llm-<v>.jar`)
+  but `Mage.Server.Plugins/Mage.Player.LLM|P1` build unversioned `finalName`s; after
+  `copyPluginJars`, copy `mage-player-llm.jar` → `mage-player-llm-<XMAGE_VERSION>.jar`
+  (currently `1.4.62`; same for `-p1`) inside `local-server/plugins/`, and remove stale
+  `*-1.4.61.jar` leftovers copied from the engine's old `target/` dirs.
+
+A bare `COMPUTER_LLM` seat probes a localhost Ollama at construction
+(`LLMConfig.fetchModelContextWindow`) and fails with `Connection refused` when none
+runs; to instantiate a seat without a live backend use a client-key config
+(`useClientKey: true` + explicit `modelContextWindow`, see `LlmConfigs.java`).
+
 ## Second flavor: XDHS (`mage.xdhs.net`)
 
 The proxy is also built against the xenohedron fork (XDHS server, tag
@@ -29,8 +60,8 @@ two proxy processes:
   then `mvn -Dmage.version=1.5.8`. `Mage.Proxy/pom.xml` takes the XMage
   dependency version from the `mage.version` property. See
   `patches/xdhs/README.md`.
-- Launcher: the `proxy-xdhs` component (CI job `proxy-xdhs` in
-  `modules.yml`) is started by the Tauri shell as a second proxy instance on
+- Launcher: the `proxy-xdhs` component (built from `patches/xdhs/`; see
+  `patches/xdhs/README.md`) is started by the Tauri shell as a second proxy instance on
   ports 8797/8798 with its own card database (`proxy-xdhs/` under the data
   dir). The web login has an "XDHS" preset; everything else is shared.
 - Host: `scripts/deploy/host-xdhs.sh` builds and restarts
@@ -57,6 +88,6 @@ Deploy/update with `ops/status/deploy.sh` (never restarts the proxy). Details: `
 
 - `site/content.json` — canonical dashboard copy (project, phases, features, guards). Keep in sync with `ROADMAP.md`.
 - `scripts/gen-dashboard.mjs` — merges `content.json` + test artefacts → `site/status.json`.
-- `scripts/dashboard-ci.mjs` — lightweight CI layers for Pages pushes.
-- `scripts/integration-report.mjs` — nightly real-stack (self-test/human-test/e2e-real) → `reports/integration-result.json`.
-- Workflow `.github/workflows/pages.yml`: push = light layers, nightly cron = + integration. Pages **source must be "GitHub Actions"** (repo Settings → Pages).
+- `scripts/dashboard-ci.mjs` — lightweight dashboard layers (unit+coverage, typecheck, build, fake-e2e, proxy java); run it locally.
+- `scripts/integration-report.mjs` — real-stack run (self-test/human-test/e2e-real) → `reports/integration-result.json`; run it on demand.
+- **No CI ships with this repository**, so there is no `.github/workflows/pages.yml`: run the layers above by hand and publish `site/` to any static host (GitHub Pages also works from a branch).

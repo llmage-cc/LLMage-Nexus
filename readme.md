@@ -1,5 +1,32 @@
 # XMage Nexus — Modern XMage Client for MTG (Web + Desktop)
 
+> **LLMage fork.** This repository is the [LLMage](https://llmage.cc) fork of
+> [XMage Nexus](https://github.com/Adamychen/xmage-nexus), for use with
+> [llmage.cc](https://llmage.cc) and LLMage servers. It adds LLM opponent seats, per-seat
+> model and provider configuration, live LLM conversations in the game and replay viewers,
+> and a browser-key relay. The [LLMage additions](#what-the-llmage-fork-adds) and
+> [License and credits](#license-and-credits) sections are the fork-specific parts; the rest of
+> this README is the upstream XMage Nexus documentation.
+
+## What the LLMage fork adds
+
+LLM seats are configured per player in the New Game wizard. Pick the **LLM AI vs LLM AI**
+preset, or set either seat to **LLM AI**, then give each seat its own model, OpenAI-compatible
+endpoint, reasoning effort, personality, and conversation limits. The two seats can use
+different providers and models.
+
+![New Game wizard with the LLM AI vs LLM AI preset and the per-seat LLM configuration open](docs/media/llmage/create-llm-seats.png)
+
+During a game, the **LLM** drawer on the board shows one conversation per LLM seat — the engine
+prompt, the model's reasoning, and its answer — as the game runs.
+
+![LLM-vs-LLM board with the LLM drawer showing a model's reasoning](docs/media/llmage/game-llm-board.png)
+
+Saved games keep those transcripts. The replay viewer's **LLM** tab lists the exchanges recorded
+up to the displayed frame.
+
+![Replay LLM tab listing the recorded conversation history](docs/media/llmage/replay-llm-history.png)
+
 **XMage Nexus** is a modern, high-performance **MTG** client for [XMage](https://github.com/magefree/mage), featuring a visual aesthetic inspired by modern digital card games. Play in your **browser** or as a **one-click desktop app** — no Java setup either way.
 
 > **Note:** XMage Nexus is an independent modern client interface. The rules engine and card database remain the battle-tested XMage Java server (`Mage.Server`).
@@ -24,7 +51,7 @@
 | Way | How |
 |---|---|
 | **Desktop app** (Windows / macOS / Linux) | Download the launcher from [Releases](https://github.com/Adamychen/xmage-nexus/releases): Windows `.msi`/`.exe`, macOS `.dmg` (Apple Silicon), Linux `.AppImage`/`.deb`/`.rpm`. It bundles the JRE + XMage server + proxy and boots everything with one click (~15 MB, auto-updates). |
-| **Browser** (zero install) | Join a hosted instance — see the [project page](https://adamychen.github.io/xmage-nexus/) — or self-host with [docs/deploy-tunnels.md](docs/deploy-tunnels.md). |
+| **Browser** (zero install) | Join a hosted instance — see the [project page](https://adamychen.github.io/xmage-nexus/) — or self-host with [docs/operator-guide/deployment.md](docs/operator-guide/deployment.md). |
 | **Local dev** | Pick a variant below: [web-only](#variant-a--web-only-no-java-no-maven-fastest-loop) (no Java/Maven) or [full stack](#variant-b--full-stack-real-xmage-server--proxy--web-client). |
 
 ## Architecture
@@ -225,12 +252,18 @@ npm run test:e2e:fullflow
 
 ## Documentation
 
-- **[docs/](docs/)** — onboarding index: reading order, ports, and what each doc is authoritative for.
+- **[docs/](docs/README.md)** — the documentation home: getting started, player guide, operator guide, developer guide, and reference.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — how to add an event, action, type, or mechanic; enforced rules; file map.
 - **[ROADMAP.md](ROADMAP.md)** — vision, current state, parity matrix and the single live list of pending work.
 - **[AGENTS.md](AGENTS.md)** — development rules, commands, conventions, known bugs.
 - **[Mage.Proxy/README.md](Mage.Proxy/README.md)** — full protocol reference (actions, events, serialization).
 
-## License
+## License and credits
 
 This web client is a separate project from the XMage server. See [LICENSE.txt](LICENSE.txt) for details.
+
+- [XMage](https://github.com/magefree/mage) — rules engine, card data, and protocol, by BetaSteward and the XMage contributors.
+- [XMage Nexus](https://github.com/Adamychen/xmage-nexus) — the web and desktop client this fork is based on, by Adamychen and the XMage Nexus contributors.
+- Card images and card identifiers come from [Scryfall](https://scryfall.com); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the full attribution list.
+
+Magic: The Gathering is a trademark of Wizards of the Coast LLC. This project is not affiliated with, sponsored, or endorsed by Wizards of the Coast or Scryfall.

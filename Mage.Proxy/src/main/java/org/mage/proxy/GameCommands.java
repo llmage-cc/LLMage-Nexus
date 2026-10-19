@@ -61,6 +61,25 @@ final class GameCommands {
         return names;
     }
 
+    /**
+     * The player-action verbs: they carry no meaning in a replay (which holds no seat), so while a
+     * replay is loaded they are refused before any server RPC (the replay action gate).
+     */
+    static boolean isPlayerAction(String action) {
+        switch (action) {
+            case "sendPlayerAction":
+            case "sendPlayerUUID":
+            case "sendPlayerBoolean":
+            case "sendPlayerInteger":
+            case "sendPlayerString":
+            case "sendPlayerManaType":
+            case "cheatSetup":
+                return true;
+            default:
+                return false;
+        }
+    }
+
     interface Answer {
         boolean send() throws Exception;
     }
@@ -84,21 +103,41 @@ final class GameCommands {
     }
 
     static boolean handle(String action, WebSocket conn, String requestId, JsonObject args, CommandContext ctx) throws Exception {
+        if (isPlayerAction(action)
+                && CapabilityGate.rejectPlayerActionDuringReplay(ctx, conn, action, requestId)) {
+            return true;
+        }
         switch (action) {
             case "replayGame": {
                 UUID gameId = JsonArgs.uuid(args, "gameId", null);
+                if (ctx.liveGameActive()) {
+                    ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, false, ProxyProtocol.ERR_FAILED,
+                            "Cannot load a replay while a game is active — stop watching/playing first"));
+                    return true;
+                }
                 boolean ok = gameId != null && ctx.session().replayGame(gameId);
+                if (ok) {
+                    ctx.markReplayActive(gameId);
+                }
                 ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, ok, ok ? null : ProxyProtocol.ERR_FAILED, null));
                 return true;
             }
             case "startReplay": {
                 UUID gameId = JsonArgs.uuid(args, "gameId", null);
-                ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, ctx.session().startReplay(gameId), null, null));
+                boolean ok = ctx.session().startReplay(gameId);
+                if (ok) {
+                    ctx.markReplayActive(gameId);
+                }
+                ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, ok, null, null));
                 return true;
             }
             case "stopReplay": {
                 UUID gameId = JsonArgs.uuid(args, "gameId", null);
-                ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, ctx.session().stopReplay(gameId), null, null));
+                boolean ok = ctx.session().stopReplay(gameId);
+                if (ok) {
+                    ctx.clearReplay();
+                }
+                ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, ok, null, null));
                 return true;
             }
             case "replayNext": {
@@ -115,6 +154,47 @@ final class GameCommands {
                 UUID gameId = JsonArgs.uuid(args, "gameId", null);
                 int moves = JsonArgs.getInt(args, "moves", 1);
                 ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, ctx.session().skipForward(gameId, moves), null, null));
+                return true;
+            }
+            case "replaySeek": {
+                // The scrubber RPC is a fork-only addition (Replays.seekTo). Gate on the
+                // server capability BEFORE any server RPC, then on the reflection seam, then on
+                // a local range check (an out-of-range seek throws server-side with no answer).
+                if (CapabilityGate.rejectReplayScrubberWithoutCapability(ctx, conn, action, requestId)) {
+                    return true;
+                }
+                if (!ReplaySeekSupport.available()) {
+                    ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, false,
+                            ProxyProtocol.ERR_CAPABILITY_UNAVAILABLE, CapabilityGate.REPLAY_UNAVAILABLE_MESSAGE));
+                    return true;
+                }
+                UUID gameId = JsonArgs.uuid(args, "gameId", null);
+                if (gameId == null) {
+                    ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, false,
+                            ProxyProtocol.ERR_GAME_ID_REQUIRED, "gameId is required"));
+                    return true;
+                }
+                if (!args.has("stateIndex") || !args.get("stateIndex").isJsonPrimitive()
+                        || !args.getAsJsonPrimitive("stateIndex").isNumber()) {
+                    ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, false,
+                            ProxyProtocol.ERR_INVALID_ARGUMENT, "stateIndex is required and must be a number"));
+                    return true;
+                }
+                int stateIndex = args.get("stateIndex").getAsInt();
+                if (stateIndex < 0) {
+                    ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, false,
+                            ProxyProtocol.ERR_INVALID_ARGUMENT, "stateIndex must be >= 0"));
+                    return true;
+                }
+                int count = ctx.replayStateCount();
+                if (count > 0 && stateIndex >= count) {
+                    ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, false,
+                            ProxyProtocol.ERR_INVALID_ARGUMENT,
+                            "stateIndex " + stateIndex + " is outside the replay range 0.." + (count - 1)));
+                    return true;
+                }
+                boolean ok = ReplaySeekSupport.seek(ctx.session(), gameId, stateIndex);
+                ctx.gateway().send(conn, ProxyProtocol.resultJson(action, requestId, ok, ok ? null : ProxyProtocol.ERR_FAILED, null));
                 return true;
             }
             case "stopWatching": {

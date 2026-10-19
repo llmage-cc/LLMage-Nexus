@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ALREADY_CONNECTED_RETRIES, doConnect, getGateway, reset } from './gateway'
+import { ALREADY_CONNECTED_RETRIES, doConnect, getGateway, probeProxyConfig, reset } from './gateway'
 import { loadResumeToken, saveResumeToken, type ConnectionInfo } from './persistence'
-import { getState } from './state'
+import { getState, setState } from './state'
 import * as cmds from '../net/commands'
 import { gameEventOrder, noteGameEvent } from './gameUtils'
 import { t } from '../i18n'
+import { DEFAULT_PROXY_CONFIG, resetProxyConfigCache } from '../net/proxyConfig'
+import { clearAuthToken, getAuthToken, setAuthToken } from '../net/authToken'
 
 vi.mock('../net/commands', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../net/commands')>()
@@ -67,6 +69,7 @@ describe('doConnect — intentos concurrentes', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    clearAuthToken()
   })
 
   it('dedupe el doble montaje de StrictMode: un solo WS y un solo login, sin error tardío', async () => {
@@ -145,7 +148,7 @@ describe('doConnect — intentos concurrentes', () => {
   })
 
   it('explains a server on another release once, without retrying', async () => {
-    const detail = 'mage.remote.MageVersionException: Wrong client version.<br/>Your version: 1.4.61-V1<br/>Server version: 1.4.62-V1'
+    const detail = 'mage.remote.MageVersionException: Wrong client version.<br/>Your version: 1.4.62-V1<br/>Server version: 1.4.63-V1'
     vi.mocked(cmds.connect).mockResolvedValue({ ok: false, error: detail, errorCode: 'VERSION_MISMATCH' } as never)
     const done = doConnect('localhost', 8787, 'localhost', 17171, 'u', 'p')
     FakeWebSocket.instances[0].triggerOpen()
@@ -153,7 +156,7 @@ describe('doConnect — intentos concurrentes', () => {
     await done
     expect(cmds.connect).toHaveBeenCalledTimes(1)
     expect(getState().phase).toBe('idle')
-    expect(getState().error).toBe(t('errors', 'server_version_mismatch', { server: '1.4.62-V1', proxy: '1.4.61-V1' }))
+    expect(getState().error).toBe(t('errors', 'server_version_mismatch', { server: '1.4.63-V1', proxy: '1.4.62-V1' }))
   })
 
   it('announces the wait before retrying a login the server refused as already connected', async () => {
@@ -250,6 +253,99 @@ describe('doConnect — intentos concurrentes', () => {
       saveResumeToken({ streamId: 's1', seq: 42 }, conn)
       reset()
       expect(loadResumeToken(conn)).toBeNull()
+    })
+  })
+
+  describe('4401 auth rejection', () => {
+    it('surfaces the typed reason, goes idle and does NOT auto-reconnect', async () => {
+      const done = doConnect('localhost', 8787, 'localhost', 17171, 'u', 'p')
+      FakeWebSocket.instances[0].triggerOpen()
+      await vi.advanceTimersByTimeAsync(100)
+      await done
+      expect(getState().phase).toBe('lobby')
+
+      FakeWebSocket.instances[0].onclose?.({ code: 4401, reason: 'Bad or missing auth token' })
+      await vi.advanceTimersByTimeAsync(30000)
+
+      expect(getState().phase).toBe('idle')
+      // The raw proxy payload is mapped to localized segments (ES/DE banner leak):
+      // the auth rejection renders through the existing
+      // login.auth_token keys instead of the English server string.
+      expect(getState().proxyReject).toBe('Token de acceso: Requerido por este proxy')
+      expect(getState().error).toBeNull()
+      expect(getState().link).toBe('ok')
+      // no reconnect socket was opened, and no re-login was attempted
+      expect(FakeWebSocket.instances).toHaveLength(1)
+      expect(cmds.connect).toHaveBeenCalledTimes(1)
+    })
+
+    it('leaves other close codes on the existing reconnect path', async () => {
+      const done = doConnect('localhost', 8787, 'localhost', 17171, 'u', 'p')
+      FakeWebSocket.instances[0].triggerOpen()
+      await vi.advanceTimersByTimeAsync(100)
+      await done
+
+      FakeWebSocket.instances[0].onclose?.({ code: 1006 } as CloseEvent)
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(FakeWebSocket.instances).toHaveLength(2)
+      expect(getState().proxyReject).toBeNull()
+    })
+
+    it('a 4401 rejection forgets the remembered auth token (only a logout or a rejection clears it)', async () => {
+      setAuthToken('sekret')
+      const done = doConnect('localhost', 8787, 'localhost', 17171, 'u', 'p', undefined, undefined, 'sekret')
+      FakeWebSocket.instances[0].triggerOpen()
+      await vi.advanceTimersByTimeAsync(100)
+      await done
+      expect(getAuthToken()).toBe('sekret')
+
+      FakeWebSocket.instances[0].onclose?.({ code: 4401, reason: 'Auth token required' })
+      expect(getAuthToken()).toBe('')
+    })
+
+    it('maps every known canonical rejection to localized segments and leaves unknown reasons verbatim (i18n leak)', async () => {
+      const done = doConnect('localhost', 8787, 'localhost', 17171, 'u', 'p')
+      FakeWebSocket.instances[0].triggerOpen()
+      await vi.advanceTimersByTimeAsync(100)
+      await done
+
+      // The proxy's auth-gate close reason (DeploymentConfig.AUTH_REJECTED_CLOSE_REASON):
+      FakeWebSocket.instances[0].onclose?.({ code: 4401, reason: 'Auth token required' })
+      expect(getState().proxyReject).toBe('Token de acceso: Requerido por este proxy')
+
+      // Its typed connect_error message variant (shown by the fake-mode path):
+      FakeWebSocket.instances[0].onclose?.({ code: 4401, reason: 'Bad or missing auth token' })
+      expect(getState().proxyReject).toBe('Token de acceso: Requerido por este proxy')
+
+      // The anon-name gate: the account/name is held on the server by another browser.
+      FakeWebSocket.instances[0].onclose?.({ code: 4401, reason: 'Name in use by another browser' })
+      expect(getState().proxyReject).toContain('sigue conectada en el servidor')
+      expect(getState().proxyReject).not.toMatch(/Name in use|already in use on that server/)
+
+      // Unknown server detail (could be any stock-server text): passes through verbatim.
+      FakeWebSocket.instances[0].onclose?.({ code: 4401, reason: 'Target refused the login' })
+      expect(getState().proxyReject).toBe('Target refused the login')
+    })
+  })
+
+  describe('reset() across the Disconnect path', () => {
+    afterEach(() => {
+      resetProxyConfigCache()
+      setState({ proxyConfig: DEFAULT_PROXY_CONFIG })
+    })
+
+    it('keeps the probed deployment config so the locked login form survives a Disconnect', async () => {
+      const probed = { authRequired: true, hideServerTarget: true, pinnedTarget: '127.0.0.1:17181', deploymentName: 'LLMage', llmRelay: false }
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(probed) })))
+      await probeProxyConfig('localhost', 8787)
+      expect(getState().proxyConfig).toEqual(probed)
+
+      reset()
+
+      // the store reset must not drop the deployment flags: the login form
+      // still needs authRequired + hideServerTarget after a Disconnect.
+      expect(getState().proxyConfig).toEqual(probed)
+      expect(getState().proxyConfig).not.toBe(DEFAULT_PROXY_CONFIG)
     })
   })
 })

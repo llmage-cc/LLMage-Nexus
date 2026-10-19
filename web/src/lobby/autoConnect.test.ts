@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAutoConnect } from './autoConnect'
+import { canAutoConnect, parseAutoConnect } from './autoConnect'
 
 describe('parseAutoConnect', () => {
   it('devuelve vacío sin parámetros', () => {
@@ -49,5 +49,20 @@ describe('parseAutoConnect', () => {
     const parsed = parseAutoConnect('?proxy=host:99999')
     expect(parsed.proxyHost).toBe('host')
     expect(parsed.proxyPort).toBeUndefined()
+  })
+})
+
+describe('canAutoConnect — reload auto-attach gate (Unit D)', () => {
+  it('always auto-attaches on an ungated deployment (stock proxy)', () => {
+    expect(canAutoConnect(false, false)).toBe(true)
+    expect(canAutoConnect(false, true)).toBe(true)
+  })
+
+  it('auto-attaches a gated deployment only when this tab still holds a token', () => {
+    expect(canAutoConnect(true, true)).toBe(true)
+  })
+
+  it('refuses to auto-attach a gated deployment without a token (no tokenless 4401)', () => {
+    expect(canAutoConnect(true, false)).toBe(false)
   })
 })

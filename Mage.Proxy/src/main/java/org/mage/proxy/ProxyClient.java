@@ -37,16 +37,15 @@ import java.util.logging.Logger;
  * - polls the lobby (tables/users) periodically and publishes it ({@link LobbyPublisher})
  * <p>
  * State it delegates: the authorized connections and their numbered stream
- * ({@link AuthorizedConnections}), the games of the server session ({@link SessionGames}), the
  * server's error detail for rejected commands ({@link ServerMessageMailbox}) and the latest
  * state/prompt per game ({@link ReplayCache}). What stays here is the session lifecycle: login,
  * attach, relink, grace period and release, all under this object's monitor.
  * <p>
- * Seguridad del protocolo (local-first):
- * - cada conexión WebSocket debe hacer connect antes de cualquier otro comando
- *   (auth por conexión: los comandos ajenos se rechazan con NOT_AUTHORIZED)
- * - respuestas con requestId (echo del comando) y errorCode uniforme
- * - las acciones de partida exigen gameId (GAME_ID_REQUIRED si falta)
+ * Protocol security (local-first):
+ * - every WebSocket connection must send connect before any other command
+ *   (per-connection auth: commands from an unauthenticated connection get NOT_AUTHORIZED)
+ * - replies carry the requestId (echoing the command) and a uniform errorCode
+ * - game actions require a gameId (GAME_ID_REQUIRED when absent)
  */
 public class ProxyClient implements MageClient, CommandContext {
 
@@ -54,10 +53,17 @@ public class ProxyClient implements MageClient, CommandContext {
 
     private final Config config;
     private final Gateway gateway;
+    /**
+     * Deployment gating config (pin, token, branding), resolved once by the gateway. Held so the
+     * {@code connect} branch can apply the pinned target to the DIAL, not just to the account key:
+     * {@link Gateway#handleConnect} pins its own locals but hands this client the RAW frame, so
+     * without this a client could still dial a target the operator pinned away.
+     */
+    private final DeploymentConfig deployment;
     private final MageVersion version = new MageVersion(ProxyClient.class);
     private final SessionImpl session;
 
-    /** conexiones WebSocket autorizadas (han hecho connect con éxito) */
+    /** authorized WebSocket connections (they have completed connect) */
     private final AuthorizedConnections connections;
 
     // all commands from web clients are processed in order on one thread
@@ -84,6 +90,12 @@ public class ProxyClient implements MageClient, CommandContext {
     private final ReportSink.Quota reports;
     /** Latest state and open prompt per game (replayed when a connection joins the game). */
     private final ReplayCache replay = new ReplayCache();
+    /**
+     * Replay bookkeeping of this session: whether a replay is loaded (the player-action gate),
+     * which game it drives, and the track length of the last forwarded replay frame (the local
+     * seek range check).
+     */
+    private final ReplayTracker replayTracker = new ReplayTracker();
     private final LobbyPublisher lobby;
 
     /** Login data of the live session, to log in again when the link to the server drops. */
@@ -107,11 +119,30 @@ public class ProxyClient implements MageClient, CommandContext {
     private String accountKey = null;
     private volatile String activityUser = null;
 
+    /**
+     * What this client registered in {@link AnonNameGuard}. Released on EVERY
+     * teardown path via {@link #dispose()} — a registration whose dial then fails must still
+     * release. Identity-checked in the guard, so a name re-registered by another browser after this
+     * client died is never dropped.
+     */
+    private volatile AnonNameGuard.ActiveConnect activeConnect = null;
+
+    /** The anon-guard entry this client owns (set by {@link Gateway#handleConnect}); released in dispose(). */
+    void setActiveConnect(AnonNameGuard.ActiveConnect active) {
+        this.activeConnect = active;
+    }
+
     public String getActivityUser() {
         return activityUser;
     }
 
     private volatile boolean connected = false;
+    /**
+     * Capabilities of the connected XMage server, probed at each successful login (connect and
+     * relink). Reset to the stock answer while a new login runs, so the dispatch gate rejects
+     * LLM-carrying requests until the server has proven the capability.
+     */
+    private volatile ServerCapabilities capabilities = ServerCapabilities.none();
     private final List<ClientCallback> handshakeBuffer = new java.util.LinkedList<>();
     private final ServerMessageMailbox serverMessages = new ServerMessageMailbox();
 
@@ -127,8 +158,8 @@ public class ProxyClient implements MageClient, CommandContext {
             CallbackSequencer.GAP_TIMEOUT_MS);
 
     /**
-     * Normaliza el host del servidor para que la clave de sesión
-     * (Gateway.handleConnect) y el accountKey coincidan. Ver detalle en connect().
+     * Normalizes the server host so the session key
+     * (Gateway.handleConnect) and the accountKey agree. See connect() for the details.
      */
     static String normalizeHost(String host) {
         if ("localhost".equalsIgnoreCase(host)) {
@@ -137,12 +168,42 @@ public class ProxyClient implements MageClient, CommandContext {
         return host;
     }
 
+    /**
+     * The target this client actually DIALS for a connect. With a pin, the pin
+     * wins and the client's host/port are ignored; without one the client's values stand. Shared
+     * with the gateway through {@link DeploymentConfig#effectiveTarget}, so the account key, the
+     * attach match and the dial resolve one deployment to exactly one effective target. Package
+     * seam so a unit test can assert the selection without opening a socket.
+     */
+    DeploymentConfig.Target dialTarget(String clientHost, int clientPort) {
+        return deployment.effectiveTarget(clientHost, clientPort);
+    }
+
+    /**
+     * The {@code Connection.userIdStr} presented to the server: the browser's
+     * per-browser id {@code web:<username>:<uuid>}, so the server's admin/shared-IP discrimination
+     * (which otherwise sees only the host proxy's identity for every player behind it) can tell
+     * users apart. A missing browserId (old clients, direct WS probes) keeps a sane fallback built
+     * from the proxy process's own identity, exactly as before the browserId existed.
+     */
+    static String userIdStr(String browserId) {
+        if (browserId != null && !browserId.trim().isEmpty()) {
+            return browserId.trim();
+        }
+        return System.getProperty("user.name") + ":" + System.getProperty("os.name") + ":mage-proxy";
+    }
+
     public ProxyClient(Config config, Gateway gateway) {
+        this(config, gateway, DeploymentConfig.from(config));
+    }
+
+    public ProxyClient(Config config, Gateway gateway, DeploymentConfig deployment) {
         this.config = config;
         this.gateway = gateway;
+        this.deployment = deployment;
         this.reports = new ReportSink.Quota(config);
         this.session = new SessionImpl(this);
-        this.connections = new AuthorizedConnections(gateway);
+        this.connections = new AuthorizedConnections(gateway, this::capabilities);
         this.lobby = new LobbyPublisher(connections::broadcastUnnumbered);
         this.simManager = new SimManager(config, this::broadcastError, gateway.simRoster());
         gateway.clientCreated();
@@ -201,6 +262,12 @@ public class ProxyClient implements MageClient, CommandContext {
         return connected;
     }
 
+    /** Capabilities of the connected XMage server (stock answer until a login proved them). */
+    @Override
+    public ServerCapabilities capabilities() {
+        return capabilities;
+    }
+
     public boolean isReleased() {
         return released;
     }
@@ -238,6 +305,12 @@ public class ProxyClient implements MageClient, CommandContext {
             disposeCounted = true;
             gateway.clientDisposed();
         }
+        // Anon-guard release on EVERY teardown path (WS close, failed dial, rejection close). The
+        // guard's release is identity-checked and idempotent, so a name re-registered by another
+        // browser after this client died is never dropped, and a double teardown cannot double-free.
+        AnonNameGuard.ActiveConnect active = activeConnect;
+        activeConnect = null;
+        AnonNameGuard.shared().release(active);
         commandExecutor.shutdownNow();
         callbackExecutor.shutdownNow();
         lobbyTimer.shutdownNow();
@@ -397,7 +470,7 @@ public class ProxyClient implements MageClient, CommandContext {
         return graceDisconnectTimer == null ? -1 : graceDisconnectTimer.getDelay(TimeUnit.SECONDS);
     }
 
-    /** Reenvía estado solo a conexiones que han autenticado su sesión local. */
+    /** Broadcasts state only to connections that have authenticated their local session. */
     private void broadcastAuthorized(String json) {
         connections.broadcast(json, null);
     }
@@ -407,10 +480,14 @@ public class ProxyClient implements MageClient, CommandContext {
         // message ids restart at 1 on the new session, so the outdated-guard would silently
         // drop every UPDATE event of the new one otherwise
         highestMessageId = 0;
+        // the previous login's capabilities describe a server session that is going away:
+        // until the new login proves them again, the dispatch gate answers the stock (no LLM) answer
+        capabilities = ServerCapabilities.none();
         // events of the previous user's still-running games (re-sent by the server over the
         // same channel) must be dropped, not forwarded
         games.clear();
         replay.clear();
+        replayTracker.clear();
         // drop callbacks still queued from the previous session instead of replaying them
         // to the new client (e.g. a WATCHGAME that lagged behind the update flood). Done
         // BEFORE connectStart: the reconnect restore of the new session can arrive while
@@ -433,6 +510,34 @@ public class ProxyClient implements MageClient, CommandContext {
         if (gameId != null) {
             games.markInactive(gameId);
         }
+    }
+
+    /** True while a replay is loaded or playing: player actions are refused before any RPC. */
+    @Override
+    public boolean replayActive() {
+        return replayTracker.isActive();
+    }
+
+    /** Track length of the last forwarded replay frame, or -1 while unknown. */
+    @Override
+    public int replayStateCount() {
+        return replayTracker.stateCount();
+    }
+
+    /** True when a game is being played or watched right now: replayGame refuses then. */
+    @Override
+    public boolean liveGameActive() {
+        return games.inProgressCount() > 0;
+    }
+
+    @Override
+    public void markReplayActive(UUID gameId) {
+        replayTracker.loaded(gameId);
+    }
+
+    @Override
+    public void clearReplay() {
+        replayTracker.clear();
     }
 
     @Override
@@ -627,6 +732,7 @@ public class ProxyClient implements MageClient, CommandContext {
                 if (live != null) {
                     rememberLiveSession(live.getHost(), live.getUsername());
                 }
+                capabilities = ServerCapabilities.probe(session);
                 lobby.publishSoon();
                 lastLoginAt = System.currentTimeMillis();
                 lastLoginWasRelink = true;
@@ -656,7 +762,7 @@ public class ProxyClient implements MageClient, CommandContext {
         broadcastAuthorized(ev.toString());
     }
 
-    /** Respuesta ok:false con el detalle real del servidor (y su errorCode clasificado). */
+    /** An ok:false reply carrying the server's real detail (and its classified errorCode). */
     @Override
     public void sendFailure(WebSocket conn, String action, String requestId, long start) {
         String detail = serverMessages.await(start, 1600);
@@ -676,7 +782,7 @@ public class ProxyClient implements MageClient, CommandContext {
         return config.isSimEnabled();
     }
 
-    /** Aviso no fatal a la web (p.ej. un asiento SIM no pudo unirse). */
+    /** Non-fatal notice to the web (e.g. a SIM seat could not join). */
     private void broadcastError(String message) {
         JsonObject ev = new JsonObject();
         ev.addProperty("type", "error");
@@ -762,6 +868,10 @@ public class ProxyClient implements MageClient, CommandContext {
             }
 
             String eventJson = CallbackEvents.toEventJson(callback);
+            // The replay cache keeps the frame UNTRIMMED (its LLM tab rebuilds the cumulative
+            // history), so the bound is applied only to the LIVE frame the browser receives. This
+            // is the single send site; a short conversation is returned byte-identical.
+            String liveJson = LlmDebugBounds.boundLlmDebug(eventJson, m);
             Object data = callback.getData();
             if (logger.isLoggable(Level.FINE) || !CallbackEvents.isGameUpdate(m)) {
                 logger.info("event >> " + m + " (msgId=" + callback.getMessageId()
@@ -782,7 +892,19 @@ public class ProxyClient implements MageClient, CommandContext {
                     supersedeKey = "state:" + callbackObjectId;
                 }
             }
-            connections.broadcast(eventJson, supersedeKey);
+            trackReplay(m, callbackObjectId, data);
+            // Client-key bridge: the fork-only LLM_PROMPT callback goes out as a
+            // TYPED llm_prompt frame, never the generic event envelope. Compared by name so a
+            // stock build (no such enum constant) stays compilable; the payload is read by
+            // reflection. The REPLAY_*/game paths above are untouched.
+            if (LlmPromptBridge.isLlmPrompt(m)) {
+                String promptJson = LlmPromptBridge.frame(data);
+                if (promptJson != null) {
+                    connections.broadcast(promptJson, null);
+                }
+                return;
+            }
+            connections.broadcast(liveJson, supersedeKey);
         } catch (Throwable ex) {
             // Throwable, not Exception: this runs on callbackExecutor, a single thread, and an
             // Error (a StackOverflowError from the recursive serializer is the realistic one)
@@ -816,6 +938,21 @@ public class ProxyClient implements MageClient, CommandContext {
         }
     }
 
+    /** Replay bookkeeping of the frames this session forwards (gate + local seek range check). */
+    private void trackReplay(ClientCallbackMethod m, UUID gameId, Object data) {
+        if (!CallbackEvents.isReplayEvent(m)) {
+            return;
+        }
+        if (m == ClientCallbackMethod.REPLAY_INIT || m == ClientCallbackMethod.REPLAY_UPDATE) {
+            replayTracker.frame(gameId, CallbackEvents.replayStateCount(data));
+        } else if (m == ClientCallbackMethod.REPLAY_DONE) {
+            // a boundary ("end of replay") keeps the session alive so the user can step back; the
+            // other reasons ("stopped replay", a corrupt file) end it
+            String result = data != null ? data.toString() : "";
+            replayTracker.done("end of replay".equals(result));
+        }
+    }
+
     private void trackGameCommand(String action, JsonObject args) {
         UUID gameId = JsonArgs.uuid(args, "gameId", null);
         if (gameId == null) {
@@ -828,7 +965,7 @@ public class ProxyClient implements MageClient, CommandContext {
         }
     }
 
-    /** Reenvía a una conexión recién adjuntada el último estado y prompt pendiente de esa partida. */
+    /** Replays the latest state and pending prompt of a game to a newly attached connection. */
     @Override
     public void replayGameState(WebSocket conn, UUID gameId) {
         for (String json : replay.replay(gameId)) {
@@ -869,7 +1006,7 @@ public class ProxyClient implements MageClient, CommandContext {
             args = cmd.get("args").getAsJsonObject();
         }
 
-        // auth por conexión: connect/ping son públicos; el resto exige sesión autorizada
+        // per-connection auth: connect/ping are public; everything else needs an authorized session
         boolean isPublic = "connect".equals(action) || "ping".equals(action);
         if (!isPublic && !connections.contains(conn)) {
             gateway.send(conn, ProxyProtocol.resultJson(action, requestId, false, ProxyProtocol.ERR_NOT_AUTHORIZED, "not connected: send connect first"));
@@ -881,7 +1018,7 @@ public class ProxyClient implements MageClient, CommandContext {
             trackGameCommand(action, args);
         }
 
-        // gameId obligatorio para todas las acciones de partida
+        // a gameId is required for every game action
         if (requiresGameId(action) && JsonArgs.uuid(args, "gameId", null) == null) {
             gateway.send(conn, ProxyProtocol.resultJson(action, requestId, false, ProxyProtocol.ERR_GAME_ID_REQUIRED, "gameId is required"));
             return;
@@ -892,12 +1029,22 @@ public class ProxyClient implements MageClient, CommandContext {
                 case "connect": {
                     String host = JsonArgs.str(args, "host", config.getServerHost());
                     int port = JsonArgs.getInt(args, "port", config.getServerPort());
+                    // Deployment pin: Gateway.handleConnect pins its OWN locals
+                    // for the account key and the attach match, but hands this branch the RAW frame.
+                    // Re-applying the pin here is what makes the pin cover the DIAL too — without it
+                    // a client could send a different target and this client would dial it, defeating
+                    // --pinnedXmageTarget (and --hideServerTarget would hide a field the client
+                    // controls). Unpinned: dialTarget returns the client's values unchanged.
+                    DeploymentConfig.Target dial = dialTarget(host, port);
+                    host = dial.host;
+                    port = dial.port;
                     String username = JsonArgs.str(args, "username", config.getUsername());
                     String password = JsonArgs.str(args, "password", config.getPassword());
                     String flagName = JsonArgs.str(args, "flagName", "world.png");
                     int avatarId = JsonArgs.getInt(args, "avatarId", 51);
+                    String browserId = JsonArgs.str(args, "browserId", "");
                     connect(conn, requestId, host, port, username, password, flagName, avatarId,
-                            resumeStream(args), resumeSeq(args));
+                            resumeStream(args), resumeSeq(args), browserId);
                     break;
                 }
                 case "disconnect": {
@@ -933,7 +1080,11 @@ public class ProxyClient implements MageClient, CommandContext {
                             || TableCommands.handle(action, conn, requestId, args, this)
                             || TournamentCommands.handle(action, conn, requestId, args, this)
                             || GameCommands.handle(action, conn, requestId, args, this)
-                            || OnlineDeckCommands.handle(action, conn, requestId, args, this);
+                            || OnlineDeckCommands.handle(action, conn, requestId, args, this)
+                            || LlmModelCommands.handle(action, conn, requestId, args, this)
+                            || LlmBridgeCommands.handle(action, conn, requestId, args, this)
+                            || ReplayFiles.handle(action, conn, requestId, args, this)
+                            || P1DeckCommands.handle(action, conn, requestId, args, this);
                     if (!handled) {
                         gateway.send(conn, ProxyProtocol.resultJson(action, requestId, false, ProxyProtocol.ERR_UNKNOWN_ACTION, "Unknown action: " + action));
                     }
@@ -955,9 +1106,9 @@ public class ProxyClient implements MageClient, CommandContext {
             String raw = ex.getMessage() != null ? ex.getMessage() : ex.toString();
             String detail = ErrorClassifier.stripServerErrorPrefix(raw);
             if (detail != null && detail.startsWith("Command failed: ")) detail = detail.substring("Command failed: ".length());
-            // si la excepción ya trae "Card not found - ...", no prefijar para no enterrar el pattern
+            // if the exception already carries "Card not found - ...", do not prefix it again — that would bury the pattern
             String payload = detail != null && !detail.isEmpty() ? detail : raw;
-            // para errores de cubierta, intentar pescar también el callback que el servidor ya encoló
+            // for cover errors, also try to catch the callback the server has already queued
             String polled = serverMessages.await(System.currentTimeMillis() - 2000, 900);
             if (polled != null && polled.length() > payload.length()) payload = polled;
             String code = ErrorClassifier.classifyErrorCode(payload);
@@ -1061,6 +1212,13 @@ public class ProxyClient implements MageClient, CommandContext {
             case "stopWatching":
             case "joinGame":
             case "quitMatch":
+            case "replayGame":
+            case "startReplay":
+            case "stopReplay":
+            case "replayNext":
+            case "replayPrevious":
+            case "replaySkipForward":
+            case "replaySeek":
                 return true;
             default:
                 return false;
@@ -1085,14 +1243,14 @@ public class ProxyClient implements MageClient, CommandContext {
     }
 
     private synchronized void connect(WebSocket conn, String requestId, String host, int port, String username, String password,
-                                      String flagName, int avatarId, String resumeStreamId, long resumeSeq) {
-        // mage.remote.Connection.getURI() sustituye "localhost" por la primera IP
-        // no-loopback que encuentra enumerando interfaces (Connection.getLocalAddress).
-        // Con interfaces bridge/túnel de VMs activas (p.ej. 192.168.97.0) construye un
-        // locator bisocket inalcanzable y el login muere en "client lease". El literal
-        // 127.0.0.1 se usa tal cual y siempre es correcto en el host del proxy.
-        // (La misma normalización se aplica en Gateway.handleConnect para que la
-        // clave host|username coincida con el accountKey registrado aquí.)
+                                      String flagName, int avatarId, String resumeStreamId, long resumeSeq, String browserId) {
+        // mage.remote.Connection.getURI() replaces "localhost" with the first non-loopback
+        // IP it finds while enumerating interfaces (Connection.getLocalAddress). With
+        // bridge/tunnel interfaces of active VMs (e.g. 192.168.97.0) that builds an
+        // unreachable bisocket locator and the login dies in "client lease". The literal
+        // 127.0.0.1 is used as-is and is always correct on the proxy host.
+        // (The same normalization runs in Gateway.handleConnect so the host|username key
+        // matches the accountKey registered here.)
         host = normalizeHost(host);
         cancelGraceTimer();
         // idempotent connect: same user + same server already connected (e.g. several browser
@@ -1128,7 +1286,7 @@ public class ProxyClient implements MageClient, CommandContext {
         connection.setPort(port);
         connection.setUsername(username);
         connection.setPassword(password);
-        connection.setUserIdStr(System.getProperty("user.name") + ":" + System.getProperty("os.name") + ":mage-proxy");
+        connection.setUserIdStr(userIdStr(browserId));
         String cleanFlag = flagName == null || flagName.isEmpty() ? "world.png" : flagName;
         if (!cleanFlag.endsWith(".png")) {
             cleanFlag = cleanFlag + ".png";
@@ -1137,8 +1295,8 @@ public class ProxyClient implements MageClient, CommandContext {
         UserData userData = UserData.getDefaultUserDataView();
         userData.setFlagName(cleanFlag);
         userData.setAvatarId(avatar);
-        // Paridad con el desktop (PreferencesDialog KEY_GAME_ALLOW_REQUEST_SHOW_HAND_CARDS = "true"):
-        // sin esto el servidor rechaza de oficio cualquier REQUEST_PERMISSION_TO_SEE_HAND_CARDS.
+        // Matches the desktop client (PreferencesDialog KEY_GAME_ALLOW_REQUEST_SHOW_HAND_CARDS = "true"):
+        // without this the server rejects every REQUEST_PERMISSION_TO_SEE_HAND_CARDS outright.
         userData.setAllowRequestShowHandCards(true);
         connection.setUserData(userData);
         connection.setProxyType(Connection.ProxyType.NONE);
@@ -1175,6 +1333,10 @@ public class ProxyClient implements MageClient, CommandContext {
             activityUser = username;
             lastConnection = connection;
             rememberLiveSession(host, username);
+            // Probe once per successful login, before the connect result goes out — the
+            // ServerState was fetched during the handshake, so this never blocks. The login
+            // and every attach then ship it as data.capabilities.
+            capabilities = ServerCapabilities.probe(session);
             lobby.publishSoon();
             lastLoginAt = System.currentTimeMillis();
             lastLoginWasRelink = false;
@@ -1184,9 +1346,9 @@ public class ProxyClient implements MageClient, CommandContext {
             simManager.restoreSims();
         } else {
             connections.abandonLogin();
-            // el servidor manda el detalle del fallo por un callback SHOW_USERMESSAGE
-            // (llega ~3s después, tras su sleep anti-bruteforce): sondearlo para no
-            // responder con un error vacío
+            // the server sends the failure detail in a SHOW_USERMESSAGE callback
+            // (it arrives ~3 s later, after its anti-bruteforce sleep): poll for it so the
+            // reply is not an empty error
             long start = System.currentTimeMillis();
             String detail = serverMessages.await(start, 4500);
             if (detail == null) detail = ErrorClassifier.stripServerErrorPrefix(session.getLastError());

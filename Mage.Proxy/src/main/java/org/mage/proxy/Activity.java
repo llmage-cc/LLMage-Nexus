@@ -28,6 +28,8 @@ public final class Activity {
             "sendPlayerString", "sendPlayerManaType", "getTables", "getRoomUsers", "getRoomChatId",
             "getFinishedMatches", "getServerMessages", "joinChat", "leaveChat", "getGameChatId",
             "getTableChatId", "sendCardMark", "setBoosterLoaded", "replayNext", "replayPrevious",
+            "replayGame", "startReplay", "stopReplay", "replaySkipForward", "replaySeek",
+            "fetchModels", "fetchPersonalities", "llm_decision", "llm_error",
             // a report gets its own line from report(), with the reference and the excerpt in it
             "report_issue"));
     private static final Set<String> SAFE_ARGS = new HashSet<>(Arrays.asList(
@@ -101,6 +103,11 @@ public final class Activity {
         } else {
             emit("login_fail", user, ip, "server=" + target + " reason=\"" + detail + "\"");
         }
+    }
+
+    /** True when the action is high-frequency and only counted, never logged (see {@link #QUIET}). */
+    static boolean isQuietAction(String action) {
+        return QUIET.contains(action);
     }
 
     public static void action(String user, String ip, String action, JsonObject args) {

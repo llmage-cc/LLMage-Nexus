@@ -5,6 +5,8 @@ import {
   requestNotificationPermission, useAttentionAlerts, type AttentionSnapshot,
 } from './attentionAlerts'
 import { loadNotificationAsked } from '../state/persistence'
+import { setState } from '../state/state'
+import { DEFAULT_PROXY_CONFIG } from '../net/proxyConfig'
 import type { GameView } from '../net/types'
 import { makeGameView, makePlayer } from '../__fixtures__/gameViews'
 import type { FeedbackPrompt } from './feedback'
@@ -199,6 +201,7 @@ describe('useAttentionAlerts', () => {
     cleanup()
     setHidden(false)
     clearAttention()
+    setState({ proxyConfig: DEFAULT_PROXY_CONFIG })
     vi.unstubAllGlobals()
   })
 
@@ -212,6 +215,17 @@ describe('useAttentionAlerts', () => {
     rerender({ game: gameAt(2, 'me') })
     expect(document.title).toBe('(1) Tu turno · XMage Nexus')
     expect(FakeNotification.created.map((n) => [n.title, n.options.body, n.options.tag])).toEqual([['Tu turno', 'Turno 2: te toca', 'mage-g']])
+  })
+
+  it('uses the configured deploymentName as the base title', () => {
+    setState({ proxyConfig: { ...DEFAULT_PROXY_CONFIG, deploymentName: 'My Nexus' } })
+    document.title = 'My Nexus'
+    const { rerender } = mount(true)
+    rerender({ game: gameAt(2, 'me') })
+    expect(document.title).toBe('(1) Tu turno · My Nexus')
+    setHidden(false)
+    act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+    expect(document.title).toBe('My Nexus')
   })
 
   it('with the tab visible it does not alert', () => {

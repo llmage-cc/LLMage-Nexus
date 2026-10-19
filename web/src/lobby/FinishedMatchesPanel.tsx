@@ -4,8 +4,11 @@ import ChipButton from '../ui/ChipButton'
 import Chip from '../ui/Chip'
 import CloseButton from '../ui/CloseButton'
 import EmptyState from '../ui/EmptyState'
+import ErrorBanner from '../ui/ErrorBanner'
 import type { MatchView, UsersView } from '../net/types'
 import { getFinishedMatches, replayGame } from '../net/commands'
+import { useStore } from '../state/store'
+import { setStoreError, clearError, replayLoadErrorMessage } from '../state/actions'
 import AvatarImage from './AvatarImage'
 import CountryFlag from './CountryFlag'
 import Icon from '../ui/Icon'
@@ -133,11 +136,14 @@ export default function FinishedMatchesPanel({
   onInspectUser,
 }: FinishedMatchesPanelProps) {
   const { t } = useTranslation()
+  const capabilities = useStore((s) => s.capabilities)
+  const replayEnabled = capabilities?.llm === true
   const [matches, setMatches] = useState<MatchView[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<'all' | 'ranked' | 'tournament'>('all')
   const [replayingGameId, setReplayingGameId] = useState<string | null>(null)
+  const [replayError, setReplayError] = useState<{ gameId: string; message: string } | null>(null)
 
   const fetchMatches = useCallback(async () => {
     setLoading(true)
@@ -197,11 +203,30 @@ export default function FinishedMatchesPanel({
   }, [matches, filterType, searchQuery])
 
   const handleReplay = async (gameId: string) => {
+    if (!replayEnabled) return
     setReplayingGameId(gameId)
+    setReplayError(null)
     try {
-      await replayGame(gameId)
+      const res = await replayGame(gameId)
+      // The proxy answers the load with a result; the REPLAY_GAME callback then
+      // opens the viewer (and auto-starts). Surface a refusal instead of leaving
+      // the button spinning as if it were a slow load — on the match card that
+      // was clicked, and on the lobby banner for a failure raised from elsewhere.
+      if (!res.ok) {
+        const message = replayLoadErrorMessage(res.error, t('lobby', 'replay_files_load_failed'))
+        setReplayError({ gameId, message })
+        setStoreError(message)
+      } else {
+        // A load that starts clears the previous failure's banner: it would
+        // otherwise hang over a replay that is opening fine.
+        clearError()
+      }
+    } catch {
+      const message = t('lobby', 'replay_files_load_failed')
+      setReplayError({ gameId, message })
+      setStoreError(message)
     } finally {
-      setTimeout(() => setReplayingGameId(null), 1000)
+      setReplayingGameId(null)
     }
   }
 
@@ -406,14 +431,14 @@ export default function FinishedMatchesPanel({
                     </div>
                   )}
 
-                  {m.games && m.games.length > 0 && (
+                  {replayEnabled && m.games && m.games.length > 0 && (
                     <div className="match-replay-actions">
                       {m.games.map((gId, gIdx) => (
                         <Button variant="soft" size="sm"
                           key={gId}
                           onClick={() => handleReplay(gId)}
                           disabled={replayingGameId === gId}
-                          title={`${t('common', 'loading')} #${gIdx + 1}`}>
+                          title={`${t('lobby', 'match_replay_single')} #${gIdx + 1}`}>
                           <span className="replay-icon"><Icon name="play" size={12} /></span>
                           <span>{replayingGameId === gId ? t('common', 'loading') : m.games!.length === 1 ? t('lobby', 'match_replay_single') : t('lobby', 'match_replay_number', { number: String(gIdx + 1) })}</span>
                         </Button>
@@ -421,6 +446,14 @@ export default function FinishedMatchesPanel({
                     </div>
                   )}
                 </div>
+
+                {replayError && (m.games ?? []).includes(replayError.gameId) && (
+                  <ErrorBanner
+                    message={replayError.message}
+                    onClose={() => setReplayError(null)}
+                    testId={`match-replay-error-${replayError.gameId}`}
+                  />
+                )}
               </div>
             )
           })}

@@ -1,4 +1,4 @@
-import type { DraftClientMessage, GameView, TournamentView } from '../../net/types'
+import type { DraftClientMessage, TournamentView } from '../../net/types'
 
 /** Draft state (START_DRAFT / DRAFT_INIT / DRAFT_PICK / DRAFT_UPDATE / DRAFT_OVER). */
 export interface DraftState {
@@ -32,7 +32,6 @@ export interface LimitedSlice {
   lastDraftMethod: string | null
   tournament: TournamentState | null
   construct: ConstructState | null
-  replayViewer: { gameView: GameView | null; result?: string } | null
 }
 
 export const initialLimited: LimitedSlice = {
@@ -42,5 +41,4 @@ export const initialLimited: LimitedSlice = {
   lastDraftMethod: null,
   tournament: null,
   construct: null,
-  replayViewer: null,
 }

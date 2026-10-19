@@ -1,5 +1,7 @@
 # Protocol — where the truth lives
 
+> **LLMage Nexus documentation:** for the current guides see [Protocol](developer-guide/protocol.md) and [Proxy](developer-guide/proxy.md). This page is inherited from upstream XMage Nexus and may lag behind the client.
+
 Canonical reference: `Mage.Proxy/README.md` (full action/event tables, serialization rules, type system).
 This page only states precedence and regeneration rules so the contract never drifts silently.
 

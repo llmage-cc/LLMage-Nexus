@@ -114,6 +114,19 @@ export function controlScenario(): Scenario {
     )
   }
 
+  /** El controlado sigue con la prioridad después de resolver su respuesta, así
+   *  que el servidor vuelve a preguntar (un GAME_SELECT nuevo, como el del
+   *  arranque): el cliente admite UNA respuesta por ask, y sin la re-pregunta la
+   *  ventana queda gastada y el siguiente clic no sale. Un GAME_UPDATE no
+   *  re-abre nada (nexus-pass-priority-double-click-stack-skip). */
+  const emitControlledPriority = (conn: FakeConn): void => {
+    conn.broadcast(
+      'GAME_SELECT',
+      { message: `Priority (as ${CONTROL_SIM_NAME})`, options: { specialButton: 'Pass' }, gameView: view() },
+      CONTROL_GAME_ID,
+    )
+  }
+
   return makeBaseScenario({
     tableId: CONTROL_TABLE_ID,
     tableName: TABLE.control,
@@ -125,7 +138,7 @@ export function controlScenario(): Scenario {
       if (uuid === CONTROL_CREATURE_ID) simCreatureAttacking = true
       if (simHand.some((c) => c.id === uuid)) simHand = simHand.filter((c) => c.id !== uuid)
       if (controlledCombat) emitControlledCombat(conn)
-      else conn.broadcast('GAME_UPDATE', { gameView: view() }, CONTROL_GAME_ID)
+      else emitControlledPriority(conn)
     },
     onSendPlayerBoolean: (conn) => {
       if (!controlledCombat) {

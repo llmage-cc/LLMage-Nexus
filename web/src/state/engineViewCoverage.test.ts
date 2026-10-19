@@ -1,3 +1,4 @@
+// @vitest-environment node — this guard reads the XMage fork sources with node:fs and diffs them against the committed baseline.
 import { describe, expect, it } from 'vitest'
 
 import { readFileSync } from 'node:fs'

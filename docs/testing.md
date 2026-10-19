@@ -1,5 +1,7 @@
 # Testing — layers, commands, and known flakes
 
+> **LLMage Nexus documentation:** for the current guide see [Testing](developer-guide/testing.md). This page is inherited from upstream XMage Nexus and may lag behind the client.
+
 Orchestrator: `node scripts/test.mjs [layer...] [--skip=unit,e2e]`.
 
 ## Layers (in order)

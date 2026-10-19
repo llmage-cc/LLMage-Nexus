@@ -10,10 +10,17 @@ import GameChat, { isGameChatEntry } from './GameChat'
 import DeckTrackerPanel from './DeckTrackerPanel'
 import MechanicsTray from './MechanicsTray'
 import CommanderDamageMatrix from './CommanderDamageMatrix'
+import LlmTabPanel from './LlmTabPanel'
+import { isLlmTabOffered } from './llmTab'
 import { DrawerHeadSlotContext } from './drawerHeadSlot'
 import './GameDrawer.css'
 
-export type DrawerTab = 'stack' | 'log' | 'chat' | 'tracker' | 'commander' | 'mechanics'
+export type DrawerTab = 'stack' | 'log' | 'chat' | 'tracker' | 'commander' | 'mechanics' | 'llm'
+
+/** Whether the LLM drawer tab is offered for the current store state. */
+export function useLlmTabOffered(): boolean {
+  return useStore((s) => isLlmTabOffered({ capabilities: s.capabilities, game: s.game, replay: s.replay }))
+}
 
 interface DrawerTabDef {
   id: DrawerTab
@@ -36,6 +43,7 @@ function useChatUnread(chatOpen: boolean): number {
 function useDrawerTabs(active: DrawerTab | null, stackCount: number, hasCommanders: boolean, hasActiveMechanics: boolean): DrawerTabDef[] {
   const { t } = useTranslation()
   const unread = useChatUnread(active === 'chat')
+  const llmOffered = useLlmTabOffered()
   return [
     {
       id: 'stack',
@@ -61,6 +69,7 @@ function useDrawerTabs(active: DrawerTab | null, stackCount: number, hasCommande
       title: t('game', 'tab_mechanics'),
       badge: hasActiveMechanics && <span className="right-tab-badge active-mechanics">★</span>,
     },
+    { id: 'llm', icon: 'bot', label: t('game', 'tab_llm'), title: t('game', 'tab_llm'), hidden: !llmOffered },
   ]
 }
 
@@ -106,6 +115,7 @@ export default function GameDrawer({ tab, stackCount, stack, onClose }: { tab: D
     tracker: t('game', 'tab_tracker'),
     commander: t('game', 'commander_damage'),
     mechanics: t('game', 'tab_mechanics'),
+    llm: t('game', 'tab_llm'),
   }
   return (
     <aside className="game-drawer" data-testid="game-drawer" data-tab={tab}>
@@ -128,6 +138,8 @@ export default function GameDrawer({ tab, stackCount, stack, onClose }: { tab: D
           <div className="sidebar-commander-tab">
             <CommanderDamageMatrix game={game} />
           </div>
+        ) : tab === 'llm' ? (
+          <LlmTabPanel />
         ) : (
           <MechanicsTray />
         )}

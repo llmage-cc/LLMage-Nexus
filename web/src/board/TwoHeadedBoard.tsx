@@ -57,18 +57,19 @@ export default function TwoHeadedBoard({
    * [topLeft]  [topRight]
    * [botLeft]  [botRight]
    *
-   * For a player: botLeft = me, rest = opponents (sorted by index).
-   * For a spectator: all 4 cells are opponents in order.
+   * For a player (or a replay viewing perspective) botLeft = me, rest = opponents
+   * (sorted by index). For a spectator all 4 cells are opponents in order.
    *
    * With fewer than 4 players some cells are undefined → rendered as empty.
    */
+  const mine = !isSpectator
   const [topLeft, topRight, botLeft, botRight] = useMemo((): (PlayerView | undefined)[] => {
-    if (isSpectator) {
+    if (!mine) {
       return [opps[0], opps[1], opps[2], opps[3]]
     }
     // Player layout: top row = first 2 opponents, bottom-left = me, bottom-right = 3rd opponent
     return [opps[0], opps[1], me, opps[2]]
-  }, [isSpectator, me, opps])
+  }, [mine, me, opps])
 
   const seatCellClass = (player: PlayerView | undefined) => {
     const state = seatState(player)
@@ -151,6 +152,7 @@ export default function TwoHeadedBoard({
             <PlayerZone
               player={me}
               hand={game?.myHand ?? {}}
+              isControlled={mine ? true : undefined}
               onCardClick={handleCardClick}
               onHandCardClick={onPlayableClick}
               onCardHover={handleCardHover}

@@ -41,7 +41,11 @@
   z-index: 40;
   width: 320px;
   max-width: calc(100vw - 16px);
-  height: var(--dd-max, 420px);
+  /* Fixed-height inner pane: the height is the strip's measured budget,
+     and the cap also keeps the box inside the VISIBLE viewport, so no inner pane
+     can ever be cut off by the window edge on a short window. */
+  --dd-cap: min(var(--dd-max, 420px), calc(100dvh - var(--sp-4h)));
+  height: var(--dd-cap);
   display: flex;
   flex-direction: column;
   background: rgb(var(--ink-2-rgb) / 0.98);
@@ -115,7 +119,7 @@
 
 .game-drawer[data-tab='stack'] {
   height: auto;
-  max-height: var(--dd-max, 420px);
+  max-height: var(--dd-cap);
 }
 
 .game-drawer[data-tab='stack'] .game-drawer-content {

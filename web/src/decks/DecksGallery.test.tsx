@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import DecksGallery, { mergeEnrichedColors, pruneSelectedId } from './DecksGallery'
 import { cloneDeckForEdit } from './cloneDeck'
+import { setBundledCorpusForTests } from './bundledDecks'
 import type { DeckV2 } from './types'
 
 const storeState = vi.hoisted(() => ({ decks: [] as DeckV2[] }))
@@ -52,12 +53,15 @@ beforeEach(() => {
   storeState.decks = []
   confirmState.calls = []
   confirmState.resolve = true
+  setBundledCorpusForTests(null)
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false }) as never))
 })
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+  setBundledCorpusForTests(null)
 })
 
 describe('cloneDeckForEdit (AUDIT bloqueante)', () => {
@@ -79,6 +83,7 @@ describe('cloneDeckForEdit (AUDIT bloqueante)', () => {
       createdAt: 1,
       updatedAt: 1,
       source: 'precon',
+      group: 'Commander',
     } as unknown as DeckV2
 
     const clone = cloneDeckForEdit(precon)
@@ -88,6 +93,11 @@ describe('cloneDeckForEdit (AUDIT bloqueante)', () => {
     expect(clone.partnerCard).toEqual(tana)
     expect(clone.favorite).toBe(true)
     expect(clone.coverCard).toEqual(atraxa)
+    // the bundle's corpus library describes where the BORROWED deck came from;
+    // the clone is the player's own deck and must not keep it (the deck pickers
+    // group by `group` — see decks/deckOrder.ts).
+    expect(precon.group).toBe('Commander')
+    expect(clone.group).toBeUndefined()
   })
 })
 
@@ -127,7 +137,7 @@ describe('mergeEnrichedColors (AUDIT)', () => {
   })
 })
 
-describe('pruneSelectedId (C.13-mayores §2)', () => {
+describe('pruneSelectedId', () => {
   const decks = [{ id: 'a' }, { id: 'b' }] as DeckV2[]
 
   it('conserva el seleccionado si sigue existiendo', () => {
@@ -143,7 +153,7 @@ describe('pruneSelectedId (C.13-mayores §2)', () => {
   })
 })
 
-describe('DecksGallery footer (C.13-mayores §1–§2)', () => {
+describe('DecksGallery footer', () => {
   const openMoreMenu = async () => {
     fireEvent.click(await screen.findByTestId('decks-more-menu'))
   }
@@ -200,6 +210,99 @@ describe('DecksGallery footer (C.13-mayores §1–§2)', () => {
     const delBtn = await screen.findByText('Eliminar')
     expect((delBtn.closest('button') as HTMLButtonElement).disabled).toBe(true)
     expect(delBtn.closest('button')?.getAttribute('title')).toContain('Precon')
+  })
+})
+
+describe('DecksGallery deck counter', () => {
+  it('gives the n/MAX counter a visible + accessible label', async () => {
+    render(<DecksGallery onEdit={() => {}} />)
+    const counter = await screen.findByTestId('decks-counter')
+    // A bare "0/75" is meaningless; the label names what is counted (es locale).
+    expect(counter.textContent).toBe('Mazos 0/75')
+    expect(counter.getAttribute('aria-label')).toBe('Mazos 0/75')
+    expect(counter.getAttribute('title')).toBe('Mazos 0/75')
+  })
+})
+
+describe('DecksGallery empty state + Create Deck', () => {
+  it('hides the empty hint while the bundled decks fill the grid', async () => {
+    render(<DecksGallery onEdit={() => {}} />)
+    // The pre-fix copy ("No decks yet…") asserted an empty list right above this
+    // populated grid; it must not be claimed while decks are on screen.
+    expect(await screen.findByText('Mage Web bolt')).not.toBeNull()
+    expect(screen.queryByTestId('decks-empty-hint')).toBeNull()
+  })
+
+  it('shows the empty hint only when nothing at all is listed (bundled decks off)', async () => {
+    vi.stubEnv('VITE_BUNDLED_DECKS', '0')
+    render(<DecksGallery onEdit={() => {}} />)
+    const hint = await screen.findByTestId('decks-empty-hint')
+    expect(hint.textContent).toContain('Aún no hay mazos')
+    // With no grid at all the own-decks nudge is meaningless: it rides on
+    // visible precon boxes, and here there are none.
+    expect(screen.queryByTestId('decks-empty-hint-own')).toBeNull()
+  })
+
+  it('nudges create/import when only the bundled grid is visible (own=0, nudge key)', async () => {
+    render(<DecksGallery onEdit={() => {}} />)
+    expect(await screen.findByText('Mage Web bolt')).not.toBeNull()
+    // The old all-empty hint must stay OFF over the populated grid (bug fix
+    // from 24a4b8c172), while the OWN-decks nudge shows: zero own decks.
+    expect(screen.queryByTestId('decks-empty-hint')).toBeNull()
+    const nudge = await screen.findByTestId('decks-empty-hint-own')
+    expect(nudge.textContent).toContain('mazos iniciales')
+  })
+
+  it('hides the nudge once the user has own decks, even with the bundled grid visible', async () => {
+    storeState.decks = [customDeck()]
+    render(<DecksGallery onEdit={() => {}} />)
+    expect(await screen.findByText('Mage Web bolt')).not.toBeNull()
+    await screen.findAllByText('Mi Burn')
+    expect(screen.queryByTestId('decks-empty-hint-own')).toBeNull()
+    expect(screen.queryByTestId('decks-empty-hint')).toBeNull()
+  })
+
+  it('hides the hint once a custom deck exists', async () => {
+    vi.stubEnv('VITE_BUNDLED_DECKS', '0')
+    storeState.decks = [customDeck()]
+    render(<DecksGallery onEdit={() => {}} />)
+    await screen.findAllByText('Mi Burn')
+    expect(screen.queryByTestId('decks-empty-hint')).toBeNull()
+  })
+
+  it('Create Deck creates a deck and opens the builder via onEdit', async () => {
+    const onEdit = vi.fn()
+    render(<DecksGallery onEdit={onEdit} />)
+    // The tile is labelled by the "box_create" key (es locale).
+    fireEvent.click((await screen.findByText('Crear Mazo')).closest('.deck-box-create')!)
+    await waitFor(() => expect(onEdit).toHaveBeenCalledTimes(1))
+    // A new custom deck was persisted (the mock storage list now holds one).
+    expect(storeState.decks).toHaveLength(1)
+    expect(storeState.decks[0].source).toBe('custom')
+    expect(onEdit).toHaveBeenCalledWith(storeState.decks[0].id)
+  })
+})
+
+describe('DecksGallery "Meta & Decks Populares" search (parity GAP 3)', () => {
+  const corpusDeck = {
+    id: 'majors:Modern/16525_boros-burn',
+    name: 'Boros Burn',
+    group: 'Modern',
+    cards: [{ cardName: 'Lightning Bolt', setCode: 'M10', cardNumber: '146', amount: 4 }],
+    sideboard: [],
+  }
+
+  it('reaches the bundled corpus through the pane search, without dumping it by default', async () => {
+    setBundledCorpusForTests([corpusDeck])
+    render(<DecksGallery onEdit={() => {}} />)
+    fireEvent.click(await screen.findByText('Meta & Decks Populares'))
+
+    // No query: still the curated catalog, and the corpus deck is not listed.
+    expect(await screen.findByText('Mono Red Aggro')).not.toBeNull()
+    expect(screen.queryByText('Boros Burn')).toBeNull()
+
+    fireEvent.change(await screen.findByPlaceholderText('Buscar...'), { target: { value: 'boros burn' } })
+    expect(await screen.findByText('Boros Burn')).not.toBeNull()
   })
 })
 

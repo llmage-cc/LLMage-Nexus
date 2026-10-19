@@ -65,6 +65,7 @@
   line-height: 1.45;
   max-height: 220px;
   overflow-y: auto;
+  overflow-x: auto;
 }
 
 .about-release-body h2,
@@ -81,6 +82,35 @@
 .about-release-body ul {
   margin: var(--sp-1) 0;
   padding-left: var(--sp-4h);
+}
+
+.about-release-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: var(--sp-1h) 0;
+  font-size: var(--fs-xs);
+}
+
+.about-release-body th,
+.about-release-body td {
+  border: 1px solid var(--border);
+  padding: var(--sp-0h) var(--sp-1h);
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.about-release-body th {
+  background: rgb(var(--ink-2-rgb) / 0.5);
+}
+
+.about-release-body details {
+  margin: var(--sp-1h) 0;
+}
+
+.about-release-body summary {
+  cursor: pointer;
+  font-weight: 600;
 }
 
 .about-release-body code {

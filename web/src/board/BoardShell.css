@@ -61,6 +61,12 @@
 .board-shell-divider.has-strip {
   height: 36px;
   z-index: 30;
+  /* The divider is a stacking island (z 30) that paints OVER every prompt bar
+     crossing the 36px band (mulligan bar over the hand at short viewports,
+     dock confirm): its own painted background must not eat those clicks.
+     Content inside (the portaled GameStrip) re-enables the pointer on its
+     interactive pieces (GameStrip.css); hit-testing only — paint unchanged. */
+  pointer-events: none;
   background:
     linear-gradient(
       90deg,

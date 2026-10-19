@@ -3,7 +3,7 @@ import { joinGame, sendManaPaymentMode, sendPlayerAction, sendPlayerBoolean, sen
 import { makeCard, makeGameView, makePermanent, makePlayer, minimalGameView } from '../__fixtures__/gameViews'
 import { DEFAULT_PHASE_STOPS, clonePhaseStops, togglePhaseStop } from '../game/phaseStops'
 import { getState, setState, addLog } from './state'
-import { applyGameplayPreset, handleMessage, maybeAutoPass, reset, setSetting, returnToLobby, enterTableChat, exitTableChat, openStagingTable, leaveStagingTable, enterTournamentChat, exitTournamentChat } from './store'
+import { applyGameplayPreset, handleMessage, maybeAutoPass, claimPriorityAnswer, priorityAnswerPending, reset, setSetting, returnToLobby, enterTableChat, exitTableChat, openStagingTable, leaveStagingTable, enterTournamentChat, exitTournamentChat } from './store'
 import { handleWatchGame } from './events/game'
 import { getTableChatId, getTournamentChatId, joinChat, leaveChat } from '../net/commands'
 import { loadActiveGame, loadGameplayPreset, saveGameplayPreset } from './persistence'
@@ -523,6 +523,92 @@ describe('maybeAutoPass with smart stops', () => {
   })
 })
 
+describe('claimPriorityAnswer — one answer per priority request', () => {
+  const me = (isActive = false) => makePlayer({ playerId: 'p1', name: 'Alice', controlled: true, hasPriority: true, isActive })
+  const select = (game: ReturnType<typeof makeGameView>) => {
+    setState({ game, priorityRequest: game })
+    return game
+  }
+
+  beforeEach(() => {
+    reset()
+    vi.clearAllMocks()
+    handleMessage({ type: 'event', method: 'START_GAME', messageId: 1, objectId: 'g-1', data: { gameId: 'g-1' } })
+  })
+
+  it('drops the repeat click of a double-click: the engine parks it and spends it on the next ask', () => {
+    const request = select(makeGameView({ step: 'UPKEEP', players: [me()] }))
+    expect(claimPriorityAnswer()).toBe(true)
+    expect(claimPriorityAnswer()).toBe(false)
+    expect(claimPriorityAnswer()).toBe(false)
+    expect(getState().priorityAnsweredRequest).toBe(request)
+    expect(getState().priorityAnsweredSeq).toBe(1)
+  })
+
+  it('opens again on the next GAME_SELECT (the game asked again)', () => {
+    select(makeGameView({ step: 'UPKEEP', players: [me()] }))
+    expect(claimPriorityAnswer()).toBe(true)
+    handleMessage({ type: 'event', method: 'GAME_SELECT', messageId: 4, objectId: 'g-1', data: { gameView: makeGameView({ step: 'DRAW', players: [me()] }) } })
+    expect(claimPriorityAnswer()).toBe(true)
+  })
+
+  it('stays spent across state pushes that are not a new request', () => {
+    select(makeGameView({ step: 'UPKEEP', players: [me()] }))
+    claimPriorityAnswer()
+    handleMessage({ type: 'event', method: 'GAME_UPDATE', messageId: 5, objectId: 'g-1', data: { gameView: makeGameView({ step: 'UPKEEP', players: [me()] }) } })
+    expect(claimPriorityAnswer()).toBe(false)
+  })
+
+  it('shares the claim with the smart auto-pass: one request, one answer', () => {
+    setSetting('smartStops', true)
+    const request = select(makeGameView({ step: 'UPKEEP', players: [me()] }))
+    maybeAutoPass(request)
+    expect(sendPlayerBoolean).toHaveBeenCalledTimes(1)
+    expect(claimPriorityAnswer()).toBe(false)
+    expect(sendPlayerBoolean).toHaveBeenCalledTimes(1)
+  })
+
+  it('a hand pass is not repeated by the smart auto-pass either', () => {
+    setSetting('smartStops', true)
+    const request = select(makeGameView({ step: 'UPKEEP', players: [me()] }))
+    expect(claimPriorityAnswer()).toBe(true)
+    maybeAutoPass(request)
+    expect(sendPlayerBoolean).not.toHaveBeenCalled()
+  })
+
+  it('refuses to answer when the game has asked nothing yet', () => {
+    setState({ game: null, priorityRequest: null })
+    expect(claimPriorityAnswer()).toBe(false)
+    expect(getState().priorityAnsweredSeq).toBe(0)
+  })
+
+  it('before the first GAME_SELECT the answered frame stands in for the request', () => {
+    const frame = makeGameView({ step: 'UPKEEP', players: [me(true)] })
+    setState({ game: frame, priorityRequest: null })
+    expect(claimPriorityAnswer()).toBe(true)
+    expect(claimPriorityAnswer()).toBe(false)
+    expect(priorityAnswerPending(getState())).toBe(true)
+  })
+
+  it('reports the window spent only while it is still the current request', () => {
+    select(makeGameView({ step: 'UPKEEP', players: [me()] }))
+    expect(priorityAnswerPending(getState())).toBe(false)
+    claimPriorityAnswer()
+    expect(priorityAnswerPending(getState())).toBe(true)
+    handleMessage({ type: 'event', method: 'GAME_SELECT', messageId: 6, objectId: 'g-1', data: { gameView: makeGameView({ step: 'DRAW', players: [me()] }) } })
+    expect(priorityAnswerPending(getState())).toBe(false)
+  })
+
+  it('a GAME_INIT re-arms the pass (rejoin/resync rebuilds the state)', () => {
+    select(makeGameView({ step: 'UPKEEP', players: [me()] }))
+    claimPriorityAnswer()
+    handleMessage({ type: 'event', method: 'GAME_INIT', messageId: 7, objectId: 'g-1', data: { gameView: makeGameView({ step: 'UPKEEP', players: [me()] }) } })
+    expect(getState().priorityAnsweredRequest).toBeNull()
+    expect(getState().priorityRequest).toBeNull()
+    expect(claimPriorityAnswer()).toBe(true)
+  })
+})
+
 describe('playables consolidados', () => {
   beforeEach(() => {
     reset()
@@ -996,7 +1082,7 @@ describe('active game persistence in store', () => {
     expect(getState().game?.step).toBeUndefined()
   })
 
-  it('F1: el GAME_INIT de la partida 2 tras el sideboard sustituye la vista congelada de la 1ª', () => {
+  it('the GAME_INIT of game 2 after the sideboard replaces the frozen view of game 1', () => {
     setState({
       phase: 'game',
       gameId: 'g-f1-1',
@@ -1026,7 +1112,7 @@ describe('active game persistence in store', () => {
     expect(getState().game).toBe(fresh)
   })
 
-  it('F1 orden real: el GAME_INIT de la 2ª partida tras su START_GAME también sustituye la vista vieja', () => {
+  it('real order: the GAME_INIT of the 2nd game after its START_GAME also replaces the old view', () => {
     setState({
       phase: 'game',
       gameId: 'g-f1b-1',
@@ -1066,7 +1152,7 @@ describe('active game persistence in store', () => {
     expect(getState().game).toBe(fresh)
   })
 
-  it('F1 guard intacto: un GAME_UPDATE trailing de otra partida y uno anterior de la misma siguen descartándose', () => {
+  it('guard intact: a trailing GAME_UPDATE from another game and an older one from the same game are still dropped', () => {
     setState({
       phase: 'game',
       gameId: 'g-x-1',
@@ -1303,7 +1389,7 @@ describe('active game persistence in store', () => {
 })
 
 
-describe('table chat (U4-11)', () => {
+describe('table chat', () => {
   beforeEach(() => {
     reset()
     vi.clearAllMocks()
@@ -1395,7 +1481,7 @@ describe('table chat (U4-11)', () => {
   })
 })
 
-describe('tournament chat (T4)', () => {
+describe('tournament chat', () => {
   beforeEach(() => {
     reset()
     vi.clearAllMocks()

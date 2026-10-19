@@ -9,5 +9,7 @@ export type {
 export { initialGame } from './game'
 export type { DraftState, TournamentState, ConstructState, LimitedSlice } from './limited'
 export { initialLimited } from './limited'
+export type { ReplayState, ReplaySlice } from './replay'
+export { initialReplay } from './replay'
 export type { SettingsState, SettingsSlice } from './settings'
 export { initialSettings } from './settings'

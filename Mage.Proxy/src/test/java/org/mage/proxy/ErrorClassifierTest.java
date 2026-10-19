@@ -8,8 +8,8 @@ class ErrorClassifierTest {
 
     @Test
     void aServerOnAnotherReleaseIsAVersionMismatch() {
-        String detail = "mage.remote.MageVersionException: Wrong client version.<br/>Your version: 1.4.61-V1 (build: 2026-10-01 16:14)"
-                + "<br/>Server version: 1.4.62-V1 (build: 2026-10-03 20:33)<br/>App download: http://xmage.today";
+        String detail = "mage.remote.MageVersionException: Wrong client version.<br/>Your version: 1.4.62-V1 (build: 2026-10-17 20:10)"
+                + "<br/>Server version: 1.4.63-V1 (build: 2026-10-20 09:00)<br/>App download: http://xmage.today";
         assertEquals(ProxyProtocol.ERR_VERSION_MISMATCH, ErrorClassifier.classifyErrorCode(detail));
         assertEquals(ProxyProtocol.ERR_VERSION_MISMATCH,
                 ErrorClassifier.classifyErrorCode(ErrorClassifier.stripServerErrorPrefix("Remote task error: " + detail)));

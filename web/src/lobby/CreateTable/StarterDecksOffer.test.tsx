@@ -33,7 +33,13 @@ vi.mock('../../net/commands', () => ({
 describe('Create Table for a player with no decks', () => {
   beforeEach(() => {
     stored.decks = []
-    vi.stubEnv('DEV', false)
+    // A deployment built with no bundled decks (VITE_BUNDLED_DECKS=0): the player
+    // has no deck at all, so the starter-deck offer must appear. This spec pins
+    // the upstream v0.4.7 production seat shape (extra seats wait for a human
+    // rival), so the SIM channel is stubbed off — the fork's SIM-path suites
+    // cover the enabled shape.
+    vi.stubEnv('VITE_BUNDLED_DECKS', '0')
+    vi.stubEnv('VITE_SIM_SEATS', '0')
   })
 
   afterEach(() => {

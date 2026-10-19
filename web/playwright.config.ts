@@ -3,23 +3,26 @@ import { defineConfig } from '@playwright/test'
 
 const FAKE_MODE = process.env.E2E_BACKEND !== 'real'
 
-// fake: cada FixtureServer arranca en puerto dinámico (ver e2e/fixtures.ts y
-// e2e/support/fake-backend.ts), así que los tests son independientes entre sí y
-// se pueden repartir entre workers. real: 1 worker serial (el stack es único).
+// fake: every FixtureServer starts on a dynamic port (see e2e/fixtures.ts and
+// e2e/support/fake-backend.ts), so tests are independent of each other and can
+// be spread across workers. real: 1 serial worker (the stack is unique).
 const E2E_WORKERS =
   Number(process.env.E2E_WORKERS) || Math.max(1, Math.min(4, cpus().length - 1))
 
-// Puerto DEDICADO del dev server del e2e fake (misma lección que el puerto
-// propio del FixtureServer):
-// si el dev server del usuario o el vite del stack ocupan 5173, con
-// reuseExistingServer Playwright reutiliza ESE servidor y los specs corren
-// contra su gráfico de módulos (HMR stale, UI vieja) fallando de forma
-// intermitente. Con puerto propio + strictPort, el e2e siempre parte de un
-// server limpio con el código actual. Real sigue en 5173 (el vite del stack).
-const E2E_PORT = FAKE_MODE ? 5175 : 5173
+// DEDICATED port for the fake e2e dev server (same lesson as the
+// FixtureServer's own port):
+// if the user's dev server or the stack's vite occupy 5173, with
+// reuseExistingServer Playwright reuses THAT server and the specs run
+// against its module graph (stale HMR, old UI), failing intermittently.
+// With a dedicated port + strictPort, the e2e always starts from a clean
+// server running the current code. Real still uses 5173 (the stack's vite).
+// Dedicated port for the e2e round's server. Default is the historical one
+// (5175 fake / 5173 real); E2E_PORT diverts it so several e2e rounds can
+// run in parallel in different worktrees without colliding on strictPort.
+const E2E_PORT = Number(process.env.E2E_PORT) || (FAKE_MODE ? 5175 : 5173)
 
-// Matriz navegador × resolución (plan4 §8.1): por defecto Chromium 1600×900
-// (el loop diario no cambia). WebKit = motor real de Tauri en macOS.
+// Browser × viewport matrix: default Chromium 1600×900 (the daily loop does
+// not change). WebKit = Tauri's real engine on macOS.
 //   E2E_BROWSER=webkit npm run test:e2e
 //   E2E_VIEWPORT=1366x768|1920x1080|2560x1440 npm run test:e2e
 const E2E_BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium'
@@ -36,13 +39,20 @@ export default defineConfig({
   fullyParallel: FAKE_MODE,
   workers: FAKE_MODE ? E2E_WORKERS : 1,
   retries: 0,
-  // en modo fake (por defecto) el e2e no depende del stack: vite se levanta solo
+  // in fake mode (the default) the e2e does not depend on the stack: vite starts on its own
   webServer: FAKE_MODE
     ? {
-        command: 'npm run dev -- --port 5175 --strictPort',
+        command: `npm run dev -- --port ${E2E_PORT} --strictPort`,
         url: `http://localhost:${E2E_PORT}`,
         reuseExistingServer: false,
         timeout: 60_000,
+        // A shell that launches the round can carry NODE_ENV=production (some CI
+        // shells export it). A dev server resolved in production mode reports
+        // import.meta.env.DEV=false and the dynamic `#/gallery` import collapses
+        // (GalleryScreen stays null), so gallery.spec.ts dies in openGallery with
+        // "element not found". The fake e2e server is a dev server by definition, so
+        // forcing development mode is a no-op when it already was one.
+        env: { ...process.env, NODE_ENV: 'development' },
       }
     : undefined,
   use: {
@@ -50,9 +60,9 @@ export default defineConfig({
     viewport: parseViewport(),
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
-    // Los specs seleccionan la UI por texto en español ('Usuario', 'Conectar',
-    // 'Empezar'…): sin esto navigator.language (en-US) ponía la i18n en inglés
-    // y todo el suite se quedaba colgado en el login.
+    // The specs select the UI by Spanish text ('Usuario', 'Conectar',
+    // 'Empezar'…): without this navigator.language (en-US) put the i18n in
+    // English and the whole suite hung on the login screen.
     locale: 'es-ES',
   },
   reporter: [['list'], ['html', { open: 'never' }]],

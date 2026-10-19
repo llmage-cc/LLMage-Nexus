@@ -1,5 +1,7 @@
 # Deploying XMage Nexus (multi-user web service)
 
+> **LLMage Nexus documentation:** for the current guides see [Deployment](operator-guide/deployment.md) and [Configuration](operator-guide/configuration.md). This page is inherited from upstream XMage Nexus and may lag behind the client.
+
 This guide sets up one always-on machine (your "host machine") that runs a single
 `Mage.Proxy` process and exposes it to the internet through three **Cloudflare quick
 tunnels** (`cloudflared tunnel --url`, no account, no domain, free). Players open a

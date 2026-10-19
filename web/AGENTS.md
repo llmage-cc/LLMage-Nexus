@@ -50,15 +50,25 @@ proxy over a JSON WebSocket and contains **no XMage/Java code**.
 - `web/COMPONENT_PARITY.md` tracks Desktop↔Web feature parity per module
   (15 units): when closing a unit audit, update its row (Estado + Evidencia +
   Última verif.) and mirror only `yes/partial/no` into `site/content.json`.
-- **Every request to `api.scryfall.com` goes through `web/src/cards/scryfallClient.ts`**
+- **Card/token IMAGES resolve from the offline index — never the API.**
+  `web/src/cards/offlineIndex.ts` loads three generated assets
+  (`web/src/data/scryfall-{cards,printings,token-arts}.generated.json`, rebuilt by
+  `node scripts/build-scryfall-image-index.mjs` from the Scryfall bulk files) and builds
+  direct `cards.scryfall.io` CDN URLs (`…/{size}/{front|back}/{id0}/{id1}/{uuid}.jpg`) —
+  that CDN is not rate-limited, while `api.scryfall.com` caps `/cards/named` + `/cards/search`
+  at 2 req/s and a full board was a 30-60 request burst (the 2026-10-09 blank-art incident).
+  A map miss renders the card-text placeholder; there is NO live-API fallback (fail-fast
+  policy, same decision as LLMage's `ScryfallImageMap`). Do not use `…?format=image` API URLs
+  as `<img src>`, and do not add `/cards/named|search` calls back to the image path — guarded
+  by `e2e/scryfall-budget.spec.ts` (asserts zero API image-resolution requests on a rendered board).
+- **Deck metadata / import / printing search / localized text still use `api.scryfall.com`** —
+  every such request goes through `web/src/cards/scryfallClient.ts`
   (`scryfallFetch` / `scryfallJson`, or `fetchCardJson` in `scryfallCards.ts` for cards):
   one global queue (150 ms spacing, 3 in flight, common pause + `Retry-After` on 429),
   in-memory + IndexedDB cache. The queue clock and the 429 pause are shared across tabs
   over a `BroadcastChannel` (`xmage-scryfall-budget`), because Scryfall's limit is per IP,
-  not per tab. Anything that resolves card art or JSON must use the cache-backed
+  not per tab. Anything that resolves card JSON must use the cache-backed
   `scryfallJson` path (never raw `scryfallFetch`) unless it needs the `Response` itself.
-  Never call `fetch('https://api.scryfall.com/…')` directly and
-  never use `…?format=image` API URLs as `<img src>` (they count against the limit; use the
-  `image_uris` CDN URLs from the card JSON, e.g. `useCardArtUrl`). Guarded by
-  `e2e/scryfall-budget.spec.ts`. Use `{ urgent: true }` only for user-driven requests.
+  Never call `fetch('https://api.scryfall.com/…')` directly.
+  Use `{ urgent: true }` only for user-driven requests.
 - Do not commit unless explicitly requested.

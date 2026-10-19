@@ -1,4 +1,4 @@
-import type { CardView, DeckCardEntry, DeckJson, GameEndInfo, GameView, PermanentView } from '../../net/types'
+import type { CardView, DeckCardEntry, DeckJson, GameEndInfo, GameView, LLMConversationView, PermanentView } from '../../net/types'
 import type { FeedbackPrompt, FeedbackCard } from '../../game/feedback'
 import type { PhaseStops } from '../../net/commands'
 import { DEFAULT_PHASE_STOPS, clonePhaseStops } from '../../game/phaseStops'
@@ -71,6 +71,15 @@ export interface EliminationState {
 export interface GameSlice {
   game: GameView | null
   gameId: string | null
+  /**
+   * LLM conversation views captured at GAME-END event time.
+   * Both match-over paths null `game` BEFORE the end dialog renders, so the dialog
+   * cannot read `game.llmDebug` — this snapshot (taken while the view still exists,
+   * from the SAME per-viewer-filtered list the LLM tab shows) is what
+   * the dialog renders its per-seat transcript download from. Cleared on
+   * GAME_INIT/next game start. Null when the game had no visible LLM seats.
+   */
+  gameEndLlmSeats: { gameId: string | null; seats: LLMConversationView[] } | null
   gameChatId: string | null
   /** Clave de `opponentHands` cuya mano se muestra en la barra propia (Switch
    *  Hands / Mindslaver); null = mano propia. */
@@ -109,6 +118,17 @@ export interface GameSlice {
   turnRecap: TurnRecap | null
   enteredThisTurn: Record<string, true>
   priorityRequest: GameView | null
+  /**
+   * The priority request this client has already answered: the identity of the
+   * `priorityRequest` it answered (or of the frame it answered when no
+   * GAME_SELECT had been seen yet). XMage consumes exactly ONE answer per ask —
+   * an answer sent while the game is not open for one is parked by
+   * `HumanPlayer.waitResponseOpen` and applied to the NEXT ask, so a repeated
+   * pass resolves a window the player never saw. See `claimPriorityAnswer()`.
+   */
+  priorityAnsweredRequest: GameView | null
+  /** Bumped on every claimed answer: gives the pass-pending clock a stable key. */
+  priorityAnsweredSeq: number
   waitingFor: string | null
   elimination: EliminationState | null
 }
@@ -116,6 +136,7 @@ export interface GameSlice {
 export const initialGame: GameSlice = {
   game: null,
   gameId: null,
+  gameEndLlmSeats: null,
   gameChatId: null,
   switchedHandKey: null,
   playableIds: [],
@@ -141,6 +162,8 @@ export const initialGame: GameSlice = {
   turnRecap: null,
   enteredThisTurn: {},
   priorityRequest: null,
+  priorityAnsweredRequest: null,
+  priorityAnsweredSeq: 0,
   waitingFor: null,
   elimination: null,
   phaseStops: clonePhaseStops(DEFAULT_PHASE_STOPS),

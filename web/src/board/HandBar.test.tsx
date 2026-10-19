@@ -94,7 +94,9 @@ describe('HandBar', () => {
 
   it('routes clicks through onCardClick', () => {
     const onCardClick = vi.fn()
-    const { container } = render(<HandBar cards={hand()} onCardClick={onCardClick} />)
+    const { container } = render(
+      <HandBar cards={hand()} onCardClick={onCardClick} playableIds={new Set(['h-1', 'h-2', 'h-3'])} />,
+    )
     const slots = container.querySelectorAll('.hand-card-slot')
     fireEvent.click(slots[1].querySelector('.card-slot')!)
     expect(onCardClick).toHaveBeenCalledWith('h-2')
@@ -124,7 +126,8 @@ describe('HandBar', () => {
 
   it('rearranges the hand by dragging, swallows the drop click and keeps the order across updates', () => {
     const onCardClick = vi.fn()
-    const { container, rerender } = render(<HandBar cards={hand()} onCardClick={onCardClick} />)
+    const playable = new Set(['h-1', 'h-2', 'h-3', 'h-4'])
+    const { container, rerender } = render(<HandBar cards={hand()} onCardClick={onCardClick} playableIds={playable} />)
     const mockRects = () => {
       container.querySelectorAll<HTMLElement>('.hand-card-slot').forEach((slot, i) => {
         const card = slot.querySelector('.hand-card') as HTMLElement
@@ -145,6 +148,7 @@ describe('HandBar', () => {
       <HandBar
         cards={{ ...hand(), 'h-4': makeCard({ id: 'h-4', name: 'Shock', parentId: 'h-4' }) }}
         onCardClick={onCardClick}
+        playableIds={playable}
       />,
     )
     expect(ids()).toEqual(['h-2', 'h-3', 'h-1', 'h-4'])
@@ -152,7 +156,9 @@ describe('HandBar', () => {
 
   it('treats a press without movement as a plain click', () => {
     const onCardClick = vi.fn()
-    const { container } = render(<HandBar cards={hand()} onCardClick={onCardClick} />)
+    const { container } = render(
+      <HandBar cards={hand()} onCardClick={onCardClick} playableIds={new Set(['h-2'])} />,
+    )
     const slot = container.querySelectorAll('.hand-card-slot')[1]
     pointerDown(slot, 10)
     act(() => {
@@ -160,6 +166,29 @@ describe('HandBar', () => {
       pointer('pointerup', 12)
     })
     fireEvent.click(slot.querySelector('.card-slot')!)
+    expect(onCardClick).toHaveBeenCalledWith('h-2')
+  })
+
+  it('an unmarked card with no prompt is inert: no clickable class, no button role, no click (2026-10-14)', () => {
+    const onCardClick = vi.fn()
+    const { container } = render(
+      <HandBar cards={hand()} onCardClick={onCardClick} playableIds={new Set(['h-2'])} />,
+    )
+    const slots = container.querySelectorAll<HTMLElement>('.hand-card-slot')
+    const inert = slots[0].querySelector<HTMLElement>('.card-slot')!
+    const live = slots[1].querySelector<HTMLElement>('.card-slot')!
+
+    // The slot the gate would drop a click on must not advertise one.
+    expect(inert.classList.contains('clickable')).toBe(false)
+    expect(inert.getAttribute('role')).toBeNull()
+    expect(inert.getAttribute('tabindex')).toBeNull()
+    fireEvent.click(inert)
+    expect(onCardClick).not.toHaveBeenCalled()
+
+    // The marked card keeps exactly the affordance it had.
+    expect(live.classList.contains('clickable')).toBe(true)
+    expect(live.getAttribute('role')).toBe('button')
+    fireEvent.click(live)
     expect(onCardClick).toHaveBeenCalledWith('h-2')
   })
 

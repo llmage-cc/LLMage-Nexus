@@ -30,7 +30,9 @@ const TABLE: TableView = {
 describe('JoinTableDialog for a player with no decks', () => {
   beforeEach(() => {
     stored.decks = []
-    vi.stubEnv('DEV', false)
+    // A deployment built with no bundled decks (VITE_BUNDLED_DECKS=0): the player
+    // has no deck at all, so the starter-deck offer must appear.
+    vi.stubEnv('VITE_BUNDLED_DECKS', '0')
   })
 
   afterEach(() => {

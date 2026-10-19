@@ -157,6 +157,17 @@ html.fx-off .mulligan-bar {
   color: var(--err);
 }
 
+/* Live status while the answer is queued on an in-flight send ("sending…"):
+ * a quiet inline status, never a blocker — the controls stay clickable. */
+.mulligan-bar-sending {
+  font-size: var(--fs-2xs);
+  color: var(--fg-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mulligan-bar-keep {
   display: inline-flex;
   align-items: center;

@@ -5,7 +5,8 @@ import { manaPaymentActions } from '../../game/manaPayment'
 import { serverAutoAnswerActions } from '../../game/autoAnswers'
 import { clonePhaseStops } from '../../game/phaseStops'
 import { getState, setState, addLog } from '../state'
-import { sniffDungeonEntry, sniffSpeedLevel, sniffRoomDoor, enterTableChat, exitTableChat, armRollbackPending, disarmRollbackPending, sniffElimination } from '../actions'
+import { isLlmTabOffered } from '../../game/llmTab'
+import { sniffDungeonEntry, sniffSpeedLevel, sniffRoomDoor, sniffElimination, enterTableChat, exitTableChat, armRollbackPending, disarmRollbackPending, priorityAnswerPending } from '../actions'
 import { ingestRollbackServerMessage } from '../rollbackVote'
 import { t as tStatic } from '../../i18n'
 import { saveActiveGame, clearActiveGame } from '../persistence'
@@ -25,6 +26,22 @@ interface GameMeta {
   gameId: string
   deckName: string | null
   format: string | null
+}
+
+/**
+ * LLM seats captured at game-end event time, before either match-over path nulls
+ * `game`: the end dialog renders AFTER `handleEndGameInfo`
+ * has cleared the board, so it reads this snapshot, not `game.llmDebug`. The
+ * visibility gate is the same `isLlmTabOffered` rule the LLM tab applies — a
+ * spectator of a hidden-chat table captures nothing.
+ */
+function captureGameEndLlmSeats(fresh: Snapshot): { gameId: string | null; seats: import('../../net/types').LLMConversationView[] } | null {
+  const game = fresh.game
+  const gameId = fresh.gameId
+  if (!game || !isLlmTabOffered({ capabilities: fresh.capabilities, game, replay: null })) return null
+  const seats = game.llmDebug ?? []
+  if (seats.length === 0) return null
+  return { gameId, seats }
 }
 
 let gameMeta: GameMeta | null = null
@@ -82,7 +99,7 @@ export function handleStartGame(data: unknown, s: Snapshot): void {
   if (!d?.gameId || d.gameId !== s.gameId) {
     setState({ log: getState().log.filter((e) => (e.channel ?? 'system') !== 'game') })
   }
-  setState({ phase: 'game', watchingTable: null, stagingTableId: null, stagingIsTournament: false, gameId: d?.gameId ?? null, gameChatId: null, gameEnd: null, sideboardScreen: null, pendingSideboardScreen: null, rollbackPendingFor: null, rollbackPendingAt: null, rollbackVote: null, elimination: null })
+  setState({ phase: 'game', watchingTable: null, stagingTableId: null, stagingIsTournament: false, gameId: d?.gameId ?? null, gameChatId: null, gameEnd: null, gameEndLlmSeats: null, sideboardScreen: null, pendingSideboardScreen: null, rollbackPendingFor: null, rollbackPendingAt: null, rollbackVote: null, elimination: null })
   addLog('partida', `${tStatic('lobby','start_match_btn')}${d?.tableName ? ` (${d.tableName})` : ''}`)
   if (isNewGame) {
     void cmds.joinGame(d!.gameId!)
@@ -110,16 +127,24 @@ export function handleGameUpdate(method: string, objectId: string | null, data: 
   if (embeddedGame) {
     if (embeddedGame.players?.some((p) => p.controlled)) lastSeenGame = embeddedGame
     const fresh = getState()
+    const requestSpent = priorityAnswerPending(fresh)
     const { ids, window: playableWindow } = consolidatePlayables(
       embeddedGame, method, fresh.feedback, fresh.playableIds, fresh.playableWindow,
+      requestSpent,
     )
     const patch: Partial<typeof s> = { playableIds: ids, playableWindow }
     if (method === 'GAME_INIT') {
       if (objectId) rememberGameStart(objectId, embeddedGame)
       patch.gameEnd = null
+      patch.gameEndLlmSeats = null
       patch.elimination = null
       patch.feedback = null
       patch.waitingFor = null
+      // A GAME_INIT (first join, rejoin, resync) rebuilds the whole game state:
+      // the requests and answers of the old one are gone with it, and holding a
+      // stale "already answered" marker would leave the pass button dead.
+      patch.priorityRequest = null
+      patch.priorityAnsweredRequest = null
       if (objectId && !fresh.gameChatId) {
         void cmds.getGameChatId(objectId).then((cid) => {
           setState({ gameChatId: cid ?? null })
@@ -178,7 +203,7 @@ export function handleWatchGame(objectId: string | null): void {
       // volver del juego espectado el lobby reabra el cuadro solo.
       spectateTournament: null,
       elimination: null,
-      ...(switchingGame ? { game: null, gameEnd: null } : null),
+      ...(switchingGame ? { game: null, gameEnd: null, gameEndLlmSeats: null } : null),
     })
   }
   // Nuevo espectado: el feed no debe arrastrar los eventos de la partida anterior
@@ -249,7 +274,7 @@ export function handleGameOver(data: unknown, objectId: string | null): void {
         result: msg,
       },
     }
-    setState({ gameEnd: syntheticEnd })
+    setState({ gameEnd: syntheticEnd, gameEndLlmSeats: captureGameEndLlmSeats(fresh) })
   }
 }
 
@@ -266,10 +291,12 @@ export function handleEndGameInfo(data: unknown, objectId?: string | null): void
   addLog('partida', matchOver ? (end.matchInfo ?? 'Fin del match') : (end.matchInfo ?? 'Fin de la partida'))
   if (matchOver) {
     autosaveGameLog(getState().gameId, end.matchInfo ?? end.gameInfo ?? 'Fin del match')
+    const capturedLlmSeats = captureGameEndLlmSeats(getState())
     clearActiveGame()
     setState({
       game: null,
       gameId: null,
+      gameEndLlmSeats: capturedLlmSeats,
       gameChatId: null,
       playableIds: [],
       playableWindow: null,

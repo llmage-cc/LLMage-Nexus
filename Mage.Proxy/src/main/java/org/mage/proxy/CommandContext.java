@@ -15,6 +15,32 @@ interface CommandContext {
 
     boolean isConnected();
 
+    /**
+     * The capabilities of the connected XMage server (probed once at login). Keeps the stock
+     * answer before any probe, so every LLM-carrying request is rejected while no server
+     * capability is known — the fail-fast input of the dispatch gate.
+     */
+    ServerCapabilities capabilities();
+
+    /**
+     * True while a replay is loaded or playing in this server session: player-action verbs are
+     * then refused before any RPC (a replay carries no seat). Cleared on a non-boundary
+     * {@code REPLAY_DONE}.
+     */
+    boolean replayActive();
+
+    /** Track length of the last forwarded replay frame, or -1 while unknown (local range check). */
+    int replayStateCount();
+
+    /** True when a live game is being played or watched right now (replayGame refuses then). */
+    boolean liveGameActive();
+
+    /** A replay was loaded or started: player actions are refused from here on. */
+    void markReplayActive(UUID gameId);
+
+    /** The replay ended (stop, exit or corrupt file): the player-action gate is lifted. */
+    void clearReplay();
+
     void sendFailure(WebSocket conn, String action, String requestId, long start);
 
     void replayGameState(WebSocket conn, UUID gameId);

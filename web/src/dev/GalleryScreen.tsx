@@ -22,11 +22,11 @@ import SetupWizard from '../setup/SetupWizard'
 import RenderedCardsGallery from './RenderedCardsGallery'
 import './GalleryScreen.css'
 
-// Layout reproducible: la escala de las zonas del tablero se mide contra la
-// fila de estado (que contiene la mano rival, dimensionada a su vez por esa
-// escala) y el ciclo tiene varios puntos fijos entre sesiones. La galería fija
-// el alto de esa fila (`galleryPinnedStatusH`) para que los baselines de
-// regresión visual sean deterministas; el resto de la app mide en vivo.
+// Reproducible layout: the board zone scale is measured against the status row
+// (which contains the opponent hand, itself sized by that scale) and the cycle
+// has several fixed points across sessions. The gallery pins that row's height
+// (`galleryPinnedStatusH`) so the visual-regression baselines are deterministic;
+// the rest of the app measures live.
 const GALLERY_STATUS_H = '116'
 if (typeof document !== 'undefined') {
   document.documentElement.dataset.galleryStatusH = GALLERY_STATUS_H
@@ -70,7 +70,7 @@ function stageOf(entry: GalleryEntry | undefined) {
   return <GameScreen />
 }
 
-/** Aplica la siembra de localStorage del estado y devuelve la restauración (si la hay). */
+/** Applies the state's localStorage seed and returns the previous values (if any). */
 function seedStorage(seed: Record<string, string> | undefined): Record<string, string | null> | null {
   if (!seed) return null
   const previous: Record<string, string | null> = {}
@@ -95,8 +95,8 @@ export default function GalleryScreen() {
   const active = entries.find((e) => e.id === activeId) ?? entries[0]
   const savedState = useRef(getState())
   const savedLang = useRef(getLanguage())
-  // El wizard de crear mesa lee localStorage al montar: la siembra va en el
-  // click (antes del montaje) y se restaura al cambiar de estado o salir.
+  // The create-table wizard reads localStorage on mount: the seed goes on the
+  // click (before mounting) and is restored on state change or exit.
   const seededStorage = useRef<Record<string, string | null> | null>(null)
 
   const selectEntry = (id: string) => {
@@ -144,8 +144,8 @@ export default function GalleryScreen() {
   }, [active])
 
   useEffect(() => {
-    // Re-aplicado en el efecto (no solo al importar el módulo): StrictMode
-    // monta/desmonta efectos y el cleanup lo borraría.
+    // Re-applied in the effect (not only on module import): StrictMode
+    // mounts/unmounts effects and the cleanup would delete it.
     document.documentElement.dataset.galleryStatusH = GALLERY_STATUS_H
     return () => {
       delete document.documentElement.dataset.galleryStatusH
@@ -162,11 +162,11 @@ export default function GalleryScreen() {
     }
   }, [])
 
-  // Lobby/draft/construct disparan comandos "fire-and-forget" al montarse
-  // (p. ej. `setBoosterLoaded` de DraftScreen) que esperan un gateway real; en
-  // la galería no hay ninguno conectado y `getGateway()` lanza sincrónicamente
-  // dentro de una promesa sin capturar → unhandled rejection. Un gateway
-  // stub que resuelve `ok:false` evita el pageerror sin tocar esas pantallas.
+  // Lobby/draft/construct fire "fire-and-forget" commands on mount
+  // (e.g. DraftScreen's `setBoosterLoaded`) that expect a real gateway; in
+  // the gallery none is connected and `getGateway()` throws synchronously
+  // inside an uncaught promise → unhandled rejection. A stub gateway that
+  // resolves `ok:false` avoids the pageerror without touching those screens.
   useEffect(() => {
     let prevGateway: Gateway | null = null
     try {
@@ -175,7 +175,7 @@ export default function GalleryScreen() {
       prevGateway = null
     }
     const stubGateway = {
-      send: async () => ({ type: 'result', action: '', ok: false, error: 'gallery: sin gateway real' }),
+      send: async () => ({ type: 'result', action: '', ok: false, error: 'gallery: no real gateway' }),
     } as unknown as Gateway
     setGateway(stubGateway)
     return () => setGateway(prevGateway)
@@ -187,8 +187,8 @@ export default function GalleryScreen() {
     <div className="gallery" data-gallery>
       <aside className="gallery-sidebar">
         <div className="gallery-head">
-          <strong>Galería de estados</strong>
-          <span>{entries.length} estados · dev</span>
+          <strong>State gallery</strong>
+          <span>{entries.length} states · dev</span>
         </div>
         <nav className="gallery-nav">
           {groups.map((group) => (
@@ -212,7 +212,7 @@ export default function GalleryScreen() {
           ))}
         </nav>
         <p className="gallery-hint">
-          Solo disponible en dev. Cambia el estado del store; al salir se restaura el estado previo.
+          Dev only. It changes the store state; on exit the previous state is restored.
         </p>
       </aside>
       <main className="gallery-stage" data-gallery-stage={active?.id ?? ''}>

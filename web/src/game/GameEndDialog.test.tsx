@@ -5,6 +5,21 @@ import { watchGame } from '../net/commands'
 import { setState, getState } from '../state/state'
 import { reset } from '../state/store'
 import { makeGameView, makePlayer } from '../__fixtures__/gameViews'
+import type { LLMConversationView } from '../net/types'
+
+function makeLlmConv(playerName: string, extra: Partial<LLMConversationView> = {}): LLMConversationView {
+  return {
+    playerName,
+    modelName: 'deepseek-v4.1',
+    exchangeCount: 1,
+    totalContextChars: 100,
+    modelContextWindow: 1000,
+    streaming: false,
+    streamingStartedAt: 0,
+    messages: [{ role: 'assistant', content: 'I cast Lightning Bolt.' }],
+    ...extra,
+  }
+}
 
 vi.mock('../net/commands', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../net/commands')>()
@@ -15,6 +30,9 @@ vi.mock('../net/commands', async (importOriginal) => {
     quitMatch: vi.fn().mockResolvedValue({ ok: true }),
   }
 })
+
+vi.mock('./llmTranscript', () => ({ downloadLlmTranscript: vi.fn(() => true) }))
+import { downloadLlmTranscript } from './llmTranscript'
 
 describe('GameEndDialog', () => {
   beforeEach(() => {
@@ -254,5 +272,72 @@ describe('GameEndDialog', () => {
     render(<GameEndDialog />)
     expect(screen.queryByRole('button', { name: /Seguir partida/i })).toBeNull()
     expect(screen.getByRole('button', { name: /Volver al lobby/i })).toBeDefined()
+  })
+
+  it('offers a per-seat transcript download for LLM seats, carrying the game id', () => {
+    vi.mocked(downloadLlmTranscript).mockClear()
+    setState({
+      capabilities: { llm: true } as never,
+      gameId: 'game-live-1',
+      game: makeGameView({
+        llmChatPublic: true,
+        llmDebug: [makeLlmConv('DeepSeek Bot'), makeLlmConv('GLM Bot')],
+      }),
+      gameEnd: {
+        won: true,
+        gameInfo: 'You have won the game',
+        matchInfo: 'You won the match!',
+        matchView: { endTime: '2026-08-29T23:50:00Z' },
+      },
+    })
+
+    render(<GameEndDialog />)
+    const buttons = screen.getAllByTestId('end-download-transcript')
+    expect(buttons).toHaveLength(2)
+    fireEvent.click(buttons[0])
+    expect(downloadLlmTranscript).toHaveBeenCalled()
+    const call = vi.mocked(downloadLlmTranscript).mock.calls[0]
+    expect(call[1]).toEqual({ gameId: 'game-live-1' })
+  })
+
+  it('does not offer a transcript download without LLM seats (stock server or hidden chat)', () => {
+    setState({
+      capabilities: { llm: false } as never,
+      game: makeGameView({
+        players: [makePlayer({ playerId: 'p-hero', name: 'Hero', controlled: true })],
+      }),
+      gameEnd: {
+        won: false,
+        gameInfo: 'Hero lost the game',
+        matchInfo: 'Match continues',
+      },
+    })
+
+    render(<GameEndDialog />)
+    expect(screen.queryByTestId('end-download-transcript')).toBeNull()
+  })
+
+  it('renders the transcript download from the event-time snapshot after the board is cleared (match over)', () => {
+    vi.mocked(downloadLlmTranscript).mockClear()
+    setState({
+      capabilities: { llm: true } as never,
+      game: null,
+      gameId: null,
+      gameEndLlmSeats: { gameId: 'game-over-1', seats: [makeLlmConv('DeepSeek Bot')] },
+      gameEnd: {
+        won: false,
+        gameInfo: 'Opponent has won the game',
+        matchInfo: 'Opponent won the match!',
+        matchView: { endTime: '2026-08-29T23:50:00Z' },
+      },
+    })
+
+    render(<GameEndDialog />)
+    const button = screen.getByTestId('end-download-transcript')
+    fireEvent.click(button)
+    expect(downloadLlmTranscript).toHaveBeenCalledTimes(1)
+    const call = vi.mocked(downloadLlmTranscript).mock.calls[0]
+    expect(call[0].playerName).toBe('DeepSeek Bot')
+    expect(call[1]).toEqual({ gameId: 'game-over-1' })
   })
 })

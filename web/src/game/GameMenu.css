@@ -40,7 +40,10 @@
   position: absolute;
   bottom: calc(100% + 6px);
   right: 0;
-  max-height: var(--dd-max, 420px);
+  /* Same viewport-derived cap as the drawer (--dd-cap): the strip budget is
+     board-relative and its 420px fallback is viewport-blind, so on short
+     windows the cap keeps the panel inside the VISIBLE screen. */
+  max-height: min(var(--dd-max, 420px), calc(100dvh - var(--sp-4h)));
   overflow-y: auto;
   z-index: 200;
   min-width: 220px;

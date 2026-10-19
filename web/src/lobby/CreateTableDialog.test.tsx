@@ -1,5 +1,7 @@
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import CreateTableDialog from './CreateTableDialog'
 import { STORAGE_KEY } from './CreateTable/constants'
 import * as cmds from '../net/commands'
@@ -44,7 +46,8 @@ describe('CreateTableDialog', () => {
   afterEach(() => {
     cleanup()
     localStorage?.removeItem(STORAGE_KEY)
-    setState({ conn: null } as never)
+    setState({ conn: null, capabilities: null } as never)
+    vi.mocked(cmds.getPlayerTypes).mockReset().mockResolvedValue(['COMPUTER_MAD', 'COMPUTER_DRAFT'])
   })
 
   // Renders the dialog and waits until the async form data (game/deck/player/
@@ -229,7 +232,7 @@ describe('CreateTableDialog', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('U2: blocks Siguiente on General with an empty name', async () => {
+  it('blocks Next on General with an empty name', async () => {
     render(<CreateTableDialog onClose={onClose} />)
 
     const nameInput = screen.getByPlaceholderText(/Ej. Modern Casual Bo3/)
@@ -240,7 +243,7 @@ describe('CreateTableDialog', () => {
     expect(screen.queryByText(/Mulligans Gratuitos|Free Mulligans/i)).toBeNull()
   })
 
-  it('F7+F2: sends bannedUsers and per-seat skills on submit', async () => {
+  it('sends bannedUsers and per-seat skills on submit', async () => {
     render(<CreateTableDialog onClose={onClose} />)
 
     fireEvent.change(screen.getByPlaceholderText(/Ej. Modern Casual Bo3/), { target: { value: 'Skill Table' } })
@@ -305,7 +308,7 @@ describe('CreateTableDialog', () => {
     })
   })
 
-  it('U8: draft tournament exposes number of rounds', async () => {
+  it('draft tournament exposes number of rounds', async () => {
     render(<CreateTableDialog onClose={onClose} />)
 
     const formatSelect = screen.getAllByRole('combobox')[1] as HTMLSelectElement
@@ -318,7 +321,7 @@ describe('CreateTableDialog', () => {
     expect(rounds.value).toBe('5')
   })
 
-  it('T3: number of rounds only shows for Swiss tournament types', async () => {
+  it('number of rounds only shows for Swiss tournament types', async () => {
     await renderDialog()
 
     const formatSelect = screen.getAllByRole('combobox')[1] as HTMLSelectElement
@@ -335,7 +338,7 @@ describe('CreateTableDialog', () => {
     expect(screen.queryByLabelText(/rondas|rounds/i)).toBeNull()
   })
 
-  it('T2: draft tournament sends lobby flags (skill/rated/rollback/clocks/single)', async () => {
+  it('draft tournament sends lobby flags (skill/rated/rollback/clocks/single)', async () => {
     render(<CreateTableDialog onClose={onClose} />)
 
     fireEvent.change(screen.getByPlaceholderText(/Ej. Modern Casual Bo3/), { target: { value: 'Draft Night' } })
@@ -381,7 +384,7 @@ describe('CreateTableDialog', () => {
     })
   })
 
-  it('T6: draft tournament sends timing only for Draft types', async () => {
+  it('draft tournament sends timing only for Draft types', async () => {
     await renderDialog()
 
     fireEvent.change(screen.getByPlaceholderText(/Ej. Modern Casual Bo3/), { target: { value: 'Timed Draft' } })
@@ -418,7 +421,7 @@ describe('CreateTableDialog', () => {
     })
   })
 
-  it('T7: mode switcher and quick presets configure table correctly', async () => {
+  it('mode switcher and quick presets configure table correctly', async () => {
     render(<CreateTableDialog onClose={onClose} />)
 
     // Click Commander 4P preset
@@ -431,7 +434,7 @@ describe('CreateTableDialog', () => {
     expect(screen.getByRole('tab', { name: /^Construido/i }).getAttribute('aria-selected')).toBe('true')
   })
 
-  it('T8: constructed tournament creates tournament table with constructed format and joins with deck', async () => {
+  it('constructed tournament creates tournament table with constructed format and joins with deck', async () => {
     render(<CreateTableDialog onClose={onClose} />)
 
     fireEvent.change(screen.getByPlaceholderText(/Ej. Modern Casual Bo3/), { target: { value: 'Modern Swiss 8P' } })
@@ -467,7 +470,7 @@ describe('CreateTableDialog', () => {
     })
   })
 
-  it('T9: handles server returning TournamentTypeView objects without throwing t.startsWith is not a function', async () => {
+  it('handles server returning TournamentTypeView objects without throwing t.startsWith is not a function', async () => {
     // Simulate real server returning TournamentTypeView objects instead of plain strings
     vi.mocked(cmds.getTournamentTypes).mockResolvedValueOnce([
       { name: 'Constructed Elimination', minPlayers: 2, maxPlayers: 16 } as unknown as string,
@@ -489,7 +492,7 @@ describe('CreateTableDialog', () => {
     expect(screen.getByRole('tab', { name: /^Construido/i })).toBeDefined()
   })
 
-  it('T10: links gameType and deckType to prevent incompatible combinations', async () => {
+  it('links gameType and deckType to prevent incompatible combinations', async () => {
     render(<CreateTableDialog onClose={onClose} />)
 
     const gameTypeSelect = screen.getAllByRole('combobox')[0] as HTMLSelectElement
@@ -522,7 +525,48 @@ describe('CreateTableDialog', () => {
     expect(duelOptions).not.toContain('Variant Magic - Commander')
   })
 
-  it('T11: mode selector cards contain title and description in separate container elements', () => {
+  // Parity 2026-10-10: Cancel must not leave a Tournament preset selected on
+  // reopen — the discard lives in the hook (form.cancel) and every cancelling
+  // exit (button, backdrop, Escape) routes through it. The draft is observed
+  // through the same in-memory localStorage stub the hook tests use: this
+  // environment has no real localStorage, so the wizard's draft writes would
+  // otherwise silently no-op.
+  it('cancel drops the persisted draft: reopen opens with the Tournament preset cleared', async () => {
+    const ls = new Map<string, string>()
+    ls.clear()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => ls.get(k) ?? null,
+      setItem: (k: string, v: string) => { ls.set(k, v) },
+      removeItem: (k: string) => { ls.delete(k) },
+    })
+    try {
+      const first = await renderDialog()
+
+      const cards = (root: HTMLElement) => Array.from(root.querySelectorAll('.create-mode-card'))
+      const tourneyCard = cards(first.container).find((c) => c.querySelector('.create-mode-card-title')?.textContent?.includes('Torneo'))!
+      fireEvent.click(tourneyCard)
+      const activeTitle = first.container.querySelector('.create-mode-card.active .create-mode-card-title')?.textContent
+      expect(activeTitle).toMatch(/Torneo/)
+      await waitFor(() => {
+        expect(JSON.parse(ls.get(STORAGE_KEY) ?? '{}').tableCategory).toBe('tourney')
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /^Cancelar$/i }))
+      expect(onClose).toHaveBeenCalled()
+      expect(ls.has(STORAGE_KEY)).toBe(false)
+      cleanup()
+
+      const second = await renderDialog()
+      const reopenedActive = second.container.querySelector('.create-mode-card.active .create-mode-card-title')?.textContent
+      expect(reopenedActive).not.toMatch(/Torneo/)
+      const reopenedFormat = screen.getAllByRole('combobox')[1] as HTMLSelectElement
+      expect(reopenedFormat.value).toBe('Constructed - Modern')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('mode selector cards contain title and description in separate container elements', () => {
     const { container } = render(<CreateTableDialog onClose={onClose} />)
     const cards = container.querySelectorAll('.create-mode-card')
     expect(cards.length).toBe(3)
@@ -536,7 +580,7 @@ describe('CreateTableDialog', () => {
     })
   })
 
-  it('T12: DraftSetsSelector allows picking popular chips and configuring boosters with full visibility', async () => {
+  it('DraftSetsSelector allows picking popular chips and configuring boosters with full visibility', async () => {
     render(<CreateTableDialog onClose={onClose} />)
 
     // Switch to Limited Draft mode
@@ -604,7 +648,7 @@ describe('CreateTableDialog', () => {
     await waitFor(() => expect((editBtn as HTMLButtonElement).disabled).toBe(true))
   })
 
-  it('T13: creates table with COMPUTER_MAD and joins both the bot and human player', async () => {
+  it('creates table with COMPUTER_MAD and joins both the bot and human player', async () => {
     await renderDialog()
 
     const nameInput = screen.getByPlaceholderText(/Ej. Modern Casual Bo3/)
@@ -671,7 +715,7 @@ describe('CreateTableDialog', () => {
     expect(summaryText()).toMatch(/10 minutos/)
   })
 
-  it('T14: el wizard abre con el set repetido por sobre y lo sincroniza al cambiar de sobres', async () => {
+  it('the wizard opens with the set repeated per booster and syncs it when the boosters change', async () => {
     await renderDialog()
     const formatSelect = screen.getAllByRole('combobox')[1] as HTMLSelectElement
     fireEvent.change(formatSelect, { target: { value: 'Limited' } })
@@ -689,7 +733,7 @@ describe('CreateTableDialog', () => {
     expect(setsInput.value).toBe('M21, MH3, DSK')
   })
 
-  it('T15: draft con bots elegidos a mano se bloquea con aviso (no llegan a rondas)', async () => {
+  it('a draft with hand-picked bots is blocked with a warning (it never reaches rounds)', async () => {
     render(<CreateTableDialog onClose={onClose} />)
     fireEvent.change(screen.getByPlaceholderText(/Ej. Modern Casual Bo3/), { target: { value: 'Draft con bots' } })
     const formatSelect = screen.getAllByRole('combobox')[1] as HTMLSelectElement
@@ -731,5 +775,130 @@ describe('CreateTableDialog', () => {
       expect(screen.getByText(/necesita un nombre|needs a name/i)).toBeDefined()
     })
     expect(screen.queryByRole('button', { name: /Crear mesa|Create table/i })).toBeNull()
+  })
+
+  it('LLM: sin capabilities.llm la opción COMPUTER_LLM no existe en el desplegable de plaza', async () => {
+    vi.mocked(cmds.getPlayerTypes).mockResolvedValue(['COMPUTER_MAD', 'COMPUTER_LLM'])
+    // capabilities null (default) — the stale session never had them
+    await renderDialog()
+    const seatsNav = screen
+      .getAllByRole('button', { name: /Multijugador/ })
+      .find((b) => (b as HTMLElement).classList.contains('wizard-step'))!
+    fireEvent.click(seatsNav)
+    const seatType = (await screen.findByTestId('seat-type-0')) as HTMLSelectElement
+    const values = Array.from(seatType.options).map((o) => o.value)
+    expect(values).not.toContain('COMPUTER_LLM')
+  })
+
+  it('LLM: con capabilities.llm el asiento COMPUTER_LLM muestra el panel y el submit lleva llmConfigs', async () => {
+    vi.mocked(cmds.getPlayerTypes).mockResolvedValue(['COMPUTER_MAD', 'COMPUTER_LLM'])
+    setState({
+      conn: { serverHost: 'localhost', username: 'e2e' },
+      capabilities: { llm: true, p1: false, replayScrubber: false, replaySidecar: false, serverVersion: '1.4.62-V1', playerTypes: [] },
+    } as never)
+    await renderDialog()
+    fireEvent.change(screen.getByPlaceholderText(/Ej. Modern Casual Bo3/), { target: { value: 'LLM Duel' } })
+
+    for (let i = 0; i < 3; i++) {
+      const nextBtn = screen.queryByRole('button', { name: /Siguiente/ })
+      if (nextBtn) fireEvent.click(nextBtn)
+    }
+    const seatType = (await screen.findByTestId('seat-type-0')) as HTMLSelectElement
+    const values = Array.from(seatType.options).map((o) => o.value)
+    expect(values).toContain('COMPUTER_LLM')
+    fireEvent.change(seatType, { target: { value: 'COMPUTER_LLM' } })
+
+    // el panel por asiento aparece con sus cinco pestañas
+    expect(await screen.findByTestId('llm-config-panel-0')).toBeDefined()
+    expect(screen.getByTestId('llm-tab-core')).toBeDefined()
+    expect(screen.getByTestId('llm-tab-behavior')).toBeDefined()
+    expect(screen.getByTestId('llm-tab-personality')).toBeDefined()
+    expect(screen.getByTestId('llm-tab-conversation')).toBeDefined()
+    expect(screen.getByTestId('llm-tab-summarization')).toBeDefined()
+
+    // editar el modelo deja el valor en el panel
+    const modelInput = screen.getByTestId('llm-model') as HTMLInputElement
+    fireEvent.change(modelInput, { target: { value: 'z-ai/glm-4.5' } })
+    expect(modelInput.value).toBe('z-ai/glm-4.5')
+
+    // navegar a Resumen por la pestaña y comprobar sus campos
+    fireEvent.click(screen.getByTestId('llm-tab-summarization'))
+    expect(screen.getByTestId('llm-summarizeKeepExchanges')).toBeDefined()
+
+    for (let i = 0; i < 5; i++) {
+      const nextBtn = screen.queryByRole('button', { name: /Siguiente/ })
+      if (!nextBtn) break
+      fireEvent.click(nextBtn)
+    }
+    fireEvent.click(screen.getByRole('button', { name: /Crear Mesa/ }))
+
+    await waitFor(() => {
+      const sent = (cmds.createTable as unknown as { mock: { calls: Array<[Record<string, unknown>]> } }).mock.calls[0][0]
+      expect(sent.playerTypes).toEqual(['HUMAN', 'COMPUTER_LLM'])
+      expect(sent.llmConfigs).toEqual([expect.objectContaining({ model: 'z-ai/glm-4.5', thinkingEnabled: true })])
+      // la clave nunca viaja (vacía aquí): ni useClientKey ni clientKeyTag
+      const cfg = (sent.llmConfigs as Array<Record<string, unknown>>)[0]
+      expect(cfg).not.toHaveProperty('useClientKey')
+      expect(cfg).not.toHaveProperty('clientKeyTag')
+      expect(cfg).not.toHaveProperty('apiKey')
+    })
+  })
+
+  it('LLM: a typed apiKey travels as useClientKey+clientKeyTag and never as apiKey', async () => {
+    vi.mocked(cmds.getPlayerTypes).mockResolvedValue(['COMPUTER_MAD', 'COMPUTER_LLM'])
+    setState({
+      conn: { serverHost: 'localhost', username: 'e2e' },
+      capabilities: { llm: true, p1: false, replayScrubber: false, replaySidecar: false, serverVersion: '1.4.62-V1', playerTypes: [] },
+    } as never)
+    await renderDialog()
+    fireEvent.change(screen.getByPlaceholderText(/Ej. Modern Casual Bo3/), { target: { value: 'LLM Key Duel' } })
+
+    for (let i = 0; i < 3; i++) {
+      const nextBtn = screen.queryByRole('button', { name: /Siguiente/ })
+      if (nextBtn) fireEvent.click(nextBtn)
+    }
+    const seatType = (await screen.findByTestId('seat-type-0')) as HTMLSelectElement
+    fireEvent.change(seatType, { target: { value: 'COMPUTER_LLM' } })
+    const keyInput = (await screen.findByTestId('llm-apiKey')) as HTMLInputElement
+    fireEvent.change(keyInput, { target: { value: 'XXXXXX-not-a-real-key' } })
+
+    for (let i = 0; i < 5; i++) {
+      const nextBtn = screen.queryByRole('button', { name: /Siguiente/ })
+      if (!nextBtn) break
+      fireEvent.click(nextBtn)
+    }
+    fireEvent.click(screen.getByRole('button', { name: /Crear Mesa/ }))
+
+    await waitFor(() => {
+      const sent = (cmds.createTable as unknown as { mock: { calls: Array<[Record<string, unknown>]> } }).mock.calls[0][0]
+      const cfg = (sent.llmConfigs as Array<Record<string, unknown>>)[0]
+      expect(cfg.useClientKey).toBe(true)
+      expect(typeof cfg.clientKeyTag).toBe('string')
+      expect(cfg).not.toHaveProperty('apiKey')
+      expect(JSON.stringify(sent)).not.toContain('XXXXXX-not-a-real-key')
+      // y la clave tampoco quedó en localStorage
+      expect(localStorage?.getItem(STORAGE_KEY) ?? '').not.toContain('XXXXXX-not-a-real-key')
+    })
+  })
+})
+
+/* jsdom no tiene motor de maquetación, así que el contrato del pane interior se
+   fija sobre el CSS de origen (mismo criterio que CreateTable/createTableScroll.test.ts). */
+const dialogCss = readFileSync(join(__dirname, 'CreateTableDialog.css'), 'utf8')
+
+function squeezed(selector: string, css: string): string {
+  const at = css.indexOf(`${selector} {`)
+  expect(at, `falta la regla ${selector} en el css de origen`).toBeGreaterThanOrEqual(0)
+  const open = css.indexOf('{', at)
+  const close = css.indexOf('}', open)
+  return [...css.slice(open + 1, close)].filter((c) => c.charCodeAt(0) >= 33).join('')
+}
+
+describe('CreateTableDialog — el cuerpo del asistente nunca es un pane que oculta contenido', () => {
+  it('declara flex none: ningún panel con tope puede encogerlo al hueco sobrante', () => {
+    const body = squeezed('.create-table-body', dialogCss).replaceAll('min-height:260px', '')
+    expect(body).toContain('flex:none')
+    expect(body, 'un tope re-crearía el pane de ~297px que escondía los campos').not.toContain('height:')
+    expect(body, 'el scroller dueño es el panel del diálogo, no este cuerpo').not.toContain('overflow')
   })
 })

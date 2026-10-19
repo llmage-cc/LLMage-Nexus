@@ -10,13 +10,25 @@ import CountryFlag from '../lobby/CountryFlag'
 import { guessDefaultFlag } from '../lobby/defaultFlag'
 import { sortedFlags, countryName, type ServerPreset } from '../lobby/flags'
 import { loadConn, saveConn, type ConnectionInfo } from '../state/persistence'
+import { doConnect } from '../state/store'
+import { getAuthToken as rememberedAuthToken } from '../net/authToken'
+import { peekProxyConfig, DEFAULT_PROXY_CONFIG } from '../net/proxyConfig'
+import { probeProxyConfig } from '../state/gateway'
+import { getState } from '../state/state'
+import { parseAutoConnect } from '../lobby/autoConnect'
 import { markSetupDone, SETUP_CONN_EVENT } from './setupFlag'
+import { isDeploymentLocked } from './deploymentLock'
 import './SetupWizard.css'
 import Field from '../ui/Field'
 
 type StepId = 'language' | 'identity' | 'server' | 'board' | 'soundplay' | 'done'
 
-const STEPS: StepId[] = ['language', 'identity', 'server', 'board', 'soundplay', 'done']
+const ALL_STEPS: StepId[] = ['language', 'identity', 'server', 'board', 'soundplay', 'done']
+
+/** The steps the wizard walks. A locked deployment drops the server-picker step. */
+function stepsFor(locked: boolean): StepId[] {
+  return locked ? ALL_STEPS.filter((s) => s !== 'server') : ALL_STEPS
+}
 
 interface ServerDraft {
   preset: ServerPreset
@@ -26,8 +38,7 @@ interface ServerDraft {
   port: string
 }
 
-function initialServerDraft(): ServerDraft {
-  const saved = loadConn()
+function initialServerDraft(locked: boolean): ServerDraft {
   const base: ServerDraft = {
     preset: 'local',
     proxyHost: import.meta.env.VITE_DEFAULT_PROXY_HOST ?? 'localhost',
@@ -35,6 +46,10 @@ function initialServerDraft(): ServerDraft {
     serverHost: import.meta.env.VITE_DEFAULT_SERVER_HOST ?? 'localhost',
     port: import.meta.env.VITE_DEFAULT_SERVER_PORT ?? '17171',
   }
+  // A locked deployment bakes its own target and never lets a saved/foreign
+  // connection override it.
+  if (locked) return base
+  const saved = loadConn()
   if (!saved) return base
   const draft: ServerDraft = {
     preset: 'custom',
@@ -58,19 +73,21 @@ function applyPreset(p: ServerPreset, prev: ServerDraft): ServerDraft {
 
 export default function SetupWizard({ onClose }: { onClose: () => void }) {
   const { t, lang } = useTranslation()
+  const locked = isDeploymentLocked()
+  const steps = stepsFor(locked)
   const [step, setStep] = useState(0)
   const [username, setUsername] = useState(() => loadConn()?.username ?? (import.meta.env.DEV ? 'player1' : ''))
   const [password, setPassword] = useState(() => loadConn()?.password ?? (import.meta.env.DEV ? 'password' : ''))
   const [flagName, setFlagName] = useState(() => loadConn()?.flagName ?? guessDefaultFlag())
   const [avatarId, setAvatarId] = useState(() => loadConn()?.avatarId ?? 10)
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
-  const [server, setServer] = useState<ServerDraft>(initialServerDraft)
+  const [server, setServer] = useState<ServerDraft>(() => initialServerDraft(locked))
   const [identityError, setIdentityError] = useState(false)
 
-  const stepId = STEPS[step]
+  const stepId = steps[step]
   const isLast = stepId === 'done'
-  // U4-2: el servidor público (beta) no usa contraseñas; el campo se
-  // deshabilita, se limpia y no viaja en la conexión guardada.
+  // The public server (beta) does not use passwords; the field is disabled,
+  // cleared and does not travel in the saved connection.
   const passwordDisabledOnBeta = server.serverHost.trim() === 'beta.xmage.today'
 
   useEffect(() => {
@@ -97,16 +114,59 @@ export default function SetupWizard({ onClose }: { onClose: () => void }) {
     avatarId,
   })
 
-  const finish = () => {
+  const finish = async () => {
     if (!username.trim()) {
-      setStep(STEPS.indexOf('identity'))
+      setStep(steps.indexOf('identity'))
       setIdentityError(true)
       return
     }
     const conn = buildConn()
     saveConn(conn)
+    // Pre-fill the login screen (it listens for SETUP_CONN_EVENT): still useful if
+    // the connect below fails and the user lands back on the form.
     window.dispatchEvent(new CustomEvent(SETUP_CONN_EVENT, { detail: conn }))
     markSetupDone()
+    // The final primary button promises "you can connect and play now": it must
+    // actually connect, not just persist and close. On a gated deployment
+    // the token is already in module memory from the login screen; an explicit
+    // ?proxyPort= (the e2e FixtureServer) still wins, exactly like login's submit.
+    const token = rememberedAuthToken()
+    // A token-gated deployment with NO token in memory yet (the very first
+    // run: the wizard's Enter is the first thing the user clicks, and the token
+    // field lives on the login screen) must not fire a connect the proxy will
+    // close with 4401 ("Auth token required"). Persist + close and leave the
+    // connect to the login screen, whose token field is visible and pre-filled
+    // by the SETUP_CONN_EVENT above. A non-gated deployment, or a gated one with
+    // a token already remembered, connects immediately.
+    //
+    // That gate decision reads `authRequired`, which the App-mount probe
+    // fills ASYNC — a fast first-run user can hit Enter while the store still
+    // holds the ALL-DEFAULTS boot shape and the probe has not settled. When the
+    // gate decision actually depends on it (no remembered token) AND the store
+    // is still all-defaults AND no probe result is cached, await a FRESH probe
+    // before deciding, so the gated case is caught instead of firing a
+    // tokenless connect → 4401 → bounce back to login. The probe never throws
+    // (it degrades to defaults).
+    let authRequired = getState().proxyConfig.authRequired
+    if (!token && getState().proxyConfig === DEFAULT_PROXY_CONFIG && !peekProxyConfig()) {
+      await probeProxyConfig(conn.wsHost, conn.proxyPort)
+      authRequired = getState().proxyConfig.authRequired
+    }
+    if (authRequired && !token) {
+      onClose()
+      return
+    }
+    void doConnect(
+      conn.wsHost,
+      parseAutoConnect(window.location.search).proxyPort ?? conn.proxyPort,
+      conn.serverHost,
+      conn.port,
+      conn.username,
+      conn.password,
+      conn.flagName,
+      conn.avatarId,
+      token || undefined,
+    )
     onClose()
   }
 
@@ -136,7 +196,7 @@ export default function SetupWizard({ onClose }: { onClose: () => void }) {
       kickerIcon="sparkles"
       kickerLabel={t('setup', 'title')}
       title={t('setup', stepId === 'language' ? 'welcome_title' : stepId === 'done' ? 'done_title' : `step_${stepId}` as 'step_language')}
-      topRight={<span className="setup-counter" data-testid="setup-counter">{t('setup', 'step_of', { current: step + 1, total: STEPS.length })}</span>}
+      topRight={<span className="setup-counter" data-testid="setup-counter">{t('setup', 'step_of', { current: step + 1, total: steps.length })}</span>}
       closeInCorner
     >
       <div className="setup-body">
@@ -187,7 +247,7 @@ export default function SetupWizard({ onClose }: { onClose: () => void }) {
             </div>
           </>
         )}
-        {stepId === 'server' && (
+        {!locked && stepId === 'server' && (
           <>
             <p className="setup-lead">{t('setup', 'step_server_desc')}</p>
             <div className="setup-presets" role="group" aria-label={t('login', 'server_target')}>
@@ -241,7 +301,7 @@ export default function SetupWizard({ onClose }: { onClose: () => void }) {
             <p className="setup-lead">{t('setup', 'done_desc')}</p>
             <ul className="setup-summary">
               <li><strong>{t('login', 'username')}:</strong> {username || '—'}</li>
-              <li><strong>{t('login', 'server_target')}:</strong> {serverLabel}</li>
+              <li><strong>{t('login', 'server_target')}</strong> {serverLabel}</li>
             </ul>
           </>
         )}

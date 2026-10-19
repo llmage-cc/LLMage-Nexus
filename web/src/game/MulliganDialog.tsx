@@ -63,11 +63,18 @@ function MulliganHandEvaluator({ evaluation, t }: { evaluation: MulliganEvaluati
 interface MulliganDialogProps {
   prompt: FeedbackPrompt
   send: (action: () => Promise<{ ok: boolean; error?: string }>, fallback: string) => void
+  /** Same as `send`, but also parks the explicit answer value in the
+   *  swallowed-answer ledger (an identical server re-ask replays it).
+   *  Optional for back-compat with pure-`send` callers/tests. */
+  sendWithRetry?: (action: () => Promise<{ ok: boolean; error?: string }>, fallback: string, answer: { gameId: string; mode: 'boolean' | 'uuid' | 'string'; value: string; prompt: FeedbackPrompt }) => void
   cancel: () => void
   busy: boolean
+  /** A click landed while the send was in flight: the controls stay enabled
+   *  ("sending…"), never disabled — the queue, not a dead prompt. */
+  queuedClick?: boolean
 }
 
-export default function MulliganDialog({ prompt, send, cancel, busy }: MulliganDialogProps) {
+export default function MulliganDialog({ prompt, send, sendWithRetry, cancel, busy, queuedClick = false }: MulliganDialogProps) {
   const { t } = useTranslation()
   const game = useStore((s) => s.game)
   const myDeck = useStore((s) => s.myDeck)
@@ -82,9 +89,27 @@ export default function MulliganDialog({ prompt, send, cancel, busy }: MulliganD
     [hand, myDeck, game],
   )
 
-  const keep = () => void send(() => cmds.sendPlayerBoolean(false, prompt.gameId), t('errors', 'send_failed'))
-  const mulligan = () => void send(() => cmds.sendPlayerBoolean(true, prompt.gameId), t('errors', 'send_failed_mulligan'))
-
+  const keep = () => {
+    // The FIRST Keep frame can be swallowed (ok, but the same question
+    // comes back 20–90 s later). Register the exact value in the swallowed-
+    // answer ledger, so the identical re-ask replays it automatically; while
+    // a send is in flight the button stays enabled ("sending…") instead of
+    // disabled-dead.
+    const answer = { gameId: prompt.gameId, mode: 'boolean' as const, value: 'false', prompt }
+    if (sendWithRetry) {
+      void sendWithRetry(() => cmds.sendPlayerBoolean(false, prompt.gameId), t('errors', 'send_failed'), answer)
+      return
+    }
+    void send(() => cmds.sendPlayerBoolean(false, prompt.gameId), t('errors', 'send_failed'))
+  }
+  const mulligan = () => {
+    const answer = { gameId: prompt.gameId, mode: 'boolean' as const, value: 'true', prompt }
+    if (sendWithRetry) {
+      void sendWithRetry(() => cmds.sendPlayerBoolean(true, prompt.gameId), t('errors', 'send_failed_mulligan'), answer)
+      return
+    }
+    void send(() => cmds.sendPlayerBoolean(true, prompt.gameId), t('errors', 'send_failed_mulligan'))
+  }
   const concede = async () => {
     if (await confirmDialog(t('game', 'concede_confirm'), { danger: true })) {
       void send(() => cmds.sendPlayerAction('CONCEDE', prompt.gameId), t('errors', 'send_failed'))
@@ -125,7 +150,7 @@ export default function MulliganDialog({ prompt, send, cancel, busy }: MulliganD
         trailing={<FloatingCardPreview card={hoveredCard} anchorRect={anchorRect} boardRect={null} inModal />}
       >
           {pickable.length > 0 && (
-            <div className="mulligan-hand-grid" data-testid="mulligan-london-grid" aria-busy={busy}>
+            <div className="mulligan-hand-grid" data-testid="mulligan-london-grid" aria-busy={busy && !queuedClick}>
               {pickable.map(([id, card], i) => (
                 <div
                   key={id}
@@ -145,12 +170,12 @@ export default function MulliganDialog({ prompt, send, cancel, busy }: MulliganD
           )}
 
           <div className="mulligan-actions">
-            {prompt.required === false && (
-              <Button variant="subtle" disabled={busy} onClick={cancel} className="cancel-btn">{t('common', 'cancel')}</Button>
+            {(prompt.required === false || queuedClick) && (
+              <Button variant="subtle" disabled={busy && !queuedClick} onClick={cancel} className="cancel-btn">{t('common', 'cancel')}</Button>
             )}
             <Button variant="soft-danger"
               data-testid="mulligan-concede"
-              disabled={busy}
+              disabled={busy && !queuedClick}
               onClick={() => void concede()}>
               <Icon name="flag" size={13} /> {t('dialogs', 'mulligan_concede')}
             </Button>
@@ -170,6 +195,7 @@ export default function MulliganDialog({ prompt, send, cancel, busy }: MulliganD
         ? t('dialogs', 'mulligan_they_start', { name: starterName })
         : null
 
+  const keepHint = t('dialogs', 'mulligan_keep_sending')
   return (
     <HandPrompt>
       <div className="mulligan-bar" role="group" aria-labelledby="mulligan-title" data-testid="mulligan-bar">
@@ -183,7 +209,12 @@ export default function MulliganDialog({ prompt, send, cancel, busy }: MulliganD
               </span>
             )}
           </div>
-          <button type="button" className="mulligan-bar-option" disabled={busy} onClick={mulligan}>
+          {queuedClick && (
+            <span className="mulligan-bar-sending" role="status" aria-live="polite" data-testid="mulligan-sending">
+              {keepHint}
+            </span>
+          )}
+          <button type="button" className="mulligan-bar-option" disabled={busy && !queuedClick} onClick={mulligan}>
             <span className="mulligan-bar-option-label">{t('dialogs', 'mulligan_btn')}</span>
             {optionHint && <span className="mulligan-bar-option-hint">{optionHint}</span>}
           </button>
@@ -191,13 +222,20 @@ export default function MulliganDialog({ prompt, send, cancel, busy }: MulliganD
             variant="ghost"
             className="mulligan-bar-concede"
             data-testid="mulligan-concede"
-            disabled={busy}
+            disabled={busy && !queuedClick}
             title={t('dialogs', 'mulligan_concede')}
             onClick={() => void concede()}
           >
             <Icon name="flag" size={13} /> {t('dialogs', 'mulligan_concede')}
           </Button>
-          <Button variant="primary" className="mulligan-bar-keep" disabled={busy} onClick={keep}>
+          <Button
+            variant="primary"
+            className="mulligan-bar-keep"
+            data-testid="mulligan-keep"
+            disabled={busy && !queuedClick}
+            aria-busy={busy}
+            onClick={keep}
+          >
             {t('dialogs', 'mulligan_keep_hand')} <span aria-hidden="true">→</span>
           </Button>
         </div>

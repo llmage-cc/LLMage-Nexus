@@ -1,3 +1,4 @@
+// @vitest-environment node — this guard reads files from disk (node:fs) and the XMage fork oracle.
 import { describe, expect, it } from 'vitest'
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs'

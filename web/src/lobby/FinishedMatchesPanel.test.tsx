@@ -7,6 +7,7 @@ import FinishedMatchesPanel, {
 } from './FinishedMatchesPanel'
 import type { MatchView, UsersView } from '../net/types'
 import * as commands from '../net/commands'
+import { setState } from '../state/state'
 import { t, setLanguage } from '../i18n'
 
 vi.mock('../net/commands', () => ({
@@ -156,6 +157,7 @@ describe('FinishedMatchesPanel helpers', () => {
 describe('FinishedMatchesPanel component', () => {
   beforeEach(() => {
     setLanguage('es')
+    setState({ capabilities: { llm: true, p1: false, replayScrubber: true, replaySidecar: true, serverVersion: '1.4.62-V1', playerTypes: [] } })
     vi.mocked(commands.getFinishedMatches).mockResolvedValue(mockMatches)
     vi.mocked(commands.replayGame).mockResolvedValue({ ok: true } as never)
   })
@@ -251,5 +253,16 @@ describe('FinishedMatchesPanel component', () => {
 
     fireEvent.click(screen.getAllByText(/Repetición J1/i)[0])
     expect(commands.replayGame).toHaveBeenCalledWith('g1')
+  })
+
+  it('hides the Replay buttons when the server lacks the llm capability', async () => {
+    setState({ capabilities: { llm: false, p1: false, replayScrubber: false, replaySidecar: false, serverVersion: '1.4.62-V1', playerTypes: [] } })
+    render(<FinishedMatchesPanel roomId="room-1" users={mockUsers} />)
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Alice').length).toBeGreaterThan(0)
+    })
+    expect(screen.queryByText(/Repetición J1/i)).toBeNull()
+    expect(document.querySelector('.match-replay-actions')).toBeNull()
   })
 })

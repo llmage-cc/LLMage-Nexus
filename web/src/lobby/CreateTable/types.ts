@@ -1,7 +1,15 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { GameTypeInfo } from '../../net/commands'
+import type { GameTypeInfo, P1DeckEntry } from '../../net/commands'
 import type { Deck } from '../decks'
 import type { CreateTab, DraftTiming, SeatConfig, TableCategory, TournamentCategory, WizardStep } from './constants'
+
+/**
+ * Lifecycle of the once-per-open COMPUTER_P1 training-deck pool fetch:
+ * `loading` until the proxy answers, `ready` on an ok answer, `error` when the
+ * proxy refused the verb (typed CAPABILITY_UNAVAILABLE / not connected). The
+ * picker renders `error` as a visible failure instead of an eternal "loading…".
+ */
+export type P1PoolStatus = 'loading' | 'ready' | 'error'
 
 /** Everything the Create Table wizard tabs read and change (see `useCreateTableForm`). */
 export interface CreateTableForm {
@@ -20,9 +28,27 @@ export interface CreateTableForm {
   setTournamentCategory: (v: TournamentCategory) => void
   applyMode: (cat: TableCategory) => void
   applyPreset: (key: string) => void
+  /**
+   * One-click all-bot LLM duel: creator becomes a spectator and both seats are
+   * COMPUTER_LLM (gated by capabilities.llm). No-op without the capability.
+   */
+  applyLlmVsLlm: () => void
   gameTypes: GameTypeInfo[]
   deckTypes: string[]
+  /** Seat types offered in the dropdowns (COMPUTER_LLM filtered out unless capabilities.llm). */
   playerTypes: string[]
+  /** True when the connected server reported capabilities.llm. */
+  llmEnabled: boolean
+  /** True when the connected server reported capabilities.p1. */
+  p1Enabled: boolean
+  /** Argentum-P1 training deck pool (name + deck TEXT), fetched once when capabilities.p1. */
+  p1Decks: P1DeckEntry[]
+  /** The proxy's deterministic default P1 deck name ('' when unknown). */
+  p1Default: string
+  /** Lifecycle of the p1Decks fetch — 'error' means the proxy refused/failed it. */
+  p1PoolStatus: P1PoolStatus
+  /** Re-run the P1 pool fetch (no-op without capabilities.p1). */
+  reloadP1Decks: () => void
   tournamentTypes: string[]
   draftCubes: string[]
   name: string
@@ -113,6 +139,8 @@ export interface CreateTableForm {
   setSeatType: (idx: number, type: string) => void
   setSeatDeck: (idx: number, deckName: string) => void
   setSeatSkill: (idx: number, skill: number) => void
+  /** Replaces the seat's raw LLM config (COMPUTER_LLM seats only). */
+  setSeatLlmConfig: (idx: number, llmConfig: Record<string, unknown>) => void
   mySkill: number
   setMySkill: (v: number) => void
   skipInitShuffling: boolean
@@ -134,4 +162,9 @@ export interface CreateTableForm {
   validateStep: (tab: CreateTab) => string | null
   submit: () => Promise<void>
   runDemoTable: () => Promise<void>
+  /**
+   * Cancel: discards the persisted draft (so an explored preset does not
+   * preselect on reopen — Cancel discards unsaved selection state) and closes.
+   */
+  cancel: () => void
 }

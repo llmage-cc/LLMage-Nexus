@@ -1,6 +1,18 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
+// Vite derives `isProduction` from `process.env.NODE_ENV` *while resolving this config* (it reads
+// the variable only after the config file has been loaded) and hangs a production build off it:
+// the `development`/`production` export conditions, the externalization of `node:` builtins for
+// the jsdom environment, and `import.meta.env.DEV`/`PROD` (which `simSeatsEnabled()` and the dev-only
+// screens read). An inherited `NODE_ENV=production` — this box's shells export it — therefore turns
+// the suite into a production build: every test file importing `node:fs`/`node:path`/`node:url` dies
+// at collection ("No such built-in module: node:", reported as 0 tests, so a real regression hides
+// behind the wall) and React resolves to its production CJS build, where `React.act` does not exist.
+// Vitest only defaults the variable when it is unset (`process.env.NODE_ENV ??= 'test'`), so the
+// suite's green baseline *is* test mode; pin exactly that here rather than leave it to the caller.
+if (process.env.NODE_ENV === 'production') process.env.NODE_ENV = 'test'
+
 export default defineConfig({
   plugins: [react()],
   define: { __DEMO__: false },

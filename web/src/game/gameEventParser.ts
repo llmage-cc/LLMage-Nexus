@@ -387,11 +387,17 @@ export function parseGameEvent(
 
   // 11d. First turn choice: "Sim chooses that Alice take the first turn"
   //      XMage writes "chooses that they take the first turn" when the chooser
-  //      picked themselves: resolve the pronoun to the chooser's name.
+  //      picked themselves: resolve the pronoun to the chooser's name. The
+  //      engine's self-choice branch has NO space between "they" and "take"
+  //      (GameImpl.sendStartMessage:1541-1545 appends "they" directly before
+  //      an inner " take the first turn" — "thattake" only occurs there), so
+  //      match it explicitly or the self-choice line falls through unparsed.
   const firstTurnMatch = text.match(/^([^:]+?)\s+chooses?\s+that\s+(.+?)\s+takes?\s+the\s+first\s+turn$/i)
-  if (firstTurnMatch) {
-    const pName = firstTurnMatch[1].trim()
-    const chosenRaw = firstTurnMatch[2].trim()
+  const firstTurnSelfMatch = text.match(/^([^:]+?)\s+chooses?\s+that\s+theytake\s+the\s+first\s+turn$/i)
+  if (firstTurnMatch || firstTurnSelfMatch) {
+    const chooser = (firstTurnMatch ?? firstTurnSelfMatch)![1].trim()
+    const pName = chooser
+    const chosenRaw = firstTurnMatch ? firstTurnMatch[2].trim() : pName
     const chosen = /^(?:they|them)$/i.test(chosenRaw) ? pName : chosenRaw
     return i18n('system', 'feed_first_turn', { player: pName, chosen }, { playerName: pName, isMe: isMe(pName) })
   }

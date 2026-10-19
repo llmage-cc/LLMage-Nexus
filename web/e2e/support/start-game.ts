@@ -1,8 +1,8 @@
 /**
- * Setup modular de partida para los E2E. `startGame` encapsula TODO el flujo
- * repetido en cada spec: captura de frames/pageerrors, login (con reintento del
- * switch de sesión del proxy), mesa humana vs Sim determinista, arranque y
- * helper WS. Cada test crea SU PROPIA partida (independencia total).
+ * Modular match setup for the E2E specs. `startGame` wraps the whole flow every
+ * spec repeats: frame/pageerror capture, login (with a retry for the proxy's
+ * session switch), human table vs deterministic Sim, start, and the WS helper.
+ * Each test creates ITS OWN match (full independence).
  */
 
 import { expect, type Locator, type Page } from '@playwright/test'
@@ -25,9 +25,9 @@ export function installCapture(page: Page, buffers: CaptureBuffers, maxFrames = 
   ;(page as unknown as { __sent: Array<Record<string, unknown> | null> }).__sent = buffers.sent
   page.on('pageerror', (err) => buffers.pageErrors.push(err))
   page.on('websocket', (ws) => {
-    // con auto-pase los turnos vuelan y los frames se acumulan sin límite
-    // (OOM: ~4GB en un minuto); se guardan solo los últimos MAX_FRAMES, ya
-    // parseados (re-parsear en cada poll también agotaba el heap)
+    // with auto-pass the turns fly by and frames pile up without bound
+    // (OOM: ~4GB in a minute); only the last MAX_FRAMES are kept, already
+    // parsed (re-parsing on every poll exhausted the heap too)
     ws.on('framereceived', (e) => {
       try {
         const f = JSON.parse(String(e.payload)) as Record<string, unknown>
@@ -52,7 +52,7 @@ export function installCapture(page: Page, buffers: CaptureBuffers, maxFrames = 
 }
 
 export interface LoginOptions {
-  /** Reintentar "Conectar" si el lobby no aparece (switch de sesión del proxy). */
+  /** Retry "Connect" if the lobby does not appear (the proxy's session switch). */
   retryLobby?: boolean
   /** CSS selector of the screen the session lands on instead of the lobby
    *  (e.g. a scenario that starts a draft right after connect: the lobby heading
@@ -62,8 +62,8 @@ export interface LoginOptions {
 
 export async function dismissSetupWizard(page: Page): Promise<void> {
   const wizard = page.getByTestId('setup-wizard')
-  // El wizard se auto-abre en contextos frescos: esperar a que React monte
-  // (si ya estaba hecho no hay wizard y es no-op).
+  // The wizard opens itself in fresh contexts: wait for React to mount
+  // (if it already ran there is no wizard and this is a no-op).
   await wizard.waitFor({ state: 'attached', timeout: 15_000 }).catch(() => {})
   if (await wizard.isVisible().catch(() => false)) {
     await page.getByTestId('setup-skip').click()
@@ -78,13 +78,14 @@ export async function login(page: Page, username: string, opts: LoginOptions = {
     await page.locator('summary.login-network-header').click()
   }
   await page.getByLabel(/^Proxy WS:/).fill('localhost')
-  // en fake el FixtureServer ignora el target, pero fijar localhost evita que
-  // una regresión de enrutado lance los tests contra el XMage real (beta)
+  // in fake mode the FixtureServer ignores the target, but pinning localhost
+  // stops a routing regression from launching the tests against the real
+  // (beta) XMage
   await page.getByLabel(/^(Servidor XMage|XMage Server):/).fill(process.env.E2E_SERVER_HOST || (FAKE_MODE ? 'localhost' : 'beta.xmage.today'))
   await page.getByLabel(/^(Puerto|Port):/).fill(process.env.E2E_SERVER_PORT || '17171')
   await page.getByLabel(/Nombre de usuario|Usuario|Username/i).fill(username)
-  // Contra beta el campo va deshabilitado (el servidor público no usa
-  // contraseña); rellenarlo a ciegas agota el timeout del test.
+  // Against beta the field is disabled (the public server uses no password);
+  // filling it blindly burns the test timeout.
   const password = page.getByLabel(/Contraseña|Password/i)
   if (await password.isEnabled().catch(() => false)) await password.fill('x')
   const lobby = opts.landsOn
@@ -93,8 +94,8 @@ export async function login(page: Page, username: string, opts: LoginOptions = {
   const connect = page.getByRole('button', { name: /Conectar|Connect/i })
   await connect.click()
   if (opts.retryLobby) {
-    // el switch de sesión del proxy tras un usuario anterior puede tardar o fallar
-    // transitoriamente; el connect es idempotente, así que reintentar es seguro
+    // the proxy's session switch after a previous user can be slow or fail
+    // transiently; connect is idempotent, so retrying is safe
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await expect(lobby).toBeVisible({ timeout: 15_000 })
@@ -109,25 +110,25 @@ export async function login(page: Page, username: string, opts: LoginOptions = {
 
 export interface CreateTableOptions {
   tableName?: string
-  /** Mazo del humano ('Mage Web advanced', 'Mage Web lands', ...). */
+  /** Human deck ('Mage Web advanced', 'Mage Web lands', ...). */
   deck?: string
-  /** Mazo del asiento bot. En real rellena la plaza con la IA nativa del
-   *  servidor (Mad); en fake lo ignora el FixtureServer (el oponente va
-   *  guionizado por el escenario). */
+  /** Bot seat deck. In real mode it fills the seat with the server's native
+   *  Mad AI; in fake mode the FixtureServer ignores it (the opponent is
+   *  scripted by the scenario). */
   simDeck?: string
-  /** Formato (Deck Type) p.ej. 'Constructed - Pioneer'. Por defecto el del diálogo. */
+  /** Format (Deck Type), e.g. 'Constructed - Pioneer'. Defaults to the dialog's. */
   deckType?: string
   skipShuffle?: boolean
   skipStartingPlayer?: boolean
-  /** Rellenar la plaza del bot: en real, IA Mad nativa del servidor (el bot
-   *  SIM del proxy es dev-only y ya no se puede elegir desde el cliente). */
+  /** Fill the bot seat: in real mode the server's native Mad AI (the proxy's
+   *  SIM bot is dev-only and can no longer be picked from the client). */
   sim?: boolean
-  /** Match best-of-N: victorias necesarias (1 = un solo game). */
+  /** Match best-of-N: wins needed (1 = a single game). */
   winsNeeded?: number
 }
 
-/** Selecciona un mazo por nombre en los selects del wizard: las option ahora
- *  llevan como value la referencia estable (id) y el nombre en la etiqueta. */
+/** Pick a deck by name in the wizard selects: the option values now carry the
+ *  stable reference (id) and the name in the label. */
 async function selectDeckOption(select: Locator, deckName: string): Promise<void> {
   const value = await select.evaluate((el, name) => {
     const options = [...(el as HTMLSelectElement).options]
@@ -135,7 +136,7 @@ async function selectDeckOption(select: Locator, deckName: string): Promise<void
     const exact = options.find((o) => (o.textContent ?? '').trim() === name)
     return withCount?.value ?? exact?.value ?? ''
   }, deckName)
-  if (!value) throw new Error(`No encuentro la opción de mazo "${deckName}" en el wizard`)
+  if (!value) throw new Error(`Cannot find the deck option "${deckName}" in the wizard`)
   await select.selectOption(value)
 }
 
@@ -156,16 +157,16 @@ export async function createTable(page: Page, tableName: string, opts: CreateTab
       await page.getByLabel(/Formato/i).selectOption({ value: opts.deckType })
     }
     if (opts.deck || opts.simDeck || !FAKE_MODE) {
-      // paso del wizard (rediseño 2026-09): "🤖 Multijugador" (scope al
-      // wizard-step: la tarjeta de modo "Commander / Multijugador" también matchea)
+      // wizard step (2026-09 redesign): "🤖 Multiplayer" (scoped to the
+      // wizard-step: the "Commander / Multiplayer" mode card matches too)
       await page.locator('button.wizard-step', { hasText: /Multijugador/i }).click()
       if (opts.deck) {
         await selectDeckOption(page.getByLabel(/Mazo activo/i), opts.deck)
       }
       if (!FAKE_MODE) {
-        // El bot SIM del proxy es dev-only y el cliente ya no lo ofrece: los
-        // specs de backend real optan por la IA Mad nativa del servidor (la
-        // misma fuente que self-test/human-test usan por WS directo).
+        // The proxy's SIM bot is dev-only and the client no longer offers it:
+        // real-backend specs opt for the server's native Mad AI (the same
+        // source self-test/human-test use over a direct WS).
         const seatType = page.getByTestId('seat-type-0')
         if (await seatType.isVisible().catch(() => false)) {
           await seatType.selectOption({ value: 'COMPUTER_MAD' })
@@ -177,7 +178,7 @@ export async function createTable(page: Page, tableName: string, opts: CreateTab
     }
 
   if ((opts.skipShuffle ?? true) || (opts.skipStartingPlayer ?? true)) {
-    // paso del wizard: "🛠️ Dev" (antes "Ajustes / Dev")
+    // wizard step: "🛠️ Dev" (formerly "Settings / Dev")
     await page.getByRole('button', { name: /Dev/i }).click()
     if (opts.skipShuffle ?? true) {
       const shuffle = page.getByRole('checkbox', { name: /No barajar el mazo inicial/i })
@@ -189,13 +190,13 @@ export async function createTable(page: Page, tableName: string, opts: CreateTab
     }
   }
 
-  // selector específico del submit del diálogo: el empty-state del lobby también
-  // tiene un botón "Crear Mesa" cuando el server no tiene ninguna
+  // dialog-specific submit selector: the lobby empty state also has a
+  // "Create Table" button when the server has no tables
   const submit = page.locator('.create-submit-btn')
   await submit.click()
 }
 
-/** Si el salto automático a la sala de espera (JOINED_TABLE) está activo, vuelve al lobby. */
+/** If the automatic jump to the waiting room (JOINED_TABLE) is on, go back to the lobby. */
 export async function dismissStaging(page: Page): Promise<void> {
   const back = page.getByTestId('staging-back')
   if (await back.isVisible().catch(() => false)) {
@@ -204,9 +205,9 @@ export async function dismissStaging(page: Page): Promise<void> {
   }
 }
 
-/** ¿Botón de arranque de staging visible Y habilitado? (OJO: `isEnabled()`
- *  espera hasta el timeout por defecto; aquí se acota explícito para usarlo
- *  como sonda dentro de polls.) */
+/** Is the staging start button visible AND enabled? (NOTE: `isEnabled()`
+ *  waits until the default timeout; the timeout is bounded here so it can be
+ *  used as a probe inside polls.) */
 export async function stagingStartReady(page: Page, timeoutMs = 1_000): Promise<boolean> {
   try {
     await expect(page.getByTestId('staging-start')).toBeEnabled({ timeout: timeoutMs })
@@ -216,10 +217,10 @@ export async function stagingStartReady(page: Page, timeoutMs = 1_000): Promise<
   }
 }
 
-/** Espera a que la mesa del usuario esté lista (asiento SIM unido, botón Empezar).
- *  El JOINED_TABLE del server real puede llegar tarde: cada vuelta considera los
- *  dos caminos (sala de espera lista o fila del lobby con 2/2) en vez de fijar
- *  uno a los 500 ms -- con la app en staging el listado del lobby queda rancio. */
+/** Wait until the user's table is ready (SIM seat joined, Start button).
+ *  The real server's JOINED_TABLE can arrive late: each pass considers both
+ *  paths (waiting room ready or lobby row at 2/2) instead of fixing
+ *  one at 500 ms -- with the app in staging the lobby listing goes stale. */
 export async function waitTableReady(page: Page, tableName: string): Promise<void> {
   const row = page.locator('.table-row', { hasText: tableName }).first()
   await expect(async () => {
@@ -230,9 +231,9 @@ export async function waitTableReady(page: Page, tableName: string): Promise<voi
   }).toPass({ timeout: 30_000 })
 }
 
-/** Arranca la partida (botón Empezar/Iniciar) y espera la pantalla de partida. */
+/** Start the match (Start button) and wait for the game screen. */
 export async function startMatch(page: Page, tableName: string): Promise<void> {
-  // El lobby puede auto-saltar a staging al unirse: arrancar desde allí.
+  // The lobby can jump to staging on join: start from there.
   const stagingStart = page.getByTestId('staging-start')
   const row = page.locator('.table-row', { hasText: tableName }).first()
   const startButton = row.getByRole('button', { name: /Empezar|Iniciar Partida|Start/i })
@@ -244,8 +245,8 @@ export async function startMatch(page: Page, tableName: string): Promise<void> {
   if (await stagingStart.isVisible().catch(() => false)) {
     await stagingStart.click()
   } else {
-    // Forzado: la lista viva del lobby se re-renderiza sin parar y el botón nunca
-    // se estabiliza para un click normal (cuelgue hasta el timeout del test).
+    // Forced: the lobby's live list re-renders continuously and the button never
+    // settles for a normal click (hangs until the test timeout).
     await startButton.click({ force: true })
   }
   await expect(page.getByTestId('game-status')).toBeVisible({ timeout: 20_000 })
@@ -258,27 +259,27 @@ export interface GameSession {
   pageErrors: Error[]
   username: string
   helper: HumanHelper
-  /** Índice del último frame procesado (cursor para waitFrame). */
+  /** Index of the last processed frame (cursor for waitFrame). */
   cursor(): number
 }
 
 export interface StartGameOptions extends CreateTableOptions {
-  /** Prefijo del usuario único (sp/tg/cb/e2e...). */
+  /** Unique user prefix (sp/tg/cb/e2e...). */
   prefix?: string
   maxFrames?: number
-  /** El helper no toca las ventanas de combate (el humano las ejerce por la UI). */
+  /** The helper does not touch combat windows (the human exercises them via the UI). */
   skipCombat?: boolean
   skipAsks?: boolean
-  /** Desactiva el auto-keep del mulligan para ejercitar la ventana de mulligan en E2E. */
+  /** Disable mulligan auto-keep to exercise the mulligan window in E2E. */
   autoKeepMulligan?: boolean
 }
 
-/** Monta la partida (login → mesa → Sim → arranque), arranca el HumanHelper
- *  (desarrollo de tierras, descartes y asks por WS) y devuelve la sesión. */
+/** Set up the match (login → table → Sim → start), start the HumanHelper
+ *  (land development, discards and asks over WS) and return the session. */
 export async function startGame(page: Page, opts: StartGameOptions = {}): Promise<GameSession> {
   const prefix = opts.prefix ?? 'e2e'
-  // El servidor limita el username a 14 chars y el login lo recorta (maxLength):
-  // el helper debe usar EXACTAMENTE el mismo nombre para compartir sesión.
+  // The server caps the username at 14 chars and login truncates it (maxLength):
+  // the helper must use EXACTLY the same name to share the session.
   const username = `${prefix}-${String(Date.now()).slice(-8)}`.slice(0, 14)
   cleanupUser(username)
   const buffers: CaptureBuffers = { frames: [], sent: [], pageErrors: [] }
@@ -300,11 +301,14 @@ export async function startGame(page: Page, opts: StartGameOptions = {}): Promis
   const tableName = opts.tableName ?? `${username}-t`
   await createTable(page, tableName, opts)
   await waitTableReady(page, tableName)
-  // el helper se conecta ANTES de arrancar la partida para capturar el
-  // START_GAME/GAME_INIT desde el primer evento (el waitGameId espera)
+  // the helper connects BEFORE the match starts so it captures
+  // START_GAME/GAME_INIT from the first event (waitGameId waits for it)
   const helper = new HumanHelper(username, 'x', { skipCombat: opts.skipCombat, skipAsks: opts.skipAsks })
   registerHelper(helper)
-  await helper.start()
+  // the helper inherits the page's browserId: the proxy's anon-name guard
+  // (production security) rejects a second connect for the same user
+  // without the SAME browser identity (typed connect_error + 4401).
+  await helper.start(page)
   await startMatch(page, tableName)
   await helper.waitGameId(20_000)
   return { page, ...buffers, username, helper, cursor: () => parsedLen(page) }

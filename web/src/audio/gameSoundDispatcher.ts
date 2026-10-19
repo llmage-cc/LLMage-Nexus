@@ -1,6 +1,7 @@
 import type { GameView } from '../net/types.generated'
 import type { PrioritySoundMode } from './prioritySound'
 import { soundManager } from './soundManager'
+import { getState } from '../state/state'
 
 export function dispatchGameSounds(
   prevGame: GameView | null,
@@ -9,6 +10,9 @@ export function dispatchGameSounds(
   prioritySound: PrioritySoundMode,
 ) {
   if (!nextGame) return
+  // Replay mode: stepping through a detached historical view must stay silent —
+  // every scrub jump would otherwise fire cast/tap/draw/damage cues.
+  if (getState().replay) return
 
   const prevMe = prevGame?.players?.find((p) => p.controlled)
   const nextMe = nextGame.players?.find((p) => p.controlled)

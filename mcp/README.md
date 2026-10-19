@@ -1,5 +1,7 @@
 # mcp — MCP server for XMage Nexus
 
+> **LLMage Nexus documentation:** for the current guide see [MCP server](../docs/developer-guide/mcp.md). This page is inherited from upstream XMage Nexus and may lag behind the client.
+
 Servidor [MCP](https://modelcontextprotocol.io) (stdio) que expone el stack de
 desarrollo y —fase 2— un jugador XMage headless como tools para agentes
 (opencode, Claude Desktop, Cursor…).

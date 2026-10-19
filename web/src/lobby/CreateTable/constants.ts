@@ -1,5 +1,6 @@
 import type { GameTypeInfo } from '../../net/commands'
 import type { CategoryT, TranslationSchema } from '../../i18n/types'
+import { deckRef, type Deck } from '../decks'
 
 type LobbyT = CategoryT<'lobby'>
 
@@ -129,6 +130,36 @@ export const DEFAULT_PLAYER_TYPES: string[] = [
 
 export const HUMAN_SEAT = 'HUMAN'
 export const SIM_SEAT = 'SIM'
+/** LLMage engine fork player type: an LLM seat (see the capabilities gate). */
+export const LLM_SEAT = 'COMPUTER_LLM'
+/** Argentum-P1 policy-net seat: only ever renderable when `capabilities.p1`. */
+export const P1_SEAT = 'COMPUTER_P1'
+
+/**
+ * Upstream v0.4.7 (4fe0f8ab8a) made the proxy-side SIM bot a dev-only feature:
+ * the proxy rejects SIM seats unless started with `--sim on` (scripts/dev.mjs
+ * does), and the stock client neither offers nor restores SIM seats. The fork
+ * still exercises SIM seats on the dev channel (demo table, e2e harness, the
+ * SIM-deck fallback chain), so the gate is an explicit build flag — keyed like
+ * `bundledDecksEnabled` on an env var rather than `import.meta.env.DEV`, which
+ * also keeps the behavior testable (`vi.stubEnv('VITE_SIM_SEATS', '1')`):
+ *
+ *   VITE_SIM_SEATS unset / '0' / 'false'  => off (upstream default: SIM never
+ *                                              leaves the client; persisted
+ *                                              SIM seats restore as HUMAN)
+ *   VITE_SIM_SEATS '1' / 'true'           => on  (dev stacks and the fork's
+ *                                              demo/e2e flows)
+ *
+ * Under vitest the flag follows `import.meta.env.DEV` (true), so the fork's
+ * historical SIM-path tests keep exercising it; a spec that needs the
+ * production shape stubs the flag off explicitly.
+ */
+export function simSeatsEnabled(): boolean {
+  const flag = (import.meta.env.VITE_SIM_SEATS as string | undefined)?.trim().toLowerCase()
+  if (flag === '1' || flag === 'true') return true
+  if (flag === '0' || flag === 'false') return false
+  return import.meta.env.DEV
+}
 
 const SEAT_TYPE_ALIASES: Record<string, string> = {
   HUMAN: HUMAN_SEAT,
@@ -142,6 +173,12 @@ const SEAT_TYPE_ALIASES: Record<string, string> = {
   COMPUTER_DRAFT: 'COMPUTER_DRAFT_BOT',
   COMPUTER_DRAFT_BOT: 'COMPUTER_DRAFT_BOT',
   COMPUTER_DRAFTBOT: 'COMPUTER_DRAFT_BOT',
+  COMPUTER_LLM: LLM_SEAT,
+  COMPUTER_LLM_SEAT: LLM_SEAT,
+  COMPUTER_P1: P1_SEAT,
+  COMPUTER_P1_SEAT: P1_SEAT,
+  COMPUTER_POLICY_NET: P1_SEAT,
+  COMPUTER_ARGENTUM: P1_SEAT,
 }
 
 function seatTypeKey(raw: string): string {
@@ -161,6 +198,16 @@ export function isSimSeatType(t: string): boolean {
   return seatTypeKey(t) === SIM_SEAT
 }
 
+/** LLMage fork seat: only ever renderable/creatable when `capabilities.llm`. */
+export function isLlmSeatType(t: string): boolean {
+  return normalizeSeatType(t) === LLM_SEAT
+}
+
+/** Argentum-P1 fork seat: only ever renderable/creatable when `capabilities.p1`. */
+export function isP1SeatType(t: string): boolean {
+  return normalizeSeatType(t) === P1_SEAT
+}
+
 export function isNativeAiSeatType(t: string): boolean {
   const k = seatTypeKey(t)
   return k !== HUMAN_SEAT && k !== SIM_SEAT
@@ -176,12 +223,16 @@ export function aiSeatTypes(playerTypes: string[]): string[] {
   return out
 }
 
+// The P1 label is a product name; every locale keeps 'P1' and translates the
+// generic "policy net" wording. Fallback labels are used when t is absent.
 const SEAT_TYPE_LABELS: Record<string, string> = {
   [HUMAN_SEAT]: 'Humano — espera rival',
   [SIM_SEAT]: 'SIM',
   COMPUTER_MAD: 'IA Mad',
   COMPUTER_MONTE_CARLO: 'IA Montecarlo',
   COMPUTER_DRAFT_BOT: 'IA Draftbot',
+  [LLM_SEAT]: 'IA LLM',
+  [P1_SEAT]: 'IA P1 (red de política)',
 }
 
 export function seatTypeLabel(tName: string, t?: LobbyT): string {
@@ -192,8 +243,40 @@ export function seatTypeLabel(tName: string, t?: LobbyT): string {
     if (n === 'COMPUTER_MAD') return t('lobby', 'create_seat_ai_mad')
     if (n === 'COMPUTER_MONTE_CARLO') return t('lobby', 'create_seat_ai_montecarlo')
     if (n === 'COMPUTER_DRAFT_BOT') return t('lobby', 'create_seat_ai_draftbot')
+    if (n === LLM_SEAT) return t('lobby', 'create_seat_ai_llm')
+    if (n === P1_SEAT) return t('lobby', 'create_seat_ai_p1')
   }
   return SEAT_TYPE_LABELS[n] ?? tName
+}
+
+/**
+ * The server sends game-type names as protocol enums ("Two Player Duel",
+ * "Free For All") that were rendered verbatim, leaking English into every locale.
+ * Map the known names to catalog keys; anything else falls through to the raw
+ * server name (the game-type catalog is server-driven and cannot be enumerated).
+ */
+const GAME_TYPE_LABEL_KEYS: Record<string, 'game_type_two_player_duel' | 'game_type_free_for_all'> = {
+  'Two Player Duel': 'game_type_two_player_duel',
+  'Free For All': 'game_type_free_for_all',
+}
+
+export function gameTypeLabel(name: string, t?: LobbyT): string {
+  const key = GAME_TYPE_LABEL_KEYS[name]
+  return key && t ? t('lobby', key) : name
+}
+
+/**
+ * A bot seat's deck is resolved at submit (seat pick -> global sim deck ->
+ * mine -> bundled), so an empty `seat.deckName` is NOT an error by itself — the
+ * submit path falls back. Flag a bot seat's deck as "empty" (to show the warning
+ * chip) only when NEITHER a per-seat deck, NOR a resolvable deck, NOR a global
+ * sim deck exists: that is a genuinely empty seat. This suppresses the transient
+ * "Deck empty or missing" right after a P1 -> LLM switch (the seat keeps its
+ * saved-deck reference, which is resolvable from here on the very next render).
+ */
+export function seatDeckIsEmpty(deckName: string | undefined, availableDecks: Deck[], simDeck: Deck | null): boolean {
+  if (!deckName) return !simDeck
+  return !availableDecks.some((d) => deckRef(d) === deckName)
 }
 
 export const SKILL_LEVEL_OPTIONS: Array<{ label: string; value: 'BEGINNER' | 'CASUAL' | 'SERIOUS'; stars: number }> = [
@@ -432,8 +515,16 @@ export function getEffectiveMaxPlayers(gameType: string, gameTypes: GameTypeInfo
 
 export interface SeatConfig {
   type: string
+  /**
+   * Bot seat's saved-deck reference (deckRef) — EXCEPT for a COMPUTER_P1 seat,
+   * whose value is the training deck's paste-ready TEXT: the P1
+   * seat's deck is restricted to the 55 training lists and rides the same seat
+   * field into joinTable, where the server's P1DeckRestriction checks it.
+   */
   deckName: string
   skill: number
+  /** COMPUTER_LLM seats only: raw per-seat LLM config (converted on submit). */
+  llmConfig?: Record<string, unknown>
 }
 
 export type WizardStep = { id: CreateTab; icon: import('../../ui/Icon').IconName; labelKey: keyof TranslationSchema['lobby'] | ''; titleFallback: string }

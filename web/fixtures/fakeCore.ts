@@ -1,12 +1,12 @@
 /**
- * FixtureServer: implementación determinista del contrato WS del proxy
- * (Mage.Proxy) para los E2E de navegador. Cada test lo arranca en un puerto
- * libre (`FakeServer.start(0)`; el test publica el asignado vía setFakePort) y
- * responde a las acciones de commands.ts con envelopes
- * {type:'result'} y emite callbacks {type:'event'} según un escenario
- * declarativo. Nada de Java, nada de timing real: los tests de UI corren en
- * segundos y son reproducibles al 100%.
- * Tipado contra src/net/types.ts (el typecheck valida la coherencia fake↔cliente).
+ * FixtureServer: deterministic implementation of the proxy's WS contract
+ * (Mage.Proxy) for browser E2E. Every test starts it on a free port
+ * (`FakeServer.start(0)`; the test publishes the assigned one via setFakePort)
+ * and it answers commands.ts actions with envelopes
+ * {type:'result'} and emits callbacks {type:'event'} according to a
+ * declarative scenario. No Java, no real timing: UI tests run in seconds and
+ * are 100% reproducible.
+ * Typed against src/net/types.ts (the typecheck validates fake↔client coherence).
  */
 
 import type { GameView, RoomUsersView, SeatView, TableView, UsersView } from '../src/net/types'
@@ -15,17 +15,17 @@ let nextConnId = 1
 
 export interface FakeServerOptions {
   /**
-   * Retardo artificial del "servidor" (ms) para los tests de latencia percibida
-   * (plan4 §5.4): se difieren los eventos de partida y las respuestas a las
-   * acciones de decisión (`sendPlayer*`, `sendCardPick`), de modo que el acuse
-   * local (busy/pending) quede visible durante el eco. 0 = inmediato (default).
+   * Artificial "server" delay (ms) for perceived-latency tests: game events and
+   * the answers to decision actions (`sendPlayer*`, `sendCardPick`) are
+   * deferred, so the local acknowledgment (busy/pending) stays visible during
+   * the echo. 0 = immediate (default).
    */
   echoDelayMs?: number
 }
 
-/** Reglas de `Mage.Server` (`Session.validateUserNameLength` + `config.xml`
- *  `minUserNameLength`/`maxUserNameLength`). Sin esto fake mode acepta nombres
- *  que el servidor real rechaza y el drift pasa desapercibido. */
+/** `Mage.Server` rules (`Session.validateUserNameLength` + `config.xml`
+ *  `minUserNameLength`/`maxUserNameLength`). Without this, fake mode accepts
+ *  names the real server rejects and the drift goes unnoticed. */
 export const SERVER_MIN_USER_NAME_LENGTH = 3
 export const SERVER_MAX_USER_NAME_LENGTH = 14
 
@@ -91,6 +91,42 @@ export const DEFAULT_RESULTS: Record<string, unknown> = {
     'Sealed Elimination',
     'Sealed Swiss',
   ],
+}
+
+/**
+ * Capabilities block for scenarios that need the FULL set of gated LLMage
+ * surfaces. Carries `llm` + `p1` + both replay gates and the FORK nexus
+ * player-type list (getPlayerTypes-shaped, COMPUTER_LLM and
+ * COMPUTER_P1 included) so a scenario can drive the LLM seat, the P1 training
+ * picker and the replay-file browser in one go.
+ *
+ * The DEFAULT fake connect result carries NO capabilities — stock-server
+ * parity. Pair it with a getPlayerTypes override that lists the fork types:
+ *
+ *   makeBaseScenario({ ..., capabilities: LLM_FAKE_CAPABILITIES })
+ */
+export const LLM_FAKE_CAPABILITIES: Record<string, unknown> = {
+  llm: true,
+  p1: true,
+  replayScrubber: true,
+  replaySidecar: true,
+  serverVersion: '1.4.62-V1',
+  playerTypes: ['HUMAN', 'SIM', 'COMPUTER_MAD', 'COMPUTER_DRAFT_BOT', 'COMPUTER_LLM', 'COMPUTER_P1'],
+}
+
+/**
+ * The stock-server parity alternative: every fork gate OFF and no LLM/P1
+ * player type. A spec passes it to prove the negative (a stock deployment shows
+ * none of the gated UI). Exported next to the LLM block so the two read
+ * side by side.
+ */
+export const STOCK_FAKE_CAPABILITIES: Record<string, unknown> = {
+  llm: false,
+  p1: false,
+  replayScrubber: false,
+  replaySidecar: false,
+  serverVersion: '1.4.62-V1',
+  playerTypes: ['HUMAN', 'SIM', 'COMPUTER_MAD', 'COMPUTER_DRAFT_BOT'],
 }
 
 /**
@@ -170,6 +206,24 @@ export interface BaseScenarioOptions {
   onSendPlayerInteger?: (conn: FakeConn, value: number, ctx: BaseScenarioActionContext) => void
   onSendPlayerString?: (conn: FakeConn, value: string, ctx: BaseScenarioActionContext) => void
   onJoinGame?: (conn: FakeConn, gameId: string, ctx: BaseScenarioActionContext) => void
+  /**
+   * Capabilities block the fake `connect` result carries.
+   * DEFAULT: absent — a stock server parity fake, every LLM/replay feature
+   * gated off. Scenarios that need the gated UI pass e.g. LLM_FAKE_CAPABILITIES.
+   */
+  capabilities?: Record<string, unknown>
+  /**
+   * Overrides the `getPlayerTypes` answer (default: DEFAULT_RESULTS). Scenarios
+   * that list COMPUTER_LLM need the matching `capabilities.llm: true`.
+   */
+  playerTypes?: string[]
+  /**
+   * Fired right after the OK of `createTable`/`createTournamentTable` (the table
+   * now exists server-side): a scenario emits there the follow-up frames a live
+   * server sends for the new table — e.g. an `llm_prompt` naming one of its LLM
+   * seats, whose `clientKeyTag` comes off the create call's own args.
+   */
+  onTableCreated?: (conn: FakeConn, action: string, args: Record<string, unknown>) => void
   /** Intercepta cualquier acción antes del switch del escenario. Devolver true
    *  significa "ya respondida" (p. ej. `conn.fail(...)` para probar errores). */
   onRequest?: (conn: FakeConn, action: string, args: Record<string, unknown>, requestId: string | number) => boolean
@@ -214,14 +268,20 @@ export function makeBaseScenario(opts: BaseScenarioOptions): Scenario {
         case 'connect': {
           const username = String((args as Record<string, unknown>).username ?? '').trim()
           if (username) conn.username = username
-          conn.ok(requestId, action, { tableId: table.tableId })
+          conn.ok(requestId, action, {
+            tableId: table.tableId,
+            ...(opts.capabilities ? { capabilities: opts.capabilities } : null),
+          })
           conn.lobby([table])
           return
         }
         case 'createTable':
         case 'createTournamentTable':
-          conn.ok(requestId, action, { tableId: table.tableId })
+          conn.ok(requestId, action, {
+            tableId: table.tableId,
+          })
           conn.lobby([table])
+          opts.onTableCreated?.(conn, action, args)
           return
         case 'joinGame':
         case 'watchTable':
@@ -322,6 +382,10 @@ export function makeBaseScenario(opts: BaseScenarioOptions): Scenario {
         case 'validateDeck': {
           const deck = args.deck as { name?: string; cards?: unknown[]; sideboard?: unknown[] } | undefined
           conn.ok(requestId, action, opts.onValidateDeck?.(deck) ?? { ready: true, missing: [], mismatches: [] })
+          return
+        }
+        case 'getPlayerTypes': {
+          conn.ok(requestId, action, opts.playerTypes ?? DEFAULT_RESULTS.getPlayerTypes)
           return
         }
         case 'getRoomChatId':

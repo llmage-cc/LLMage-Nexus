@@ -12,7 +12,12 @@ import net from 'node:net'
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 export const runDir = path.join(repoRoot, '.run')
 
-/** Versión XMage del fork (coincide con los artefactos org.mage del ~/.m2). */
+/** Version of the org.mage artifacts the proxy compiles against: the LLMage fork
+ *  1.4.62 — our engine trunk after the xmage_1.4.62V1 sync (13-commit merge,
+ *  fork-only pom bump), which carries both the upstream 1.4.62 code and the
+ *  fork-only COMPUTER_LLM/LLMPlayerConfig symbols
+ *  (the stock 1.4.62 artifacts still lack them). Follows Mage.Proxy/pom.xml's
+ *  mage.version default. */
 export const XMAGE_VERSION = '1.4.62'
 
 /**

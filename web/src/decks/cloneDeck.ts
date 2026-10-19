@@ -10,5 +10,9 @@ export function cloneDeckForEdit(d: MetaDeckItem | DeckV2): DeckV2 {
     createdAt: now,
     updatedAt: now,
     source: 'custom',
+    // A bundled deck's corpus library must not survive into the player's own
+    // copy: the deck pickers group by `group`, so a clone carrying it would be
+    // filed under that library instead of the player's own decks.
+    group: undefined,
   }
 }

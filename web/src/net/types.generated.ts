@@ -29,6 +29,16 @@ export interface GameView {
   totalErrorsCount: number
   totalEffectsCount: number
   gameCycle: number
+  replayStateIndex?: number
+  replayStateCount?: number
+  replayHasLlmPlayers?: boolean
+  llmChatPublic?: boolean
+  llmDebug?: LLMConversationView[]
+  replayLLMBuckets?: Record<string, {
+    entries: LLMConversationView[]
+  }> | null
+  replayGameLog?: string[]
+  replayGameLogCount?: number
 }
 
 export interface PlayerView {
@@ -435,4 +445,43 @@ export interface PlayableObjectStats {
 export interface PlayableObjectRecord {
   id: string
   value: string
+}
+
+export interface LlmPromptFrame {
+  type: 'llm_prompt'
+  requestId: string
+  seatId: string
+  gameId: string
+  playerName: string
+  requestBody: string
+  apiEndpoint: string
+  stream: boolean
+  timeoutSeconds: number
+  clientKeyTag: string
+}
+
+export interface LLMConversationView {
+  playerName: string
+  modelName: string
+  exchangeCount: number
+  totalContextChars: number
+  modelContextWindow: number
+  streaming: boolean
+  streamingReasoning?: string
+  streamingContent?: string
+  streamingStartedAt: number
+  gamePlan?: string
+  postGameReflection?: string
+  matchReview?: string
+  messagesHidden?: number
+  messages: LLMMessageView[]
+}
+
+export interface LLMMessageView {
+  role: string
+  content: string
+  promptType?: string
+  turn?: number
+  phaseStep?: string
+  compactSummary?: string
 }

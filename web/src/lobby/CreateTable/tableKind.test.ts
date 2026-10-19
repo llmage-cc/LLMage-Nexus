@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   resolveTableKind,
   clampNumPlayers,
@@ -94,9 +94,9 @@ describe('resolveTableKind — matriz de decisión del wizard', () => {
       'Booster Draft Elimination',
     ],
     [
-      'duelo Modern + tipo constructed rancio → constructed-tourney (documenta comportamiento)',
+      'Modern duel + stale constructed type → match (the legacy disjunct used to fabricate tournaments)',
       { tournamentType: 'Constructed Swiss' },
-      'constructed-tourney',
+      'match',
       'Constructed Swiss',
     ],
     [
@@ -168,8 +168,17 @@ describe('clampNumPlayers', () => {
   })
 
   it('defaultSeatTypeFor: extra seats wait for humans (bots are opt-in)', () => {
+    // Upstream v0.4.7 production shape (VITE_SIM_SEATS off): seats wait for a
+    // human rival, bots are opt-in — no matter the table kind.
+    vi.stubEnv('VITE_SIM_SEATS', '0')
     expect(defaultSeatTypeFor(true)).toBe('HUMAN')
     expect(defaultSeatTypeFor(false)).toBe('HUMAN')
+    vi.unstubAllEnvs()
+    // The fork's dev-channel shape (the flag defaults to import.meta.env.DEV,
+    // true under vitest): the SIM bot fills constructed seats, the draft bot
+    // fills draft ones — the demo table and the e2e harness ride this.
+    expect(defaultSeatTypeFor(true)).toBe('COMPUTER_DRAFT_BOT')
+    expect(defaultSeatTypeFor(false)).toBe('SIM')
   })
 })
 
@@ -337,6 +346,91 @@ describe('builders de payload', () => {
     expect(args).not.toHaveProperty('skipInitShuffling')
     expect(args.simDecks).toBeUndefined()
     expect(args.mulliganType).toBeUndefined()
+  })
+
+  it('llmConfigs: el match lleva los configs alineados y omite el arg sin asientos LLM', () => {
+    const cfg = { useClientKey: true, clientKeyTag: 'tag-1' }
+    const baseMatch = {
+      name: 'LLM Duel',
+      username: 'player1',
+      gameType: 'Two Player Duel',
+      deckType: 'Constructed - Modern',
+      wins: 1,
+      seatSkills: [2, 2],
+      password: '',
+      skillLevel: 'CASUAL' as const,
+      rated: false,
+      spectatorsAllowed: true,
+      rollbackTurnsAllowed: true,
+      timeLimit: 'NONE',
+      bufferTime: 'NONE',
+      freeMulligans: 0,
+      showRangeAttack: false,
+      attackOption: 'LEFT',
+      range: 'ALL',
+      minimumRating: 0,
+      quitRatio: 100,
+      edhPowerLevel: 100,
+      bannedUsersRaw: '',
+      mulliganType: 'GAME_DEFAULT',
+      customStartLifeEnabled: false,
+      customStartLife: 20,
+      customStartHandSizeEnabled: false,
+      customStartHandSize: 7,
+      planeChase: false,
+      simDecks: [],
+      dev: false,
+    }
+    // 2 asientos LLM, el primero con config y el segundo sin ella → [cfg, null]
+    const withLlm = buildCreateMatchArgs({
+      ...baseMatch,
+      playerTypesFinal: ['HUMAN', 'COMPUTER_LLM', 'COMPUTER_LLM'],
+      llmConfigs: [cfg, null],
+    })
+    expect(withLlm.playerTypes).toEqual(['HUMAN', 'COMPUTER_LLM', 'COMPUTER_LLM'])
+    expect(withLlm.llmConfigs).toEqual([cfg, null])
+
+    // with no LLM seats the arg is omitted entirely
+    const noLlm = buildCreateMatchArgs({ ...baseMatch, playerTypesFinal: ['HUMAN', 'COMPUTER_MAD'] })
+    expect(noLlm).not.toHaveProperty('llmConfigs')
+
+    const emptyLlm = buildCreateMatchArgs({ ...baseMatch, playerTypesFinal: ['HUMAN', 'COMPUTER_MAD'], llmConfigs: [] })
+    expect(emptyLlm).not.toHaveProperty('llmConfigs')
+  })
+
+  it('llmConfigs: el torneo lleva los configs alineados y omite el arg sin asientos LLM', () => {
+    const cfg = { model: 'z-ai/glm-4.5' }
+    const baseTourney = {
+      name: 'Swiss',
+      username: 'player1',
+      tournamentType: 'Constructed Swiss',
+      gameType: 'Two Player Duel',
+      deckType: 'Constructed - Modern',
+      draft: false,
+      limitedOptions: undefined,
+      password: '',
+      spectatorsAllowed: true,
+      wins: 2,
+      numberRounds: 0,
+      skillLevel: 'CASUAL' as const,
+      rated: false,
+      rollbackTurnsAllowed: true,
+      timeLimit: 'NONE',
+      bufferTime: 'NONE',
+      minimumRating: 0,
+      quitRatio: 100,
+      bannedUsersRaw: '',
+      singleGame: false,
+    }
+    const withLlm = buildCreateTournamentArgs({
+      ...baseTourney,
+      playerTypesFinal: ['HUMAN', 'COMPUTER_LLM', 'COMPUTER_LLM'],
+      llmConfigs: [cfg, null],
+    })
+    expect(withLlm.llmConfigs).toEqual([cfg, null])
+
+    const noLlm = buildCreateTournamentArgs({ ...baseTourney, playerTypesFinal: ['HUMAN', 'COMPUTER_MAD'] })
+    expect(noLlm).not.toHaveProperty('llmConfigs')
   })
 })
 

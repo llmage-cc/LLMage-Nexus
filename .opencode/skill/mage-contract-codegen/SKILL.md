@@ -64,7 +64,7 @@ ClientCallbackMethod.java -> callbackCoverage + INTERACTION_COVERAGE.md
 | bloque `keywords` i18n | `node scripts/gen-keywords-i18n.mjs` | `--check` |
 
 `npm run gen` = los 3 principales. Validación agregada: tool MCP `mage_validate_generated`.
-CI: `.github/workflows/web-ci.yml` (jobs web/mcp/proxy/e2e-fake/integration) y
+Sin CI en este repo: corre las capas (web/mcp/proxy/e2e-fake/integration) con
 `scripts/dashboard-ci.mjs`.
 
 ## Convenciones del schema

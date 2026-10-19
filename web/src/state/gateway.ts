@@ -1,6 +1,10 @@
 import { Gateway } from '../net/Gateway'
+import { CLOSE_CODE_AUTH_REJECTED } from '../net/Gateway'
+import { getProxyConfig, getProxyHttpBase, peekProxyConfig, isAllDefaultsConfig, resetProxyConfigCache, type ProxyConfig } from '../net/proxyConfig'
+import { getAuthToken, clearAuthToken } from '../net/authToken'
 import * as cmds from '../net/commands'
 import { getState, setState, addLog, initialState } from './state'
+import { parseCapabilities } from './slices/session'
 import { handleMessage } from './eventHandler'
 import { clonePhaseStops } from '../game/phaseStops'
 import { saveConn, loadActiveGame, clearActiveGame, loadActiveDraft, clearActiveDraft, saveResumeToken, loadResumeToken, clearResumeToken, type ConnectionInfo } from './persistence'
@@ -74,10 +78,11 @@ async function relogin(g: Gateway, conn: ConnectionInfo, attempt: number): Promi
     conn.flagName,
     conn.avatarId,
     g.resumeToken(),
+    getAuthToken(),
   )
   if (gateway !== g) return
   if (res.ok) {
-    setState({ link: 'ok', linkAttempt: 0 })
+    setState({ link: 'ok', linkAttempt: 0, capabilities: parseCapabilities(res.data) })
     if (!isAttached(res.data)) resetGameEventOrder()
     if (isResumed(res.data)) {
       addLog('conexión', 'sesión reanudada sin pérdida de eventos')
@@ -108,6 +113,26 @@ async function relogin(g: Gateway, conn: ConnectionInfo, attempt: number): Promi
   const s = getState()
   if (!s.conn || s.phase === 'idle' || s.phase === 'connecting') return
   await relogin(g, s.conn, attempt + 1)
+}
+
+/**
+ * The proxy's typed 4401 rejection reasons are ENGLISH SERVER PAYLOADS
+ * (`DeploymentConfig.AUTH_REJECTED_CLOSE_REASON` / `…_MESSAGE` and their anon-name
+ * counterparts); an earlier pass saw them raw inside the localized
+ * `errors.proxy_rejected` banner ("Der Proxy hat die Verbindung abgelehnt:
+ * **Auth token required**…"). Map the KNOWN canonical proxy reasons to segments that
+ * already exist in every locale; anything else (stock-server detail, unknown text)
+ * passes through verbatim.
+ */
+export function localizeProxyRejectReason(reason: string): string {
+  const lower = reason.trim().toLowerCase()
+  if (lower.includes('auth token') || lower.includes('bad or missing auth')) {
+    return `${t('login', 'auth_token')}: ${t('login', 'auth_token_placeholder')}`
+  }
+  if (lower.includes('name in use') || lower.includes('already in use on that server')) {
+    return t('errors', 'session_in_use')
+  }
+  return reason
 }
 
 /** The proxy lost the XMage server and logs the session in again by itself:
@@ -209,7 +234,38 @@ export function attachGateway(g: Gateway) {
     if (gateway !== g || !token || !s.conn || s.phase === 'idle' || s.phase === 'connecting') return
     saveResumeToken(token, s.conn)
   }
-  g.events.onClose = (reason) => {
+  g.events.onClose = (reason, code) => {
+    // 4401: the proxy refused the connect (bad/absent auth token, name already
+    // held, target refused). Surface the typed reason and go idle WITHOUT any
+    // auto-reconnect/auto-relogin — the user must fix the input. The
+    // Gateway already stopped its own reconnect for this code.
+    if (code === CLOSE_CODE_AUTH_REJECTED) {
+      addLog('conexión', `rechazo del proxy (4401): ${reason}`)
+      // A rejection is the other case (besides an explicit logout) that
+      // must forget the token: the user will re-enter it. A plain failed attempt
+      // never reaches here and keeps it.
+      clearAuthToken()
+      // The boot probe may have failed (transient outage) or predate the
+      // proxy coming up, and its ALL-DEFAULTS failure result is cached in the
+      // module — `probeProxyConfig` alone would return it forever. When a
+      // cached-but-all-defaults config exists, drop the cache and re-probe so
+      // the reject banner renders against FRESH config: a gated deployment
+      // shows its token field instead of dead-ending. Fire and forget — the
+      // fetch is bounded by the browser and never blocks the reject path.
+      // Nothing cached at all (a 4401 before ANY probe settled) stays quiet:
+      // the App boot probe still owns that fetch, so no second request fires.
+      const cachedConfig = peekProxyConfig()
+      if (cachedConfig && isAllDefaultsConfig(cachedConfig)) {
+        reprobeProxyConfig().catch(() => {})
+      }
+      setState({
+        phase: 'idle', connecting: false, wsAlive: false,
+        link: 'ok', linkAttempt: 0, loginRetry: null,
+        error: null,
+        proxyReject: localizeProxyRejectReason(reason),
+      })
+      return
+    }
     const s = getState()
     const inSession = !!s.conn && s.phase !== 'idle' && s.phase !== 'connecting'
     setState({ connecting: false, wsAlive: false, ...(inSession ? { link: 'ws-down' as const, linkAttempt: 0 } : null) })
@@ -232,6 +288,40 @@ export function proxyUrl(wsHost: string, proxyPort: number): string {
   return wsHost.includes('://') ? wsHost : `ws://${wsHost}:${proxyPort}`
 }
 
+/**
+ * Pre-connect probe of the deployment config. Called once before the
+ * login screen is shown; the result lands on the store as `proxyConfig`. A 404,
+ * network failure or malformed body resolves to ALL-DEFAULTS, so an old/stock
+ * proxy keeps working. Idempotent within a session (module-cached in
+ * `proxyConfig.ts`).
+ */
+export async function probeProxyConfig(wsHost?: string, wsPort?: number): Promise<ProxyConfig> {
+  const cached = peekProxyConfig()
+  if (cached) {
+    if (getState().proxyConfig !== cached) setState({ proxyConfig: cached })
+    return cached
+  }
+  const config = await getProxyConfig(fetch, getProxyHttpBase(wsHost, wsPort))
+  setState({ proxyConfig: config })
+  return config
+}
+
+/**
+ * Re-probe the deployment config with the cache dropped.
+ * `proxyConfig.ts` caches even the ALL-DEFAULTS FAILURE result of
+ * a probe (404 / network down / malformed body), so a gated deployment whose
+ * probe failed at boot — or whose proxy started later — dead-ends forever:
+ * `probeProxyConfig` alone can never recover because the failure is
+ * indistinguishable from a settled probe. This drops the module cache and
+ * probes again, then lands the fresh result on the store.
+ */
+export async function reprobeProxyConfig(wsHost?: string, wsPort?: number): Promise<ProxyConfig> {
+  resetProxyConfigCache()
+  const config = await getProxyConfig(fetch, getProxyHttpBase(wsHost, wsPort))
+  setState({ proxyConfig: config })
+  return config
+}
+
 export function doConnect(
   wsHost: string,
   proxyPort: number,
@@ -241,6 +331,7 @@ export function doConnect(
   password: string,
   flagName?: string,
   avatarId?: number,
+  authToken?: string,
 ): Promise<void> {
   // StrictMode monta App dos veces en dev: sin dedupe, el segundo intento
   // desconecta el WS del primero, que a los 5 s rechaza y pisa el estado del
@@ -248,7 +339,7 @@ export function doConnect(
   const key = `${wsHost}|${proxyPort}|${serverHost}|${port}|${username}`
   if (inFlight?.key === key) return inFlight.promise
   const attempt = ++activeAttempt
-  const promise = runConnect(attempt, wsHost, proxyPort, serverHost, port, username, password, flagName, avatarId, 0)
+  const promise = runConnect(attempt, wsHost, proxyPort, serverHost, port, username, password, flagName, avatarId, authToken, 0)
   inFlight = { key, promise }
   void promise.finally(() => {
     if (inFlight?.promise === promise) inFlight = null
@@ -266,13 +357,15 @@ async function runConnect(
   password: string,
   flagName?: string,
   avatarId?: number,
+  authToken?: string,
   alreadyConnectedRetries = 0,
 ): Promise<void> {
   // Un intento anterior (p.ej. auto-connect lento) no puede volver a 'idle' ni
   // escribir un error encima del intento vigente que ya logueó.
   const stale = () => attempt !== activeAttempt
+  const token = authToken ?? getAuthToken()
   const conn: ConnectionInfo = { wsHost, proxyPort, serverHost, port, username, password, flagName, avatarId }
-  setState({ phase: 'connecting', conn, connecting: true, error: null, link: 'ok', linkAttempt: 0, loginRetry: null })
+  setState({ phase: 'connecting', conn, connecting: true, error: null, link: 'ok', linkAttempt: 0, loginRetry: null, capabilities: null, proxyReject: null })
   detachGateway()
   const g = new Gateway()
   attachGateway(g)
@@ -291,8 +384,12 @@ async function runConnect(
   const resume = loadResumeToken(conn)
   clearResumeToken()
   if (resume) g.seedResume(resume)
-  const res = await cmds.connect(serverHost, port, username, password, flagName, avatarId, resume)
+  const res = await cmds.connect(serverHost, port, username, password, flagName, avatarId, resume, token)
   if (stale()) return
+  // 4401: the proxy refused the connect (bad/absent auth token, name held,
+  // target refused). The onClose handler already surfaced the typed reason and
+  // went idle; do not overwrite it with the raw close reason and do not retry.
+  if (g.lastCloseCode === CLOSE_CODE_AUTH_REJECTED) return
   if (!res.ok && /already connected|already logged in/i.test(res.error ?? '') && alreadyConnectedRetries < ALREADY_CONNECTED_RETRIES) {
     const waitMs = ALREADY_CONNECTED_BASE_DELAY_MS * 2 ** alreadyConnectedRetries
     addLog('conexión', `la sesión anterior sigue viva en el servidor: reintento ${alreadyConnectedRetries + 1}/${ALREADY_CONNECTED_RETRIES} en ${Math.round(waitMs / 1000)} s`)
@@ -300,11 +397,11 @@ async function runConnect(
     await cmds.disconnect()
     await new Promise((r) => setTimeout(r, waitMs))
     if (stale()) return
-    return runConnect(attempt, wsHost, proxyPort, serverHost, port, username, password, flagName, avatarId, alreadyConnectedRetries + 1)
+    return runConnect(attempt, wsHost, proxyPort, serverHost, port, username, password, flagName, avatarId, token, alreadyConnectedRetries + 1)
   }
   if (res.ok) {
     if (!isAttached(res.data)) resetGameEventOrder()
-    setState({ phase: 'lobby', connecting: false, error: null, conn })
+    setState({ phase: 'lobby', connecting: false, error: null, conn, capabilities: parseCapabilities(res.data) })
     saveConn(conn)
     if (isResumed(res.data)) addLog('conexión', 'recarga: eventos perdidos reproducidos desde el proxy')
     // the replay carries what happened meanwhile, but this page has no board: rejoin for the state + prompt
@@ -336,6 +433,13 @@ export function reset() {
   clearResumeToken()
   clearActiveGame()
   clearActiveDraft()
+  clearAuthToken()
   resetGameEventOrder()
-  setState(initialState)
+  // Disconnect must NOT forget the deployment config: `initialState.proxyConfig`
+  // is ALL-DEFAULTS, so a plain `setState(initialState)` makes the returning
+  // login form fall back to the stock shape (no auth-token field, editable
+  // Server/Port) although the probe is still cached in `proxyConfig.ts`.
+  // Re-derive it from the module cache, which survives the store reset.
+  const config = peekProxyConfig()
+  setState({ ...initialState, proxyConfig: config ?? initialState.proxyConfig })
 }

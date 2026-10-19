@@ -132,6 +132,7 @@ export function hasUnseenNews(releases: NewsRelease[]): boolean {
 
 export function renderNewsMarkdown(src: string): string {
   const escaped = src
+    .replace(/\r\n?/g, '\n')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -141,6 +142,14 @@ export function renderNewsMarkdown(src: string): string {
       .replace(/(?<!["'=])(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noreferrer">$1</a>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
+  const rowCells = (line: string): string[] =>
+    line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim())
+  const isRow = (line: string): boolean => /^\s*\|.*\|\s*$/.test(line)
+  const isDivider = (line: string): boolean => {
+    if (!isRow(line)) return false
+    const cells = rowCells(line)
+    return cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c))
+  }
   const lines = escaped.split('\n')
   const html: string[] = []
   let inList = false
@@ -150,7 +159,49 @@ export function renderNewsMarkdown(src: string): string {
       inList = false
     }
   }
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (isRow(line)) {
+      if (i + 1 < lines.length && isDivider(lines[i + 1])) {
+        closeList()
+        const head = rowCells(line)
+        const body: string[][] = []
+        i += 2
+        while (i < lines.length && isRow(lines[i]) && !isDivider(lines[i])) {
+          body.push(rowCells(lines[i]))
+          i += 1
+        }
+        i -= 1
+        html.push(
+          `<table><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${body
+            .map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join('')}</tr>`)
+            .join('')}</tbody></table>`,
+        )
+        continue
+      }
+      if (isDivider(line)) {
+        closeList()
+        continue
+      }
+    }
+    const details = line.trim().match(/^&lt;details&gt;(?:&lt;summary&gt;(.*)&lt;\/summary&gt;)?$/)
+    if (details) {
+      closeList()
+      html.push('<details>')
+      if (details[1] !== undefined) html.push(`<summary>${inline(details[1])}</summary>`)
+      continue
+    }
+    if (line.trim() === '&lt;/details&gt;') {
+      closeList()
+      html.push('</details>')
+      continue
+    }
+    const summary = line.trim().match(/^&lt;summary&gt;(.*)&lt;\/summary&gt;$/)
+    if (summary) {
+      closeList()
+      html.push(`<summary>${inline(summary[1])}</summary>`)
+      continue
+    }
     const heading = line.match(/^(#{1,4})\s+(.*)$/)
     if (heading) {
       closeList()

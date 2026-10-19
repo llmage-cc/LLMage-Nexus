@@ -6,6 +6,8 @@ import type { GameSlice } from './slices/game'
 import { initialGame } from './slices/game'
 import type { LimitedSlice } from './slices/limited'
 import { initialLimited } from './slices/limited'
+import type { ReplaySlice } from './slices/replay'
+import { initialReplay } from './slices/replay'
 import type { SettingsSlice } from './slices/settings'
 import { initialSettings } from './slices/settings'
 
@@ -15,16 +17,18 @@ export type {
   CombatState, SideboardCard, SideboardScreenState, UserRequestButton,
   UserRequestView, CardViewerState, GameSlice,
   DraftState, TournamentState, ConstructState, LimitedSlice,
+  ReplayState, ReplaySlice,
   SettingsState, SettingsSlice,
 } from './slices'
 
-export interface AppState extends SessionSlice, LobbySlice, GameSlice, LimitedSlice, SettingsSlice {}
+export interface AppState extends SessionSlice, LobbySlice, GameSlice, LimitedSlice, ReplaySlice, SettingsSlice {}
 
 export const initialState: AppState = {
   ...initialSession,
   ...initialLobby,
   ...initialGame,
   ...initialLimited,
+  ...initialReplay,
   ...initialSettings,
 }
 

@@ -288,7 +288,10 @@ class DeckValidationTest {
     void validateDeckFormatRunsOfficialXMageValidator() {
         DeckCardLists atraxaDeck = deck(
                 card("Atraxa, Praetors' Voice", "C16", "28", 1),
-                card("Sol Ring", "C16", "264", 1),
+                // C16:272 is this engine's Sol Ring printing: :264 is Myr Retriever
+                // and the fork's strict wrong-card guard (Deck.createCard) rejects
+                // a [SET:NUM] whose name disagrees, so the old code failed the test
+                card("Sol Ring", "C16", "272", 1),
                 card("Forest", "LEA", "294", 98));
         JsonObject ok = DeckValidation.validateDeckFormat(atraxaDeck, "Variant Magic - Commander", null);
         assertTrue(ok.get("ready").getAsBoolean());
@@ -300,8 +303,8 @@ class DeckValidationTest {
         // carta baneada en Commander => error BANNED del validador oficial
         DeckCardLists bannedDeck = deck(
                 card("Atraxa, Praetors' Voice", "C16", "28", 1),
-                card("Ancestral Recall", "LEA", "46", 1),
-                card("Island", "LEA", "75", 98));
+                card("Ancestral Recall", "LEA", "47", 1),
+                card("Island", "LEA", "288", 98));
         JsonObject banned = DeckValidation.validateDeckFormat(bannedDeck, "Variant Magic - Commander", null);
         assertTrue(banned.get("supported").getAsBoolean());
         assertEquals(false, banned.get("valid").getAsBoolean());

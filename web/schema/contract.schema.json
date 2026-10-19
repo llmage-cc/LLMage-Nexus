@@ -55,7 +55,30 @@
         "rollbackTurnsAllowed": { "type": "boolean" },
         "totalErrorsCount": { "type": "number" },
         "totalEffectsCount": { "type": "number" },
-        "gameCycle": { "type": "number" }
+        "gameCycle": { "type": "number" },
+        "replayStateIndex": { "type": "number" },
+        "replayStateCount": { "type": "number" },
+        "replayHasLlmPlayers": { "type": "boolean" },
+        "llmChatPublic": { "type": "boolean" },
+        "llmDebug": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LLMConversationView" }
+        },
+        "replayLLMBuckets": {
+          "type": ["object", "null"],
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "entries": {
+                "type": "array",
+                "items": { "$ref": "#/definitions/LLMConversationView" }
+              }
+            },
+            "required": ["entries"]
+          }
+        },
+        "replayGameLog": { "type": "array", "items": { "type": "string" } },
+        "replayGameLogCount": { "type": "number" }
       },
       "required": [
         "priorityTime", "bufferTime", "myHand", "myHelperEmblems",
@@ -606,6 +629,63 @@
         "value": { "type": "string" }
       },
       "required": ["id", "value"]
+    },
+    "LlmPromptFrame": {
+      "type": "object",
+      "description": "Typed server→client frame (NOT the generic `event` envelope): a fork-only LLM_PROMPT callback means the connected XMage build runs LLM seats whose key lives in THIS browser. The proxy relays the server-built request body verbatim; the frame carries NO API key (the browser attaches the key it stored for `clientKeyTag`). The client answers llm_decision / llm_error.",
+      "properties": {
+        "type": { "type": "string", "enum": ["llm_prompt"] },
+        "requestId": { "type": "string" },
+        "seatId": { "type": "string" },
+        "gameId": { "type": "string" },
+        "playerName": { "type": "string" },
+        "requestBody": { "type": "string" },
+        "apiEndpoint": { "type": "string" },
+        "stream": { "type": "boolean" },
+        "timeoutSeconds": { "type": "number" },
+        "clientKeyTag": { "type": "string" }
+      },
+      "required": [
+        "type", "requestId", "seatId", "gameId", "playerName", "requestBody",
+        "apiEndpoint", "stream", "timeoutSeconds", "clientKeyTag"
+      ]
+    },
+    "LLMConversationView": {
+      "type": "object",
+      "description": "Web-only LLM debug view (GameView.llmDebug / replayLLMBuckets entries). Mirrors serialization of mage.view.LLMConversationView by the web proxy (GameStateSerializer.serializeLlmView).",
+      "properties": {
+        "playerName": { "type": "string" },
+        "modelName": { "type": "string" },
+        "exchangeCount": { "type": "number" },
+        "totalContextChars": { "type": "number" },
+        "modelContextWindow": { "type": "number" },
+        "streaming": { "type": "boolean" },
+        "streamingReasoning": { "type": "string" },
+        "streamingContent": { "type": "string" },
+        "streamingStartedAt": { "type": "number" },
+        "gamePlan": { "type": "string" },
+        "postGameReflection": { "type": "string" },
+        "matchReview": { "type": "string" },
+        "messagesHidden": { "type": "number" },
+        "messages": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LLMMessageView" }
+        }
+      },
+      "required": ["playerName", "modelName", "exchangeCount", "totalContextChars", "modelContextWindow", "streaming", "streamingStartedAt", "messages"]
+    },
+    "LLMMessageView": {
+      "type": "object",
+      "description": "One message of an LLM conversation (role + content, plus optional per-exchange metadata).",
+      "properties": {
+        "role": { "type": "string" },
+        "content": { "type": "string" },
+        "promptType": { "type": "string" },
+        "turn": { "type": "number" },
+        "phaseStep": { "type": "string" },
+        "compactSummary": { "type": "string" }
+      },
+      "required": ["role", "content"]
     }
   }
 }

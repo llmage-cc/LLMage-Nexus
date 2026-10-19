@@ -1,9 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { usePhase, useStore, loadConn, doConnect } from './state/store'
+import { usePhase, useStore, loadConn, doConnect, probeProxyConfig } from './state/store'
+import { saveConn } from './state/persistence'
+import { isDeploymentLocked } from './setup/deploymentLock'
 import { linkBanner } from './system/linkBanner'
 import { isGalleryHash } from './dev/galleryRoute'
 import { setState } from './state/state'
 import { parseDeepLink } from './lobby/deepLink'
+import { canAutoConnect } from './lobby/autoConnect'
+import { getAuthToken } from './net/authToken'
 import { setSetting } from './state/actions'
 import { ZOOM_DEFAULT, stepZoom } from './appearance/zoom'
 import { useTranslation } from './i18n'
@@ -26,8 +30,8 @@ import Attribution from './system/Attribution'
 import LoginRetryHint from './system/LoginRetryHint'
 import DemoTour from './demo/DemoTour'
 
-// P3: galería de estados (solo dev). El import dinámico queda tras
-// `import.meta.env.DEV`, así el build de producción no incluye los frames.
+// State gallery (dev only). The dynamic import sits behind
+// `import.meta.env.DEV`, so the production build does not include the frames.
 const GalleryScreen = import.meta.env.DEV ? lazy(() => import('./dev/GalleryScreen')) : null
 
 export default function App() {
@@ -39,8 +43,22 @@ export default function App() {
   const linkAttempt = useStore((s) => s.linkAttempt)
   const loginRetry = useStore((s) => s.loginRetry)
   const settings = useStore((s) => s.settings)
+  const deploymentName = useStore((s) => s.proxyConfig.deploymentName)
   const [showSetup, setShowSetup] = useState(() => bootPlanFromStorage().showWizard)
   const [gallery, setGallery] = useState(() => Boolean(GalleryScreen) && isGalleryHash(window.location.hash))
+
+  // Deployment gating: probe the proxy's GET /config once before the
+  // login screen. 404/failure → ALL-DEFAULTS, so a stock/old proxy is unchanged.
+  useEffect(() => {
+    void probeProxyConfig()
+  }, [])
+
+  // Branding knob: the base document title is the deployment's name
+  // (`XMage Nexus` by default). attentionAlerts keeps prefixing its own
+  // `(n) <reason> · <base>` on top of whatever the base is.
+  useEffect(() => {
+    document.title = deploymentName
+  }, [deploymentName])
 
   useEffect(() => {
     if (!GalleryScreen) return
@@ -80,9 +98,33 @@ export default function App() {
     if (!bootPlanFromStorage().restore) return
     if (GalleryScreen && isGalleryHash(window.location.hash)) return
     const saved = loadConn()
-    if (saved?.username && phase === 'idle') {
-      void doConnect(saved.wsHost, saved.proxyPort, saved.serverHost, saved.port, saved.username, saved.password, saved.flagName, saved.avatarId)
-    }
+    if (!saved?.username || phase !== 'idle') return
+    void (async () => {
+      // The token is persisted per tab (net/authToken.ts). Awaiting the /config
+      // probe lets the gate tell a gated deployment whose tab still holds a token
+      // (auto-attach, the reload resumes the game) from one without a token (land
+      // on the login form's prompt instead of firing a tokenless connect the
+      // proxy closes with 4401). The probe is shared with the App-mount call and
+      // never throws (it degrades to defaults).
+      const config = await probeProxyConfig()
+      if (!canAutoConnect(config.authRequired, !!getAuthToken())) return
+      // M2: the reload auto-reconnect is the one connect path the deployment
+      // lock did not cover — LoginScreen and SetupWizard honor it, but a saved
+      // foreign/stale connection would silently bypass it here. On a locked
+      // deployment the baked target replaces the saved server host/port BEFORE
+      // doConnect, and the saved connection is rewritten so the bypass does not
+      // persist into the next reload either.
+      let serverHost = saved.serverHost
+      let port = saved.port
+      if (isDeploymentLocked()) {
+        serverHost = (import.meta.env.VITE_DEFAULT_SERVER_HOST as string | undefined) ?? 'localhost'
+        port = parseInt(import.meta.env.VITE_DEFAULT_SERVER_PORT ?? '17171', 10) || 17171
+        if (serverHost !== saved.serverHost || port !== saved.port) {
+          saveConn({ ...saved, serverHost, port })
+        }
+      }
+      void doConnect(saved.wsHost, saved.proxyPort, serverHost, port, saved.username, saved.password, saved.flagName, saved.avatarId)
+    })()
   }, [])
 
   useEffect(() => {

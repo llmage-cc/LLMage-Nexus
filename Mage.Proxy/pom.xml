@@ -21,8 +21,15 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
-        <!-- XMage artifacts to compile against. Override to build a proxy for
-             another server release: -Dmage.version=1.5.8 -->
+        <!-- XMage artifacts to compile against: the default is this fork's own
+             release (${project.version} = 1.4.62, synced to upstream
+             xmage_1.4.62V1). The fork's 1.4.62 artifacts carry the fork-only
+             symbols the proxy references
+             (PlayerType.COMPUTER_LLM, LLMPlayerConfig,
+             MatchOptions.setLlmPlayerConfigs, Personality.allNames) over real
+             upstream 1.4.62 code — the stock Adamychen 1.4.62 artifacts lack
+             every one of them, so never build against those. Override to build
+             for another server release: -Dmage.version=1.5.8 (XDHS fork). -->
         <mage.version>${project.version}</mage.version>
     </properties>
 

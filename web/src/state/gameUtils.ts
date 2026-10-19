@@ -122,12 +122,21 @@ export function consolidatePlayables(
   currentFeedback: FeedbackPrompt | null | undefined,
   currentPlayableIds: string[],
   currentPlayableWindow: { turn: number; phase: string | null } | null,
+  currentRequestSpent = false,
 ): { ids: string[]; window: { turn: number; phase: string | null } | null } {
   const turn = game.turn
   const phase = game.phase
   const objects = game.canPlayObjects?.objects
   const hasObjects = !!objects && Object.keys(objects).length > 0
   if (method === 'GAME_SELECT' || method === 'GAME_PLAY_MANA' || hasObjects) {
+    // A spent window (the answer already went out) must not re-mark: the
+    // positions the server keeps re-publishing around an answered ask carry
+    // canPlayObjects of a window the game no longer opens, so the painted
+    // `playable` marker lies and a click parks in the engine's answer queue
+    // (2026-10-13 stale-playable-marker). Only a NEW GAME_SELECT re-opens.
+    if (currentRequestSpent && method !== 'GAME_SELECT') {
+      return { ids: [], window: null }
+    }
     const ids = playableObjectIds(game, currentFeedback ?? undefined)
     const me = game.players?.find((p) => p.controlled)
     // Jugar una tierra exige pila vacía (CR 305.1/116.2): con un hechizo en la
@@ -144,6 +153,20 @@ export function consolidatePlayables(
     return { ids, window: ids.length > 0 ? { turn, phase } : null }
   }
   if (currentPlayableIds.length === 0) return { ids: [], window: currentPlayableWindow }
+  // Stale window: a push for the SAME turn+phase without canPlayObjects kept
+  // the previous playables even though the priority situation no longer
+  // allowed them (the server rejected the play silently). With a dialog
+  // prompt open (uuid/string/integer/boolean) the hand click belongs to THAT
+  // dialog: clear the playables; only mana and combat keep playing on the board.
+  const openMode = currentFeedback?.mode
+  if (openMode && openMode !== 'mana' && openMode !== 'combat') {
+    return { ids: [], window: null }
+  }
+  // Ventana ya respondida (claim 2026-10-12): los push posteriores del MISMO
+  // turno+fase no re-abren nada — el marcador sería una mentira del mismo tipo.
+  if (currentRequestSpent) {
+    return { ids: [], window: null }
+  }
   if (currentPlayableWindow && (currentPlayableWindow.turn !== turn || currentPlayableWindow.phase !== phase)) {
     return { ids: [], window: null }
   }

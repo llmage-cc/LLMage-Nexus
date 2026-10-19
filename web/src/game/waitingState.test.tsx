@@ -78,6 +78,24 @@ describe('waitingState', () => {
     expect(getByRole('button', { name: /Waiting for Ana/ })).not.toBeNull()
   })
 
+  it('shows the pass as spent — with a clock — while the answer waits for the next ask', () => {
+    const game = makeGameView({ players: [me(true)], stack: { s1: makeCard({ id: 's1', name: 'Shock' }) } })
+    const live = render(
+      <ActionButton game={game} feedback={null} gameId="g" canPass onPass={vi.fn()} onSkip={vi.fn()} />,
+    )
+    // Control: the same window is a live Resolve button until we answer it.
+    expect(live.getByRole('button', { name: /Resolve/ })).not.toBeNull()
+    live.unmount()
+
+    const spent = render(
+      <ActionButton game={game} feedback={null} gameId="g" canPass onPass={vi.fn()} onSkip={vi.fn()} answered />,
+    )
+    const button = spent.getByRole('button', { name: /Pass sent/ })
+    expect(button.getAttribute('disabled')).not.toBeNull()
+    expect(button.getAttribute('class')).toContain('disabled')
+    expect(spent.getByTestId('waiting-clock').textContent).toContain('thinking 0:00')
+  })
+
   it('ticks the thinking clock, counts down the timer and flags long waits', () => {
     vi.useFakeTimers()
     const game = makeGameView({ players: [me(), ana(true, 300)], step: 'UPKEEP' })

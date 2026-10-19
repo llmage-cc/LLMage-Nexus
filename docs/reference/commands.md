@@ -141,7 +141,7 @@ A driver connects to the proxy, creates a real table, plays a scripted mechanic,
 | `node scripts/i18n-coverage.mjs` | Nothing; it is the guard that fails when keys are missing. |
 | `node scripts/build-scryfall-image-index.mjs [--bulk-dir <dir>] [--out <dir>] [--out-tmp <dir>]` | The offline card-image index. Without `--bulk-dir` it downloads Scryfall bulk data into a temporary directory. |
 
-`npm --prefix web run gen` runs the three contract generators in sequence. The matching `:validate` npm scripts run the same generators in check mode and fail instead of writing, which is what CI uses.
+`npm --prefix web run gen` runs the three generators above in sequence. The matching `:validate` npm scripts run the same generators in check mode and fail instead of writing, which is what CI uses.
 
 ## Packaging and releases
 

@@ -5,7 +5,7 @@
 Counts are `wc -l` / `find | wc -l` output from the working tree, so re-run them before trusting a number
 here (`find web/src -name '*.ts' -o -name '*.tsx' -o -name '*.css' | wc -l`, etc.). The **refactor queue**
 of the 2026-09-05 version of this file is finished: every file it listed at 1 000+ lines was split then. In the proxy the only hand-written source still above 1 000 lines is `ProxyClient.java`, and it has grown back
-from the 739 lines that split left (1 161 now, with the relink / sequencer / probe work). In the web client
+from the 739 lines that the split left (1 161 now, with the relink / sequencer / probe work). In the web client
 the only files over 1 000 lines are generated data (the 9 locales, `data/mtgKeywords.ts`), a data catalog
 (`decks/metaDeckCatalog.ts`), one test (`state/store.test.ts`), the dev-only `dev/galleryFixtures.ts` and
 three CSS files (`lobby/LobbyScreen.css`, `lobby/SpectatorStagingScreen.css`, `board/CardSlot.css`). What is
@@ -102,7 +102,7 @@ Tests: `Mage.Proxy/src/test` — **36 files**, including `ProxyClientFailedLogin
 | Real-stack harnesses | `self-test.mjs`, `human-test.mjs`, `fuzz.mjs`, `warmup.mjs`, `clean-tables.mjs`, `multi-tenant-test.mjs` | Need the stack; `warmup.mjs` exists because of the cold-start callback-socket flake |
 | Anti-drift `verify` layer | `verify-player-leave`, `verify-hand-permission`, `verify-range-attack`, `verify-rollback-vote`, `verify-spectator-end`, `verify-swiss`, `verify-tournament-watch`, `verify-wizard-matrix`, `verify-reconnect` | The nine scripts listed in `VERIFY_SCRIPTS`; each logs out before closing its socket |
 | Fixture recording | `record.mjs` (3 866), `rec-lib.mjs`, `record-sync.mjs`, `drivers/*.mjs` | Real frames → `web/fixtures/recorded/`; one driver per mechanic |
-| Contract generators | `view-schema.mjs`, `engine-view-schema.mjs`, `server-state-schema.mjs`, `hint-schema.mjs`, `gen-types.mjs`, `gen-zod.mjs`, `gen-splash-i18n.mjs`, `gen-keywords-i18n.mjs`, `extract-keywords.mjs` | Each has a `--validate` mode used by CI; `*_schema.json` outputs live in `web/fixtures/` |
+| Contract generators | `view-schema.mjs`, `engine-view-schema.mjs`, `server-state-schema.mjs`, `hint-schema.mjs`, `gen-types.mjs`, `gen-zod.mjs`, `gen-splash-i18n.mjs`, `gen-keywords-i18n.mjs`, `extract-keywords.mjs` | Four of them (`gen-types.mjs`, `gen-zod.mjs`, `server-state-schema.mjs`, `gen-splash-i18n.mjs`) have a `--validate` mode, run by hand via `gen-*:validate` npm scripts (no CI ships with this repository); `*_schema.json` outputs live in `web/fixtures/` |
 | Release/site | `gen-dashboard.mjs`, `dashboard-ci.mjs`, `integration-report.mjs`, `gen-latest.mjs`, `gen-manifest.mjs`, `gen-release-body.mjs`, `assemble-modules.mjs` | Feed `site/` and the release workflow |
 | Deploy/host | `deploy-bundle.mjs`, `deploy/*` (`host-xdhs.sh`, …), `check-upstream-release.mjs` | The public host + the 6-hourly upstream release probe |
 | MCP tooling | `playwright-mcp.mjs` | Wraps `@playwright/mcp` for browser interaction |

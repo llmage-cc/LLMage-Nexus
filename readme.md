@@ -50,8 +50,7 @@ up to the displayed frame.
 
 | Way | How |
 |---|---|
-| **Desktop app** (Windows / macOS / Linux) | Download the launcher from [Releases](https://github.com/Adamychen/xmage-nexus/releases): Windows `.msi`/`.exe`, macOS `.dmg` (Apple Silicon), Linux `.AppImage`/`.deb`/`.rpm`. It bundles the JRE + XMage server + proxy and boots everything with one click (~15 MB, auto-updates). |
-| **Browser** (zero install) | Join a hosted instance — see the [project page](https://adamychen.github.io/xmage-nexus/) — or self-host with [docs/operator-guide/deployment.md](docs/operator-guide/deployment.md). |
+| **Browser** (zero install) | Play at [play.llmage.cc](https://play.llmage.cc/) — or self-host with [docs/operator-guide/deployment.md](docs/operator-guide/deployment.md). |
 | **Local dev** | Pick a variant below: [web-only](#variant-a--web-only-no-java-no-maven-fastest-loop) (no Java/Maven) or [full stack](#variant-b--full-stack-real-xmage-server--proxy--web-client). |
 
 ## Architecture
@@ -80,7 +79,7 @@ up to the displayed frame.
 
 | Component | Minimum | Verified / CI | Notes |
 |---|---|---|---|
-| **JDK** | 17 | Temurin 17.0.20 (CI), 17+ locally | Required for `Mage.Server` + `Mage.Proxy`. The scripts auto-resolve the real binary (macOS `/usr/bin/java` stub is bypassed via `scripts/lib.mjs:130`). |
+| **JDK** | 17 | Temurin 17.0.20 (CI), 17+ locally | Required for `Mage.Server` + `Mage.Proxy`. The scripts auto-resolve the real binary (macOS `/usr/bin/java` stub is bypassed via `scripts/lib.mjs:209`). |
 | **Maven** | 3.9+ | 3.9.16 | Required only for the full stack. Not needed for web-only work. |
 | **Node.js** | 20+ | 22 (CI), 24.19.0 (local dev) | `web/` uses Vite 8 / Vitest / Playwright. |
 | **npm** | 10+ | 10.x | `web/package.json` uses `npm`. `pnpm` also works. |
@@ -95,14 +94,14 @@ node --version  # >=20 (22 recommended)
 npm --version
 ```
 
-> If `ulimit -n` reports `< 10240` on macOS/Linux, raise it before starting the stack (`ulimit -n 65536`). A low descriptor limit can break server callbacks under load (`scripts/lib.mjs:168`).
+> If `ulimit -n` reports `< 10240` on macOS/Linux, raise it before starting the stack (`ulimit -n 65536`). A low descriptor limit can break server callbacks under load (`scripts/lib.mjs:250`).
 
 ## Installation
 
 Clone once:
 
 ```bash
-git clone https://github.com/Adamychen/xmage-nexus.git
+git clone https://github.com/llmage-cc/LLMage-Nexus.git
 cd xmage-nexus
 ```
 
@@ -128,7 +127,7 @@ npm --prefix web run build      # production build
 npm --prefix web run test:e2e:fake  # Playwright against FakeServer on :8789 (deterministic)
 ```
 
-The fake E2E mode (`FakeServer` in `web/fixtures/fake.ts`) speaks the real WebSocket protocol derived from `web/src/net/types.ts` but runs entirely in Node — no proxy, no XMage server, no flakes. Playwright auto-starts Vite in this mode (`web/playwright.config.ts:12`).
+The fake E2E mode (`FakeServer` in `web/fixtures/fake.ts`) speaks the real WebSocket protocol derived from `web/src/net/types.ts` but runs entirely in Node — no proxy, no XMage server, no flakes. Playwright auto-starts Vite in this mode (`web/playwright.config.ts:43`).
 
 ### Variant B — Full stack (real XMage server + proxy + web client)
 
@@ -178,10 +177,10 @@ node scripts/build.mjs
 
 | Service | URL | Notes |
 |---|---|---|
-| Web Client (Vite dev) | `http://localhost:5173` | `vite.config.ts:6` |
-| Proxy WebSocket | `ws://127.0.0.1:8787` | `scripts/lib.mjs:15` |
+| Web Client (Vite dev) | `http://localhost:5173` | `vite.config.ts:12` |
+| Proxy WebSocket | `ws://127.0.0.1:8787` | `scripts/lib.mjs:95` |
 | Proxy HTTP (test page) | `http://127.0.0.1:8788/index.html` | Served by the proxy itself |
-| FakeServer (E2E fake) | `ws://127.0.0.1:8789` | Fake E2E only; `8788` is owned by the real proxy — do not reuse (`web/AGENTS.md:21`) |
+| FakeServer (E2E fake) | `ws://127.0.0.1:8789` | Fake E2E only; `8788` is owned by the real proxy — do not reuse (`web/AGENTS.md:25`) |
 | XMage Server (testMode) | `127.0.0.1:17171` / `beta.xmage.today:17171` | Local server is the reliable oracle; `beta.xmage.today` anonymous login is best-effort (`AGENTS.md`) |
 
 ### Verifying the installation
@@ -205,19 +204,19 @@ E2E_BACKEND=real npm --prefix web run test:e2e:real  # real-stack E2E (anti-drif
 node scripts/test.mjs all
 ```
 
-After `ctl.mjs start all`, `node scripts/ctl.mjs status` should show `server`, `proxy`, and `vite` as `RUNNING`. If the proxy or Vite port is not yet listening, wait a few seconds and retry — `dev.mjs` waits up to 60s for the server/Vite and 30s for the proxy.
+After `ctl.mjs start all`, `node scripts/ctl.mjs status` should show `server`, `proxy`, and `vite` as `RUNNING`. If the proxy or Vite port is not yet listening, wait a few seconds and retry — `dev.mjs` waits up to 600s for the server, 60s for Vite, and 30s for the proxy.
 
 ### Troubleshooting
 
 | Symptom | Cause / Fix |
 |---|---|
-| `java -version` reports wrong version or `java` not found | Install Temurin 17 (`https://adoptium.net`), ensure `JAVA_HOME` points to JDK 17. On macOS the `/usr/bin/java` stub fails if no JDK is registered — `scripts/lib.mjs:130` auto-resolves Homebrew paths (`/opt/homebrew/opt/openjdk@17`, `/usr/local/opt`). |
+| `java -version` reports wrong version or `java` not found | Install Temurin 17 (`https://adoptium.net`), ensure `JAVA_HOME` points to JDK 17. On macOS the `/usr/bin/java` stub fails if no JDK is registered — `scripts/lib.mjs:212` auto-resolves Homebrew paths (`/opt/homebrew/opt/openjdk@17`, `/usr/local/opt`). |
 | `mvn: command not found` | Install Maven 3.9+ and add it to `PATH`. Web-only work does not require Maven. |
 | `vite` not found / `npm install` errors | Run `npm --prefix web install` from the repo root; Node 20+ required. |
 | Proxy fails with `MAGE_VERSION_RELEASE_INFO_MUST_BE_SAME` | Client/proxy/server version mismatch. Rebuild everything: `node scripts/build.mjs` + `node scripts/ctl.mjs restart all`. Fork version is `1.4.62` (`Mage.Common/pom.xml` parent). |
 | `Can't receive server state before other data` / login fails | **Not a handshake bug.** It is a symptom of *any* failed login: `connectStart()` only fetches the server state after a successful login, so the server's error callback arrives with `serverState == null`. The usual real cause is a username longer than `maxUserNameLength` (**14**); the server says `User name may not be longer than 14 characters`. Shorten the username (`LoginScreen` caps it at 14). |
-| `SESSION CALLBACK EXCEPTION - Unable to create socket` on first game after cold start | Known warm-up race. `scripts/test.mjs:107` runs `scripts/warmup.mjs` automatically; or restart `server+proxy` together (`node scripts/ctl.mjs restart all` — never restart only the proxy when the server is cold, `scripts/dev.mjs:23`). |
-| `ulimit -n` warnings / many open sockets | Raise the file descriptor limit before starting: `ulimit -n 65536` (see `scripts/lib.mjs:168`). |
+| `SESSION CALLBACK EXCEPTION - Unable to create socket` on first game after cold start | Known warm-up race. `scripts/test.mjs:218` runs `scripts/warmup.mjs` automatically; or restart `server+proxy` together (`node scripts/ctl.mjs restart all` — never restart only the proxy when the server is cold, `scripts/dev.mjs:23`). |
+| `ulimit -n` warnings / many open sockets | Raise the file descriptor limit before starting: `ulimit -n 65536` (see `scripts/lib.mjs:250`). |
 | Port already in use (`8787`/`8788`/`5173`/`17171`) | Another `ctl.mjs`/`dev.mjs` instance is running. `node scripts/ctl.mjs stop all` then `start all`. Fake E2E uses dedicated `8789` so it can run alongside the real proxy. |
 | Types out of sync after XMage update | Regenerate: `npm --prefix web run gen-types && npm --prefix web run gen-zod`, then `npm --prefix web run gen-types:validate` / `gen-zod:validate`. |
 

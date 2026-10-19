@@ -93,7 +93,7 @@ Artwork:
 
 ## Recorded and synthetic fixtures
 
-`web/fixtures/recorded/` holds 126 JSON protocol frames recorded from an XMage server by `scripts/record.mjs`, with drivers listed in `scripts/drivers/manifest.mjs`. Each file stores a `recordedAt` timestamp, a `gameId`, and a validated `gameView` containing players, permanents, stack objects, and card names and set codes. They are not derived from Scryfall and contain no card images or Scryfall identifiers. The other files in `web/fixtures/` (for example `web/fixtures/fake.ts` and `web/fixtures/fakeCore.ts`) are synthetic test doubles written for this project.
+`web/fixtures/recorded/` holds 125 JSON fixture files plus a `manifest.json` index, recorded from an XMage server by `scripts/record.mjs`, with drivers listed in `scripts/drivers/manifest.mjs`. Most files store a `recordedAt` timestamp, a `gameId`, and a validated `gameView` containing players, permanents, stack objects, and card names and set codes; four files deviate — `learn-raw-target.json` is a raw proxy frame, `sealed-pool.json` and `tournament-end.json` store tournament payloads, and `top-card-peek-sequence.json` stores a three-view `views` sequence. They are not derived from Scryfall and contain no card images or Scryfall identifiers. The other files in `web/fixtures/` (for example `web/fixtures/fake.ts` and `web/fixtures/fakeCore.ts`) are synthetic test doubles written for this project.
 
 ## Avatars and other inherited XMage assets
 

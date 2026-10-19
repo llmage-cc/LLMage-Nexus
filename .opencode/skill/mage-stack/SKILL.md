@@ -14,7 +14,7 @@ Guía operativa del stack local (`node` + `mvn`; multiplataforma: macOS/Linux/Wi
 | `server` | Servidor XMage (Java, `-testMode` en dev) | 17171 |
 | `proxy` | Proxy WebSocket `Mage.Proxy` (jar Java) | 8787 (WS), 8788 (HTTP test page) |
 | `vite` | Dev server del cliente web | 5173 |
-| e2e fake | FixtureServer + vite propio (no toca el proxy) | 8789 (WS), 5175 (HTTP) |
+| e2e fake | FakeServer + vite propio (no toca el proxy) | 8789 (WS), 5175 (HTTP) |
 
 Arranca SIEMPRE en orden `server → proxy → vite` (dev.mjs/ctl.mjs ya lo hacen; el proxy
 falla si el servidor no está).
@@ -28,7 +28,7 @@ falla si el servidor no está).
 - `node scripts/build.mjs [proxy]` — sin args: servidor+plugins+proxy; con `proxy`: solo
   el jar (para el proxy antes si estaba arriba). Luego `node scripts/ctl.mjs restart proxy`
   (mejor `restart all`).
-- `node scripts/warmup.mjs` — espera a que el proxy termine de escanear la card DB y tripea
+- `node scripts/warmup.mjs` — espera a que el proxy termine de escanear la card DB y dispara
   los callbacks del servidor con una partida IA-vs-IA descartable (la primera partida tras
   arranque en frío puede perder el socket de retorno).
 - `node scripts/install.mjs` — setup desde cero (deps + jars del servidor); no arranca nada.

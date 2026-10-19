@@ -115,7 +115,7 @@ Regenerate the frames after changing the proxy or the contract, and commit them 
 
 ## Rules
 
-- **English only.** Commit messages, pull requests, documentation, code identifiers, test names, fixtures, and log strings are written in English. The translation locales and quoted server output are the only exceptions.
+- **English only.** Commit messages, pull requests, documentation, code identifiers, test names, fixtures, and log strings are written in English. The translation locales, the MCP server's existing Spanish strings, and quoted server output are the exceptions.
 - **Generated files are read-only.** Regenerate them and fix the code that consumes them.
 - **Every user-facing string goes into all nine locales.** The `i18n` layer checks parity and untranslated copy.
 - **No comments in code** unless the change explicitly calls for one.
@@ -157,7 +157,7 @@ Commit subjects use a conventional prefix with a scope:
 | `docs` | Documentation only |
 | `chore(...)` | Build, tooling, or dependency work |
 
-Open the pull request against the main branch and fill the template. Its checklist mirrors the rules above: which layers ran, whether the build changed, whether generated files were regenerated rather than edited, whether new strings reached all locales, whether the affected documentation and coverage tables were updated, and whether any build output slipped into the diff.
+Open the pull request against the master branch and fill the template. Its checklist mirrors the rules above: which layers ran, whether the build changed, whether generated files were regenerated rather than edited, whether new strings reached all locales, whether the affected documentation and coverage tables were updated, and whether any build output slipped into the diff.
 
 A reviewer will look for the same things. Describe what changed and why in one paragraph, then paste the verification output. A pull request that says which layers passed is easier to review than one that says the change works.
 

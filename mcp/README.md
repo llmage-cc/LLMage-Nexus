@@ -153,7 +153,7 @@ determinista, `mage_e2e` ejecuta los specs reales de Playwright.
   pagos de maná y auto-pass. Verificado con una partida real completa vs Sim
   (`MCP_E2E=1 npm test` en `mcp/`).
 - **Fase C3 (hecha, 2026-09-11)**: endurecimiento en 4 sub-fases, en  orden **C3.3 → C3.1 → C3.2 → C3.4**:
-  - **C3.3 · Arnés FixtureServer en CI** (hecha): tests del MCP contra
+  - **C3.3 · Arnés FakeServer en CI** (hecha): tests del MCP contra
     `FakeServer.start(0, escenario)` de `web/fixtures/fake.ts` vía
     `test/support/fakeServer.ts` (import dinámico no-literal, porque `fake.ts`
     usa parameter properties y no corre en strip-only), partida scripted

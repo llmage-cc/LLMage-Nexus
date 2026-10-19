@@ -34,7 +34,7 @@ The XMage server rejects names longer than its default maximum of 14 characters,
 
 ## Can I use the same account in two tabs?
 
-Through the same proxy, yes: the second connection attaches to the live session, and both windows see the same game. Two different proxies cannot attach to one session. The server refuses the second login until the first session expires, which takes about a minute.
+Through the same proxy, yes: the second connection attaches to the live session, and both windows see the same game. Two different proxies cannot attach to one session. The server refuses the second login until the first session expires, which takes about three minutes.
 
 ## Can I play on a phone or tablet?
 

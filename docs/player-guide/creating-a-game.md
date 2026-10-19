@@ -103,7 +103,7 @@ A password protects the table, but it is not a secret in the protocol. **Invite 
 
 The last step holds your seat and the other seats.
 
-Your seat has a toggle between **Player** and **Spectator**. As a player you pick the deck for the table from a tiered picker: your own decks or the built-in library, then the format, then the event, then the deck. **Edit deck** jumps to the builder and closes the wizard; the deck is saved, the unsaved table settings are not. **My skill** is a number from 1 to 10 and defaults to 2.
+Your seat has a toggle between **Player** and **Spectator**. As a player you pick the deck for the table from a tiered picker: your own decks or the built-in library, then the format, then the event, then the deck. **Edit deck** jumps to the builder and closes the wizard; the deck is saved, and the table settings are kept as a draft and restored when you reopen the wizard (only **Cancel** discards them). **My skill** is a number from 1 to 10 and defaults to 2.
 
 If you switch your seat to spectator, the table is created without you; other players or bots fill the remaining seats.
 
@@ -125,7 +125,7 @@ Bot seats need a deck. A seat with none falls back to the shared bot deck, and s
 
 The strip under the steps repeats the shape you are about to submit: game type and player count, the format, the match length, the clock, the skill label, any custom rules, the draft configuration, the rating and quit limits, and whether the table is private or rated.
 
-The final button changes its label with the shape: **Create Table** for a match, **Create Draft Tournament** for a limited tournament, **Create Tournament** for a constructed one. It stays disabled while the table has no name, and it is disabled with an explanation when the format and game type do not fit.
+The final button changes its label with the shape: **Create Table** for a match, **Create Draft Tournament** for a limited tournament, **Create Constructed Tournament** for a constructed one. It stays disabled while the table has no name, and it is disabled with an explanation when the format and game type do not fit.
 
 ## Validation and common refusals
 
@@ -137,7 +137,7 @@ The final button changes its label with the shape: **Create Table** for a match,
 | You need a deck: import or create one in My Decks | Your seat is a player seat and no deck is selected. | Pick a deck, import one, or add a starter deck. |
 | Must provide at least one set code for draft | A draft or sealed tournament has no sets. | Enter at least one set code. |
 | With N boosters provide N set codes | Fewer set codes than boosters, with more than one code entered. | Add codes, or use a single code for every booster. |
-| A limited tournament with bots never reaches the rounds | A limited tournament has a bot seat. | Make every seat human, or run a constructed tournament. |
+| Limited tournaments with bots never reach rounds | A limited tournament has a bot seat. | Make every seat human, or run a constructed tournament. |
 
 Errors appear in a red box above the buttons, and the dialog stays open so you can fix the field.
 

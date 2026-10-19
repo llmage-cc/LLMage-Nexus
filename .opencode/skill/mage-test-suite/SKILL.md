@@ -49,7 +49,7 @@ Fuera del orquestador (este repo no trae CI: corre estas capas a mano):
 ## Matices de la capa `e2e`
 
 - En modo fake (default) NO necesita stack: Playwright levanta su propio vite en 5175 y el
-  FixtureServer en 8789. En modo real (`E2E_BACKEND=real`) sí exige el stack (vite 5173 + proxy
+  FakeServer en 8789. En modo real (`E2E_BACKEND=real`) sí exige el stack (vite 5173 + proxy
   8787) y `test.mjs` reporta SKIP con el hint si falta.
 - La suite fake tarda ~10 min; el timeout interno del orquestador para Playwright es 1800 s.
 - `E2E_BROWSER=webkit` / `E2E_VIEWPORT=AxB` para la matriz de navegador/resolución (skill

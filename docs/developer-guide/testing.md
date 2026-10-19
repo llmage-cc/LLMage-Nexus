@@ -44,7 +44,7 @@ Before `self-test` and `human-test`, the orchestrator plays one disposable warm-
 
 Browser tests run against two backends with the same spec files.
 
-**Fake (default).** `npm --prefix web run test:e2e` starts a `FixtureServer` on a free port for each test, with a declarative scenario. Vite runs on a dedicated port with `strictPort`, four workers at most, and no retries. The proxy and the XMage server are not involved. This is the daily loop: deterministic, parallel, and fast.
+**Fake (default).** `npm --prefix web run test:e2e` starts a `FakeServer` on a free port for each test, with a declarative scenario. Vite runs on a dedicated port with `strictPort`; Playwright uses four workers at most and no retries. The proxy and the XMage server are not involved. This is the daily loop: deterministic, parallel, and fast.
 
 **Real.** `E2E_BACKEND=real npm --prefix web run test:e2e:real` runs the same specs against the live stack, one worker, serial. It is the anti-drift net: the fake server is written from the same types as the client, so only the real server can reveal that both drifted from the actual protocol. A failure that appears only in real mode is a timing or protocol problem; do not weaken the spec to make it pass.
 
@@ -61,7 +61,7 @@ Specs are grouped by domain tags:
 
 Secondary markers (`@reveal`, `@draft`, `@keywords`, `@voting`, `@planeswalker`, `@chat`, `@decks`, `@latency`) narrow a run inside those files. `npm --prefix web run test:e2e` with `--grep` works for any marker.
 
-Assertions read the live scene through `window.__mageScene` plus the DOM. The board is DOM and CSS, so there is nothing to pixel-diff, and the browser locale is pinned in the Playwright config so label-based selectors stay stable. Shared helpers live in `web/e2e/support/`: frame waiting and game accessors, a start-game routine, page objects for dialogs and actions, the scene reader, and `HumanHelper`, a WebSocket driver used for fragile operations while the UI only verifies the result.
+Assertions read the live scene through `window.__mageScene` plus the DOM. The board is DOM and CSS, so there is nothing to pixel-diff, and the browser locale is pinned in the Playwright config so label-based selectors stay stable. Shared helpers live in `web/e2e/support/`: frame waiting and game accessors, a start-game routine, page objects for dialogs and actions, the scene reader, plus `HumanHelper` at `web/e2e/wshelper.ts` — a WebSocket driver used for fragile operations while the UI only verifies the result.
 
 A failure writes screenshots, a trace, the WebSocket frames, page errors, and a prompt dump to `web/test-results/`. `npx playwright show-report` opens the HTML report.
 

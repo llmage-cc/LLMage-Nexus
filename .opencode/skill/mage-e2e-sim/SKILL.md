@@ -18,7 +18,7 @@ description: Contexto completo de los E2E del Mage con oponentes simulados (Sim)
    `record.mjs`, `fuzz.mjs` (they send `playerTypes: ['HUMAN','SIM']` + `simDecks` over raw WS).
    When SIM runs, the proxy converts the seat to `HUMAN` for the server and joins a
    `SimPlayer` per seat with its own connection. Mazos por asiento vía `simDecks` (array
-   de decks en createTable); por defecto solo tierras. Reglas del bot: jugar 1 tierra/turno en su main phase; lanzar el primer
+   de decks en createTable); por defecto solo tierras. Reglas del bot: jugar 1 tierra/turno en su main phase; lanzar la primera
    criatura/instantáneo/conjuro **pagable en COLOR** apuntando al oponente; atacar siempre
    ("All attack" = `sendPlayerString(gameId,"special")` en DECLARE_ATTACKERS con opción
    `specialButton`); bloquear siempre (1 bloqueador por select de DECLARE_BLOCKERS); mulligan =
@@ -61,8 +61,8 @@ description: Contexto completo de los E2E del Mage con oponentes simulados (Sim)
    `@spells/@targeting/@combat/@fullflow/@mechanics/...`; librerías comunes en `web/e2e/support/`
    (`frames.ts`, `start-game.ts` → `GameSession`, `game-screen.ts`, `scene.ts`, `canvas.ts`,
    `fake-backend.ts` → `withFakeServer`, `fake-mode.ts` → `fakeOnly()`, `fake-port.ts`); y
-   escenarios declarativos del FixtureServer en `web/fixtures/scenarios/` (mini-motor
-   `humanGame.ts`). Todo corre en fake (sin stack, vite 5175 + FixtureServer 8789) y en real
+   escenarios declarativos del FakeServer en `web/fixtures/scenarios/` (mini-motor
+   `humanGame.ts`). Todo corre en fake (sin stack, vite 5175 + FakeServer 8789) y en real
    (contrato, vite 5173 + proxy 8787). En real los specs marcados `fakeOnly()` se saltan.
    Al tocar `support/` o los escenarios: fake completo + real.
    El estado del tablero se publica en `window.__mageScene` (solo DEV,

@@ -65,7 +65,7 @@ The drawer tabs work on the saved state. **Log** shows the game log up to the cu
 
 ## Limitations
 
-- **Replays need a server that saves them.** A stock server persists nothing, so the History view offers no replay at all, and the viewer's controls do not render.
+- **Replays need a server that saves them.** A stock server does save games, but replay playback is gated on the LLM capability, so the History view offers no replay at all, and the viewer's controls do not render.
 - **Seeking needs server support.** The slider and Skip ask the server to jump; on a server that cannot seek, the request is refused and the viewer stays where it was. Stepping with **Next** always works.
 - **A replay is read-only.** Play, pass, target, and every other player action are refused while a replay is loaded. Leaving the viewer is the only way back to a live table.
 - **One file per game.** A best-of-three match stores each game separately, which is why the match row shows a replay button per game.

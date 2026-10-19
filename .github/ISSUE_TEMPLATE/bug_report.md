@@ -25,6 +25,8 @@ labels: bug
 
 ## Logs
 
-<!-- Relevant excerpts from node scripts/tail.mjs [server|proxy|vite] all, browser console, or web/test-results/ artefacts. -->
+<!-- Relevant excerpts from node scripts/tail.mjs [server|proxy|vite|all], browser console, or web/test-results/ artefacts. -->
 <!-- Note: self-test WATCHGAME can flake once on a cold server start — retry warm first (see docs/testing.md). -->
+```
+
 ```

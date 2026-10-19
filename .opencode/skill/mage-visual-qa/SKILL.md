@@ -21,7 +21,7 @@ description: QA visual y UX: MCP Playwright (snapshot para actuar + screenshot p
   `@playwright/mcp` fijada con `PLAYWRIGHT_MCP_VERSION`).
 - Artefactos: `.run/playwright-mcp/` (snapshots `page-*.yml`, PNG, `console-*.log`).
 - URLs: stack real `http://localhost:5173` (`node scripts/ctl.mjs start`); galería sin backend
-  `http://localhost:5173/#/gallery`; el fake de tests levanta vite 5175 + FixtureServer 8789
+  `http://localhost:5173/#/gallery`; el fake de tests levanta vite 5175 + FakeServer 8789
   (no hay app fake permanente).
 - Reproducir pantallas inyectando estado: `window.__mageStore.setState(...)` (solo DEV; patrón de
   `draft.spec.ts`/`tournament.spec.ts`).
@@ -49,7 +49,7 @@ description: QA visual y UX: MCP Playwright (snapshot para actuar + screenshot p
   `node scripts/gallery-visual.mjs` (verifica) / `--update` (regenera) /
   `--dry-run` / `--browser=… --viewport=…`. Alternativa directa:
   `npm --prefix web run test:e2e:visual[:update]` (solo chromium 1920x1080; no hay
-  baselines de 1600x900, ese viewport es solo el del loop e2e diario. Ojo:
+  baselines de 1600x900; ese viewport es solo el del loop e2e diario. Ojo:
   `gallery.spec.ts` a secas también matchea `decks-gallery.spec.ts`).
 - Bajo `reducedMotion: 'reduce'` (que la galería activa) las flechas y la línea de
   targeting van **sólidas**: el trazo discontinuo tiene fase ligada a la longitud
@@ -96,7 +96,7 @@ description: QA visual y UX: MCP Playwright (snapshot para actuar + screenshot p
 - Los baselines llevan plataforma/navegador en el nombre: otro SO/navegador = regenerar.
 - En la galería, pantallas `position:fixed;inset:0` (draft/construct) se ven descentradas por el
   sidebar dev: no es bug real.
-- Puertos aislados (fake 5175/8789, real 5173/8787): no compartir; el fake usa FixtureServer, no
+- Puertos aislados (fake 5175/8789, real 5173/8787): no compartir; el fake usa FakeServer, no
   el proxy.
 - Hallazgos UX abiertos de plan4 (§5): revisar `docs/history/plan4.md`, `docs/history/qa/p5-1-prompt-checklist.md` y
   `docs/history/qa/p5-2-heuristic-findings.md` antes de dar por cerrada una auditoría.

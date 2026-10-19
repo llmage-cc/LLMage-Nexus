@@ -21,7 +21,7 @@ reproduce with. Everything below exists to move context, not to collect text.
 
 - **Clipboard + prefilled `issues/new?body=…` only.** Needs a GitHub account, so it only serves
   the few players who would have opened an issue anyway; it also cannot carry the bundle (a body
-  that long exceeds what a URL survives). Kept as a *fallback* for desktop, not as the system.
+  that long would not survive as a URL). Kept as a *fallback* for desktop, not as the system.
 - **A public HTTPS ingest endpoint** (Cloudflare Worker holding a PAT, or a public `/feedback` on
   the host). Unauthenticated write path into a public tracker: spam, and PII disclosed without a
   human in the loop. Also needs a `connect-src` change, and the host dashboard is LAN-only on

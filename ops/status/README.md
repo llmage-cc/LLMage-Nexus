@@ -15,7 +15,7 @@ It never touches the proxy: everything comes from what the host already records.
 | `systemctl show`, `/proc`, `statfs` | service state, restarts, CPU, memory, disk, load, proxy RSS/CPU |
 | TCP/HTTP probes | connect time to the XMage server and to the local web client |
 
-The journal is followed from a stored cursor into `data/status.db` (SQLite, WAL). The first start indexes the
+The journal is followed from a cursor stored in `data/status.db` (SQLite, WAL). The first start indexes the
 whole journal (≈160 k lines in under a second). The live player list is rebuilt by replaying the activity
 events since the last proxy start, so it survives restarts of this service.
 

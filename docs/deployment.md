@@ -35,7 +35,7 @@ Three gotchas when flipping an existing runtime:
 
 - `local-server/config/config.xml` is seeded **once** from whatever fork `forkDir()`
   resolved to at first start. After switching forks, delete `local-server/` (gitignored
-  runtime) so the seed re-reads the new fork's release config (the LLM trunk's registers
+  runtime) so the seed re-reads the new fork's release config (the LLM trunk registers
   `Computer - LLM`).
 - `.run/server-deps.txt` (server 3rd-party classpath cache) is keyed by pom mtime and
   survives fork switches — delete it too when changing `NEXUS_FORK_DIR`.
@@ -58,8 +58,7 @@ two proxy processes:
 
 - Build: `patches/xdhs/*.patch` are applied to a `xenohedron/mage` checkout,
   then `mvn -Dmage.version=1.5.8`. `Mage.Proxy/pom.xml` takes the XMage
-  dependency version from the `mage.version` property. See
-  `patches/xdhs/README.md`.
+  dependency version from the `mage.version` property.
 - Launcher: the `proxy-xdhs` component (built from `patches/xdhs/`; see
   `patches/xdhs/README.md`) is started by the Tauri shell as a second proxy instance on
   ports 8797/8798 with its own card database (`proxy-xdhs/` under the data
@@ -68,20 +67,20 @@ two proxy processes:
   `xmage-proxy-xdhs.service` (first run installs the unit). The beta jar,
   symlink and service are untouched.
 
-## Public multi-user deployment (playit.gg)
+## Public multi-user deployment (Cloudflare quick tunnels)
 
-See **`docs/deploy-tunnels.md`** for the full English guide: run one `Mage.Proxy`
-(multi-tenant) on an always-on machine, expose its two ports through playit.gg
-TCP tunnels, and point it at `beta.xmage.today`. Bundle it with
+See **`docs/deploy-tunnels.md`** for the full guide: run one `Mage.Proxy`
+(multi-tenant) on an always-on machine, expose its two ports through Cloudflare
+quick tunnels, and point it at `beta.xmage.today`. Bundle it with
 `node scripts/deploy-bundle.mjs`; start scripts live in `scripts/deploy/`
 (`start-proxy.sh` for Linux/macOS, `start-proxy.bat` for Windows).
 
 ## Host status dashboard (LAN only)
 
 `ops/status/` is a dependency-free Node service (`xmage-status.service`) that runs next to the proxy on the
-host and serves `http://<host-lan-ip>:8790/`: players online, history/statistics, proxy and playit logs, host
-metrics and restarts, indexed from `journalctl -u xmage-proxy` and `/var/log/playit/playit.log` into SQLite.
-It has no playit tunnel and rejects every non-LAN client, loopback included (playit visitors arrive as `127.x`).
+host and serves `http://<host-lan-ip>:8790/`: players online, history/statistics, proxy and tunnel status, host
+metrics and restarts, indexed from `journalctl -u xmage-proxy` into SQLite.
+It has no public tunnel and rejects every non-LAN client, loopback included (tunnel visitors arrive as `127.x`).
 Deploy/update with `ops/status/deploy.sh` (never restarts the proxy). Details: `ops/status/README.md`.
 
 ## Dashboard (GitHub Pages, zero-build static `site/`)

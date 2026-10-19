@@ -24,7 +24,7 @@ The right end of the strip holds the drawer tabs — **Stack**, **Log**, **Chat*
 
 ## Board layouts
 
-Three layouts paint the same game state. The default follows the number of opponents; you can force one in **Settings → Board & appearance**.
+Three layouts paint the same game state. The default follows the number of opponents; you can force one in **Settings → Board**.
 
 - **Standard** — one opponent on top, your full board below. The layout for duels and for large tables.
 - **Pod (2×2)** — two opponents on the top row, you bottom-left, the third opponent bottom-right. The default for three or four players.
@@ -69,7 +69,7 @@ X costs and "choose a number" effects open a stepper. Costs paid outside a spell
 
 When a spell or ability needs a target, every legal target lights up. Click one to choose it: a dotted animated arrow runs from the source, and an arrow aimed at a player points at that player's bar.
 
-Multi-target prompts put a bar above the hand with the prompt, your progress, and a **Finish** button when fewer targets are legal than the maximum. The zone the choice lives in is ringed too: a graveyard, exile, or library prompt opens that pile automatically and closes it when targeting ends, and a prompt answered from hand highlights the hand instead of covering the board. When the target is on the stack, the stack drawer opens and legal entries are marked.
+Multi-target prompts put a bar above the hand with the prompt, your progress, and a **Finish** button when the server marks the choice optional (you may stop before the maximum). The zone the choice lives in is ringed too: a graveyard, exile, or library prompt opens that pile automatically and closes it when targeting ends, and a prompt answered from hand highlights the hand instead of covering the board. When the target is on the stack, the stack drawer opens and legal entries are marked.
 
 Card choices use a full-screen grid: search by name, type, or rules text, then click to select. Multi-select prompts show a counter and **Confirm (n/m)**. The grid hides cards the server did not offer, with **Show all** for the rest of the revealed set. When every legal choice is already in your hand, the grid is skipped: the hand highlights, a compact bar tracks progress, and **Open card grid** is one click away.
 

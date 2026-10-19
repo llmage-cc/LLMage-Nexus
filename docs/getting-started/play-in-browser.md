@@ -96,7 +96,7 @@ The buttons on a table depend on its state and your relation to it:
 | `Start Match` | You own the table and everyone is ready | Begins the game |
 | `Return to table` | You have a seat but left the table view | Goes back to the waiting room |
 
-The header carries the `Tables`, `Decks`, `History`, and `Ranking` tabs, plus `New Table`, the online player count, your avatar and rating, settings, and the client news. The side panel lists online users and the room chat.
+The header carries the `Tables`, `Decks`, `History`, and `Leaderboard` tabs, plus `New Table`, the online player count, your avatar and rating, settings, and the client news. The side panel lists online users and the room chat.
 
 ## Your first game
 

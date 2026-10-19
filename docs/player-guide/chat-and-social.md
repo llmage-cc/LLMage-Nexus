@@ -21,7 +21,7 @@ The room chat is a floating panel, closed until you open it. A round button in t
 
 The panel has two tabs: **Global Chat** and a users tab labelled with the number of players online. On a desktop viewport you can drag the panel by its header, and it reopens where you left it; on a narrow screen it docks above the bottom edge instead. A trophy button in the header opens the room leaderboard, and the chevron collapses the panel back to the round button.
 
-Messages show a timestamp, the sender, and the text. Your own messages and whispers are styled differently from ordinary messages, and a whisper also plays a sound. Card names in double brackets, such as `[[Lightning Bolt]]`, render as highlighted links, and hovering one shows the card image.
+Messages show a timestamp, the sender, and the text. Your own messages and whispers are styled differently from ordinary messages, and a whisper also plays a sound. Card names the server highlights with its card markup render as highlighted links, and hovering one shows the card image.
 
 System notices — players connecting, losing the connection, disconnecting, and leaving — appear in the same stream with an icon. The **Show alerts** / **Hide alerts** toggle at the top of the panel removes those notices while keeping player messages. The setting lasts while the panel is open.
 

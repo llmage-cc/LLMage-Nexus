@@ -27,7 +27,7 @@ That direction matters for firewalls. A remote XMage server must be reachable **
 
 ### 8787 — the proxy WebSocket gateway
 
-Every browser action travels here as JSON: connect, lobby, table, deck, game commands, replay commands. One WebSocket connection equals one XMage session, and each session carries its own target server, so a single proxy can serve several players connected to different servers.
+Every browser action travels here as JSON: connect, lobby, table, deck, game commands, replay commands. One WebSocket connection equals one XMage session — except a reconnect or second tab, which attaches to the existing one — and each session carries its own target server, so a single proxy can serve several players connected to different servers.
 
 By default the gateway binds to loopback. Exposing it means passing a non-loopback `--bind` and listing the public page origin in `--allowedOrigins`; without that list, only localhost origins are accepted.
 
@@ -59,7 +59,7 @@ Keep 8789 away from 8788. The real proxy owns 8788 whenever the stack is up, and
 
 ### 8790 — the optional status dashboard
 
-The repository includes a small LAN-only status service that reads the host's service journal and shows players online, game history, logs, and host metrics. It listens on `STATUS_PORT` (default 8790) and accepts only clients inside `STATUS_ALLOW`; loopback is rejected on purpose, because the service is meant to be reached from the local network and never through a public tunnel. It does not touch the proxy and reads no session data from it.
+The repository includes a small LAN-only status service that reads the host's service journal and shows players online, game history, logs, and host metrics. It listens on `STATUS_PORT` (default 8790) and accepts only clients inside `STATUS_ALLOW`; loopback is rejected on purpose, because the service is meant to be reached from the local network and never through a public tunnel. It pings the proxy's HTTP endpoint for a latency figure but reads no session data from it.
 
 ### 8797 and 8798 — a second proxy
 

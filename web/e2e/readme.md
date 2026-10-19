@@ -1,10 +1,10 @@
 # E2E Tests (Playwright)
 
-Browser test suite for the web client with **dual backend support**: the SAME test specs run against a deterministic `FixtureServer` (fake mode, default) or against the real stack (server + proxy + vite, serving as the contract anti-drift safety net).
+Browser test suite for the web client with **dual backend support**: the SAME test specs run against a deterministic `FakeServer` (fake mode, default) or against the real stack (server + proxy + vite, serving as the contract anti-drift safety net).
 
 ## Modes
 
-- `npm run test:e2e` / `test:e2e:fake` — **fake**: FixtureServer on a dynamic port (one server per test, `FakeServer.start(0)` + `setFakePort`), declarative scenarios, no Java or real proxy needed. Parallel by default (`fullyParallel`, up to 4 workers, override with `E2E_WORKERS`). Ideal for the daily development loop.
+- `npm run test:e2e` / `test:e2e:fake` — **fake**: FakeServer on a dynamic port (one server per test, `FakeServer.start(0)` + `setFakePort`), declarative scenarios, no Java or real proxy needed. Parallel by default (`fullyParallel`, up to 4 workers, override with `E2E_WORKERS`). Ideal for the daily development loop.
 - `E2E_BACKEND=real npm run test:e2e:real` — **real**: runs against the full stack (`node scripts/ctl.mjs start`), 1 worker serial. Validates protocol contracts against the authoritative XMage server.
 
 ## Subsets by Domain
@@ -27,7 +27,7 @@ Each test creates ITS OWN isolated match. Shared utilities live in `e2e/support/
 - `game-screen.ts` — Page objects for feedback dialogs (`feedback-dialog`) and action drivers: `payMana`, `targetOpponent`, `resolveInteger`, `waitPlayable`.
 - `scene.ts` / `canvas.ts` — Live scene state (`window.__mageScene`, deterministic) and board scene interactions.
 - `wshelper.ts` — `HumanHelper`: plays lands, discards, and yields priority over WS for fast/fragile operations; UI verifies dialogs, rendering, and page errors.
-- `fake-backend.ts` — `withFakeServer(scenario, run)`: spins up the FixtureServer with the specified test scenario and tears it down cleanly.
+- `fake-backend.ts` — `withFakeServer(scenario, run)`: spins up the FakeServer with the specified test scenario and tears it down cleanly.
 
 Fake mode scenarios (`fixtures/scenarios/`) are declarative scripts using the `humanGame.ts` mini-engine (human vs Sim player): starting hand, lands, casting prompt sequences, and resolution effects. State is shared between page and helper via WebSocket broadcast just like in the real proxy.
 

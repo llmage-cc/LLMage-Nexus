@@ -122,7 +122,7 @@ Where the output goes depends on how you run the proxy:
 | systemd | `journalctl -u xmage-proxy -f` |
 | Repository scripts | `node scripts/tail.mjs proxy` |
 
-Java logging is routed through log4j in this build, so JUL warnings and the watchdog lines land on
+Java logging goes through JUL's default console handler in this build, so JUL warnings and the watchdog lines land on
 standard error rather than standard output. With the repository scripts they appear in
 `proxy.err.log`, not `proxy.out.log`.
 

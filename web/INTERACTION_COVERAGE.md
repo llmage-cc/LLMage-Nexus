@@ -38,7 +38,7 @@ Leyenda: ✅ = sí · ❌ = no · ⚠️ = parcial/log-only · — = no aplica /
 | `VIEW_LIMITED_DECK` | ✅ | ✅ | ✅ | eventHandler.test.ts / verify-hand-permission.mjs (real) | 2026-09-08 |
 | `VIEW_SIDEBOARD` | ✅ | ✅ | ✅ | eventHandler.test.ts / player-menu.spec.ts / verify-hand-permission.mjs (real) | 2026-09-08 |
 | `USER_REQUEST_DIALOG` | ✅ | ✅ | ✅ | eventHandler.test.ts / missing-prompts.spec.ts / UserRequestDialog.test.tsx / verify-hand-permission.mjs (real: hand permission); rollback vote → `RollbackVoteDialog` (state/rollbackVote.test.ts, RollbackVoteDialog.test.tsx, `scripts/verify-rollback-vote.mjs` real 4-player: all accept / deny / late vote / SIM seats auto-accept) | 2026-09-25 |
-| `GAME_REDRAW_GUI` | ➖ fuera de alcance | — | — | Decisión 2026-09-14: log-only permanente; el tablero ya reacciona a `GAME_UPDATE` | 2026-09-14 |
+| `GAME_REDRAW_GUI` | — fuera de alcance | — | — | Decisión 2026-09-14: log-only permanente; el tablero ya reacciona a `GAME_UPDATE` | 2026-09-14 |
 | `START_GAME` | ✅ | — | ✅ | full-flow.spec.ts | 2026-08-24 |
 | `GAME_INIT` | ✅ | — | ✅ | full-flow.spec.ts / spells.spec.ts | 2026-08-24 |
 | `GAME_UPDATE_AND_INFORM` | ✅ | — | ✅ | (partidas E2E) | 2026-08-24 |
@@ -70,7 +70,7 @@ real auditado en `web/src` (componentes/handlers) y los specs E2E. Cruza con el
 blueprint de `ROADMAP.md` §7. Leyenda: ✅ = sí · ⚠️ = parcial · ❌ = no.
 
 **Cobertura automática de campos (reverse-drift, server→cliente):** `web/src/state/mechanicsCoverage.test.ts`
-difumina el oráculo `web/fixtures/server-view-schema.json` (generado por
+compara el oráculo `web/fixtures/server-view-schema.json` (generado por
 `scripts/view-schema.mjs` desde las clases `mage.view.*` del server) contra los
 campos modelados en `contract.schema.json`. Cualquier campo que el server *puede*
 emitir y el cliente no modela hace fallar el test. Ejecutado en CI como parte de
@@ -100,12 +100,11 @@ en el cliente; necesitarían que el server oficial expusiera el campo en el DTO.
 Rastreados por `engineViewCoverage.test.ts` (baseline `engine-view-gap.baseline.json`).
 Lista actual (de `engine-view-gap.baseline.json`):
 - **Can't be targeted** (criatura y jugador): `PermanentImpl.canBeTargetedBy` / `PlayerImpl`
-  (gate por método, no campo) — invisible.
-- **Harnessed** (Unfinity): `PermanentImpl.harnessed` — invisible. `HarnessedHint`
-  existe pero nada lo adjunta y no hay contadores/iconos: sin señal cliente.
-  **Fuera de alcance por decisión (2026-09-14)**: requeriría cambio en el fork
-  (adjuntar la hint por carta + rebuild del motor); el proxy no puede inferirlo
-  de `rules`/iconos.
+  (gate por método, no campo) — invisible. Aceptado: el servidor rechaza objetivos ilegales.
+- **Harnessed** (Unfinity) — visible: `HarnessedHint` la adjuntan The Mind Stone y The Soul
+  Stone (`TheMindStone.java`, `TheSoulStone.java`); las hints de habilidad llegan en `rules`
+  y la web parsea `"{this} is harnessed"` al badge `harnessed` (`web/src/board/designations.ts`,
+  pintado por `CardSlot.tsx`).
 - **Soulbond** (pareja) — **visible vía línea `info` + badge (2026-09-08)**: `PermanentImpl.setPairedWith` añade `addInfo("soulbond", "Paired with <nombre>")` en ambas criaturas (y `setUnpaired` la retira); `getRules` la vuelca en `rules`. El web parsea el partner (`pairedPartnerName`) a `.designation-badge.is-paired` con tooltip "Emparejada con X" (i18n ×9). Las stats llegan computadas.
 - **Solved** (Casos MKM): el cliente YA pinta el badge `CaseSolved`
   (`web/src/board/designations.ts:43`; fila rendered en
@@ -113,10 +112,6 @@ Lista actual (de `engine-view-gap.baseline.json`):
   sigue sin adjuntarse (`CaseSolvedHint.java`; `CaseAbility.java` no lo añade),
   así que depende de upstream: **gap de motor aceptado (2026-09-18), sin parche
   de fork**.
-- **Can't be targeted** (criatura y jugador): `canBeTargetedBy` es gate por método,
-  no campo — invisible. Aceptado: el servidor rechaza objetivos ilegales.
-- **Habilidades de jugador** (hexproof/shroud/daño/vida): `PlayerImpl` sin campo
-  `rules`/abilities — invisible. Aceptado (baja frecuencia, el servidor lo impone).
 - **Monstrous / Renowned — NO son gaps de campo** (verificado en vivo 2026-09-08):
   `MonstrosityAbility:69` y `RenownAbility:28` adjuntan `MonstrousHint`/`RenownedHint`;
   `ConditionHint` emite siempre una rama en `rules`: `ICON_GOOD{this} is monstrous` /
@@ -144,9 +139,12 @@ Lista actual (de `engine-view-gap.baseline.json`):
   lo impone; se descubre por oferta/rechazo), resto de `PlayerView`/`GameView`
   (timers, zonas ocultas, ids).
 - **Habilidades de jugador** (hexproof/shroud/can't be dealt damage/can't lose):
-  `PlayerImpl` no tiene campo `rules`/abilities — invisible.
-- **Day/Night**: el flag de juego no va en `GameView`, pero se infiere vía la carta
-  daybound/nightbound en el command zone (`CommandZone.tsx`); por eso aparece como ✅ arriba.
+  `PlayerImpl` no tiene campo `rules`/abilities — invisible. Aceptado (baja frecuencia,
+  el servidor lo impone).
+- **Day/Night**: el flag de juego no va en `GameView`; el indicador parsea la pista de rules
+  (`It's currently day/night…`) vía `web/src/board/dayNight.ts` (emblemas helper + permanentes
+  en el campo, mostrado por `PlayerInfoBar`) — `CommandZone.tsx` y `designationNames` ya no
+  intervienen; por eso aparece como ✅ arriba.
 
 ### A. Morfologías de carta
 | Mecánica | Implementado | Testeado | Ref | Última verif. |
@@ -294,6 +292,6 @@ Lista actual (de `engine-view-gap.baseline.json`):
 ## Planes enlazados (callbacks ✅)
 - **Draft / Limited** ✅: `START_DRAFT`, `DRAFT_INIT`, `DRAFT_PICK`, `DRAFT_UPDATE`, `DRAFT_OVER`, `CONSTRUCT` → `DraftScreen`/`ConstructScreen`.
 - **Torneo** ✅: `START_TOURNAMENT`, `TOURNAMENT_INIT`, `TOURNAMENT_UPDATE`, `TOURNAMENT_OVER`, `SHOW_TOURNAMENT` → `TournamentBracket`/`TournamentPanel`.
-- **Visor de repeticiones** ⚠️ (solo cliente): `REPLAY_GAME`, `REPLAY_INIT`, `REPLAY_UPDATE`, `REPLAY_DONE` → `replayViewer` + `GameView`. En vivo 2026-09-14 no es verificable de punta a punta: el servidor por defecto lleva `saveGameActivated="false"` → nunca hay `games[]`/`replayAvailable`; y el cliente no tiene controles (siguiente/anterior/skip) ni salida del tablero. **APLAZADO por decisión (2026-09-14)** hasta que el motor lo soporte.
+- **Visor de repeticiones** ✅ (solo cliente): `REPLAY_GAME`, `REPLAY_INIT`, `REPLAY_UPDATE`, `REPLAY_DONE` → `replayViewer` + `GameView`, con controles completos en `ReplayControls` (anterior / play-pausa / siguiente / skip / stop + slider + atajos Espacio/←/→/Esc). El flujo completo requiere un servidor que persista repeticiones (los servidores stock llevan `saveGameActivated="false"` por defecto).
 - **Sala de espera de jugador** ✅: `JOINED_TABLE` → fase `staging` (`SpectatorStagingScreen mode="player"`), paridad con el `TableWaitingDialog` de desktop: salto automático al crear/unirse, Empezar (dueño+ready), Salir (`leaveTable`), Eliminar mesa (dueño, `removeTable`), toggle Listo/No listo (`staging-toggle-ready` con badges 🟢/🟡 y sincronización reactiva por chat de sala), cambiar baraja en vivo (`staging-change-deck`) y re-entrada "Ir a la mesa" desde la tarjeta (asiento propio o `stagingTableId`). Cierre 2026-09-06: reordenar asientos (`swapSeats`, ↑/↓ dueño en READY), bypass de torneo limitado sin password (`joinTournamentTable` directo), `startTournament` en torneo (flag `JOINED_TABLE`→`stagingIsTournament`), start con confirm si falta ready, roster con rating/history/flag. E2E: staging.spec.ts (fake, 8/8) / multi-user.spec.ts (real). Nota desktop: si el join falla tras crear, el dueño limpia con `removeTable` (mismo flujo en `NewTableDialog`).
 - **Trivial**: `GAME_REDRAW_GUI` (fuera de alcance por decisión 2026-09-14; log-only permanente, el tablero ya reacciona a `GAME_UPDATE`).

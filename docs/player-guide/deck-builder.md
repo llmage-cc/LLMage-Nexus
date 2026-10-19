@@ -94,8 +94,7 @@ Sort by mana cost, name, rarity, colour, EDHREC rank, or release date, and flip 
 either direction. Mana cost ascending is the default. **Card size** scales the result grid from
 0% to 150%.
 
-The language button chooses which printing language the search asks for; **All languages** adds no
-language filter. A chosen language adds `lang:<code>` to the query. If it returns nothing on the
+The language button chooses which printing language the search asks for; **All** adds `lang:any`. A chosen language adds `lang:<code>` to the query. If it returns nothing on the
 first page, the client retries across all languages.
 
 Results show a small counter when the card is already in the deck. A **Not in XMage** badge means
@@ -120,7 +119,7 @@ in the deck:
 | Drag the row onto the sideboard area | Move one copy to the sideboard |
 | Drag the row onto the search panel | Remove one copy |
 | Swap button on the row | Move one copy between main deck and sideboard |
-| Trash button | Remove every copy, with a confirmation when there is more than one |
+| Remove all copies button | Remove every copy, with a confirmation when there is more than one |
 
 The sideboard area is always visible. Drop cards on it, or use the swap button on any row.
 
@@ -131,7 +130,7 @@ marks it.
 
 In a Commander, Brawl, Oathbreaker, or Highlander deck, drag a legendary card onto the commander
 slot or use the crown button on its row. The slot accepts a second commander when the pair is legal
-(Partner, Partner with, or a Background with a commander that chooses one). A card that cannot be
+(Partner, Partner with, or a Background when the commander can choose one). A card that cannot be
 a commander has its crown button disabled. The star button marks any card as the cover art; the
 cover has no effect on play.
 
@@ -174,7 +173,7 @@ different card. A banner lists every affected row with its set and collector num
 For a rejected printing, a suggestion button such as **Use DMU #277** switches that card to a
 printing the server has, and **Auto-resolve (N)** applies every suggestion at once. A mismatch can
 be accepted with **Got it**.
-The banner is advisory and never blocks saving. The table you join is final, and the pre-join
+The banner is advisory and never blocks saving. The check when you join a table is the final one, and the pre-join
 dialog repeats the check.
 
 When the proxy can run the official XMage deck validator, its verdict appears as **XMage

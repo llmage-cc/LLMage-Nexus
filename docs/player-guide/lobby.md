@@ -73,7 +73,7 @@ The filter row is collapsed by default and remembers its state in the browser. A
 | Sort | **Default**, **Newest**, **Oldest**. Default puts your own tables first, then tables with a free seat, then the newest. | Default |
 | Mode | **All**, **1v1**, **Multiplayer**, **Tournament**. In tournament mode you can narrow to **Constructed** or **Limited**. | All |
 | Skill | **Beginner**, **Casual**, **Competitive**. | All |
-| Restrictions | **Private** hides passworded tables; **Passworded only** shows only them; **Rated only** and **Unrated only** split by ELO; **Spectators** keeps tables that allow watchers; **AI seats** keeps tables with an open bot seat; **Hide ignored** removes tables hosted by players on your ignore list. The paired options are mutually exclusive. | All off |
+| Restrictions | **Private** hides passworded tables; **Passworded only** shows only them; **Rated** and **Unrated only** split by ELO; **Allow Spectators** keeps tables that allow watchers; **AI Bot** keeps tables with an open bot seat; **Hide ignored** removes tables hosted by players on your ignore list. The paired options are mutually exclusive. | All off |
 
 The list header also holds a density button that switches between card view and a compact row view, and an **Active deck** badge that names the deck you last played or selected.
 
@@ -85,7 +85,7 @@ When you own or sit at a table that has not finished, a strip appears above the 
 
 ## The Decks tab
 
-The **Decks** tab is a gallery with two sources: **My Decks**, the decks stored in this browser, and **Meta & Popular Decks**, a browsable library of ready-made lists. The toolbar filters by format or favourites, sorts by recency, name, or size, and narrows the grid by search text and mana colour. The footer edits the selected deck in the builder, exports it, marks it as a favorite, or deletes it. A counter shows how many of your own decks exist and how many the browser can hold. **Import Deck** accepts a paste or a file.
+The **Decks** tab is a gallery with two sources: **My Decks**, the decks stored in this browser, and **Meta & Popular Decks**, a browsable library of ready-made lists. The toolbar filters by format or favorites, sorts by recency, name, or size, and narrows the grid by search text and mana colour. The footer edits the selected deck in the builder, exports it, marks it as a favorite, or deletes it. A counter shows how many of your own decks exist and how many the browser can hold. **Import Deck** accepts a paste or a file.
 
 Deck building, import formats, and printing repair are covered in [Deck builder](deck-builder.md).
 

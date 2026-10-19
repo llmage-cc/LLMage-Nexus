@@ -66,7 +66,7 @@ triage. See `web/INTERACTION_COVERAGE.md`.
   line. It correlates 1:1 with `Logging: FAIL` and happens just as often against `localhost`. The
   apparent intermittency was generated usernames of varying length (`warmup-825244967` = 16 chars
   failed, `warmup-510227` = 13 passed). Keep every generated username **≤ 14 chars**; `LoginScreen`
-  already enforces `maxLength={14}` and the `FixtureServer` validates it so fake mode catches drift.
+  already enforces `maxLength={14}` and the `FakeServer` validates it so fake mode catches drift.
   (The local server `localhost:17171` remains the oracle for real-protocol CI — it is deterministic,
   not because beta is broken.)
 - **Web login already separates Proxy and XMage Server**: `LoginScreen` has independent fields for the
@@ -125,11 +125,11 @@ This repo has three independent concerns, each developable on its own:
 session (`SessionImpl`). A single proxy process serves many independent players
 at once (see `Mage.Proxy/README.md` "Connection & Session").
 
-- **Same account, multiple windows** (normal + incógnito, or several tabs): a
+- **Same account, multiple windows** (normal + incognito, or several tabs): a
   second connection with the same `host|username` **attaches** to the existing
   session — one session shared across windows (`ProxyClient.isSameSession` /
   `Gateway.attach`). This is what lets two browser contexts (e.g. normal +
-  incógnito) share one account on one proxy.
+  incognito) share one account on one proxy.
 - **Different accounts**: isolated sessions; server→client events for a session
   reach only that session's connections (`Gateway.byConn` / `byAccount`).
 - **Deployment**: host the static `web` build + one `Mage.Proxy` instance. Each
@@ -215,7 +215,7 @@ screenshot and actually look at it (read the image file), so visual regressions
 Browser E2E (Playwright) runs in **two modes with the SAME specs**:
 
 - **fake (default, `npm run test:e2e` / `test:e2e:fake`)**: against the
-   `FixtureServer` (`web/fixtures/fake.ts`, contract from
+   `FakeServer` (`web/fixtures/fake.ts`, contract from
    `src/net/types.ts` + declarative scenarios in `fixtures/scenarios/`). No
    Java, no proxy, no flakes — the daily iteration loop. Uses dedicated port
    **8789** (independent of the proxy ports: WS 8787 and HTTP page 8788). `playwright.config.ts` starts
@@ -265,7 +265,7 @@ before touching or debugging any E2E.
 **Modular architecture (2026-08-17)**: tests by functionality, independent
 game per test. Common libraries in `web/e2e/support/`
 (`frames.ts`, `start-game.ts`, `game-screen.ts`, `scene.ts`, `canvas.ts`,
-`fake-backend.ts`) and declarative scenarios for the FixtureServer in
+`fake-backend.ts`) and declarative scenarios for the FakeServer in
 `web/fixtures/scenarios/` (mini-engine `humanGame.ts`). Tags by
 domain: `@spells`, `@targeting`, `@combat`, `@fullflow`, `@board`, `@site` (scripts
 `test:e2e:spells|targeting|combat|fullflow|board|site`). Every spec runs in fake
@@ -298,7 +298,7 @@ for `mechanics.spec.ts`, so a fixture change must be checked against every spec 
   (`build.mjs proxy`) + restart proxy.
 - **Before declaring a task "done"**: the full suite (`node scripts/test.mjs`) with the stack up.
   This repository ships no CI, so the local run is the whole gate — do not wait for a remote run.
-- **Restart the stack right before** (`node scripts/ctl.mjs restart all`): a server that accumulated orphan
+- **Restart the stack right before the run** (`node scripts/ctl.mjs restart all`): a server that accumulated orphan
   sessions and matches degrades the callback channel and makes `warmup`/`self-test`/`human-test` flaky
   (`WATCHGAME` never arrives, `GAME_PLAY_MANA` expires). On a freshly restarted, warm stack: self-test
   15/15 and human-test 80/80 (measured 2026-09-18). Parallel-run e2e failures (hover/click under load:
@@ -314,7 +314,7 @@ for `mechanics.spec.ts`, so a fixture change must be checked against every spec 
   environment causes that read like product bugs — the desktop launcher (`today.xmage.nexus` JRE) can squat
   ports 17171/8787 while dev processes fail to bind with a stale `.run/*.pid`, and the 09-05→09-10 window
   of 77 fake failures had the same shape: `SetupWizard.skip()` persisted a default connection (proxy 8787)
-  whose `setup-conn` event overwrote the FixtureServer's `?proxyPort=8789`, so those e2e runs played against
+  whose `setup-conn` event overwrote the FakeServer's `?proxyPort=8789`, so those e2e runs played against
   the real proxy and beta. `skip()` persists nothing now (the flag is re-guessed by `guessDefaultFlag`),
   `LoginScreen` lets an explicit `?proxyPort=` win in `applySetupConn`, and the e2e helper points at
   `localhost` in fake mode.

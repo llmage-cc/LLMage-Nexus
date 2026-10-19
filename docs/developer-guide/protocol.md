@@ -26,7 +26,7 @@ If the documented contract and the schema disagree, regenerate the schema-derive
 | Rate | 100 messages per second per connection by default (`--maxMessagesPerSecond`) |
 | Origin | Localhost origins and no-origin clients by default; exact allowlist with `--allowedOrigins` |
 
-A full game state is roughly 200 KB of repetitive JSON and compresses by an order of magnitude, which is most of the latency a remote player feels.
+A full game state is roughly 200 KB of repetitive JSON and compresses by an order of magnitude; that transfer is most of the latency a remote player feels.
 
 The proxy closes a connection with specific codes:
 

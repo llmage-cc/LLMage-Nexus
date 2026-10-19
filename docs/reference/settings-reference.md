@@ -69,7 +69,7 @@ Picking a layout pins it. Until you pick one, Standard switches to Pod automatic
 
 | Setting | Default | Effect | Stored in |
 |---|---|---|---|
-| Playmat | Classic | Background of the battlefield. Arcane, Verdant, Tides, Ember, Dawn, and Abyss are static; Aurora drifts slowly; Your colours follows your commander or the colors on your board. Custom uses an uploaded image. | `mage-web-appearance`; a custom image also uses `mage-web-custom-playmat` |
+| Playmat | Classic | Background of the battlefield. Arcane, Verdant, Tides, Ember, Dawn, and Abyss are static; Aurora drifts slowly; Your colours follows your commander or the colours on your board. Custom uses an uploaded image. | `mage-web-appearance`; a custom image also uses `mage-web-custom-playmat` |
 | Card sleeve | Classic card back | Art shown on face-down cards: the official back, five built-in designs, or a custom upload. | `mage-web-appearance`; a custom image also uses `mage-web-custom-sleeve` |
 | Your card images | Empty | Per-card art you upload, visible only to you. Stored as images, not as a setting; the manager lists the count and approximate size and can remove them all. | IndexedDB `xmage-custom-card-art` / `art` |
 
@@ -129,7 +129,7 @@ Stored in `mage-web-phase-stops`.
 
 | Item | Default | Effect | Stored in |
 |---|---|---|---|
-| Auto-answers | Empty | Rules that answer a repeated yes/no prompt automatically. You create them with the "remember" checkbox on a prompt; the list here shows the pattern, the answer, and a delete button, plus clear all. Rules are also sent to the server for the current game. | `mage-web-auto-answers` |
+| Auto-answers | Empty | Rules that answer a repeated yes/no prompt automatically. You create them with the "Always answer like this" checkbox on a prompt; the list here shows the pattern, the answer, and a delete button, plus clear all. Rules are also sent to the server for the current game. | `mage-web-auto-answers` |
 | Choice memory | Empty | Previously chosen answers for repeated named choices, offered again next time. Managed from the in-game ⋯ menu rather than the settings dialog. | `mage-web-choice-memory` |
 
 ## Settings outside the dialog

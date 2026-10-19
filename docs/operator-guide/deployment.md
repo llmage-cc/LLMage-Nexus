@@ -36,7 +36,7 @@ static host as long as the browser can reach the proxy's HTTP port for the pre-c
 | JDK | 17 | The proxy and the XMage server run on 17 and need `--add-opens` flags |
 | Maven | 3.9 | Builds the proxy jar against the engine artifacts |
 | Node.js | 20 or newer (24 in the container build) | Builds the web client and runs the repository scripts |
-| XMage engine | 1.4.62 (`1.4.62-V1`) | The proxy is compiled against one release and rejects servers on another |
+| XMage engine | 1.4.62 (`1.4.62-V1`) | The proxy is compiled against one release, and a server on another release refuses its login |
 
 The proxy talks to the engine through JBoss Remoting, which needs reflective access on JDK 17.
 Every launch path in this page passes:
@@ -217,7 +217,7 @@ Four rules make this work:
 - **Keep `/config` reachable.** When the page is served over HTTPS and the socket port is `443`,
   the client probes `/config` on its own origin. Behind a single-port edge the request lands on the
   HTTP backend through the default branch above, which is exactly what you want.
-- **Do not idle-timeout the socket.** The proxy sends keep-alives, but a 60-second proxy timeout
+- **Do not idle-timeout the socket.** The proxy sends keep-alives, but a 60-second reverse-proxy timeout
   still drops players mid-game.
 
 If the browser cannot reach the HTTP port at all, the pre-connect probe fails and the client falls

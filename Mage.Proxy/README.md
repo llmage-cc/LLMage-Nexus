@@ -145,7 +145,7 @@ account's entry, so the next login is a fresh session.
 it; ignored when older than 10 minutes). When their owner logs in again through a
 restarted proxy the bots log in with the same name, the server takes it as a
 reconnection and hands them their games; a restored bot with no game stops after
-60 s. SIM names start from the clock so a new bot never reuses the name of one of
+60 s. SIM names start from the clock so a new bot never reuses the name of one from
 a previous process. A bot whose own link to the server drops logs in again too.
 SIM as a whole is a dev/test-harness feature: with the default `--sim off` (Docker,
 `deploy/bundle`, launcher) `createTable`/`createTournamentTable` reject `playerTypes`
@@ -206,7 +206,7 @@ meanwhile (double gating).
 | `getPlayerTypes` | `{}` | Available player types (HUMAN, COMPUTER_*) |
 | `getExpansionsWithBoosters` | `{}` | Sets with boosters (`{code, name, releaseDate}`), release-date order; `[]` while the card DB is still building |
 | `getRoomUsers` | `{}` | Users in the room |
-| `getRoomChatId` | `{}` | Chat room ID |
+| `getRoomChatId` | `{roomId?}` | Chat room ID (defaults to the main room) |
 | `getTables` | `{}` | All tables |
 | `getFinishedMatches` | `{}` | Match history |
 | `getReplayFiles` | `{}` | List the saved replay files in the proxy's replay directory (`--replayDir`, default `saved`, resolved against the proxy process CWD). Result data: `{directory, exists, files:[{gameId, bytes, savedAtMs, meta?}]}` sorted by `gameId`; `meta` is the parsed `<uuid>.json` sidecar verbatim (absent when there is no/unreadable sidecar). Non-UUID `*.game` names are skipped; a missing directory is not an error (`exists:false`, empty list). Reads the PROXY filesystem (not the server), so it carries **no capability gate** — stock-server-compatible. See the Replay section for the full contract. |
@@ -668,7 +668,7 @@ when Java view classes change, then regenerate.
 3. **If it's a proxy action** (client → server):
    - Add a `case` in the domain class (`InfoCommands` / `TableCommands` /
      `TournamentCommands` / `GameCommands`), reachable from the
-     from the `ProxyClient.handleCommand` router; add to `requiresGameId` in
+     `ProxyClient.handleCommand` router; add to `requiresGameId` in
      `ProxyClient.java` if the action is game-scoped (the replay verbs all carry
      `gameId`, so they are listed there)
    - Add the TypeScript type in `types.ts` if needed
@@ -680,7 +680,6 @@ when Java view classes change, then regenerate.
 | Card images | Binary data not serialized through JsonUtil | Cosmetic — can load from Scryfall API |
 | Deck editor | Pure UI, no protocol gap | Build in TypeScript |
 | Tournament UI | Protocol actions (`createTournamentTable`, `joinTournament`, `joinDraft`, …) exist, web UI partial | Build in TypeScript |
-| Replay system | Load/start/stop/step/seek and the saved-replay **file browser** (`getReplayFiles`: a `saved/*.game` listing + sidecar metadata on the proxy's filesystem) are implemented | Against LLMage servers (gated by `capabilities.replayScrubber`) the whole flow works — `replayGame`/`startReplay`/`replayNext`/`replayPrevious`/`replaySkipForward`/`replaySeek`; stock servers do not persist replays, but the file listing still works (it reads the proxy filesystem) |
 | Admin tools | Proxy doesn't expose admin actions | Would need proxy modification |
 
 **Key insight**: The proxy is a thin bridge. If the Java server sends it, the proxy
@@ -835,7 +834,7 @@ not registered at all, so it 404s.
 
 Security rules (ported exactly from the LLMage Jetty relay — do not loosen):
 
-- It never reads, parses, logs or stores the `Authorization` header or any body: the key transits
+- It never reads, parses, logs or stores the `Authorization` header or any body: the key transits as
   in-memory bytes only and is never persisted.
 - Only these request headers are forwarded upstream: `authorization`, `content-type`, `accept`,
   `x-api-key`, `anthropic-version`, `anthropic-dangerous-direct-browser-access`,

@@ -89,7 +89,7 @@ Retrying does not help; the proxy must be rebuilt against the server's release. 
 | "You have too many tables not started (max 2)" | Two unstarted tables already belong to you | Start or delete one |
 | "Your rating is below the table minimum" | The table filters by rating | Choose another table |
 | "Table does not exist or has been closed" | The owner left before the start, or a filter hid it | Re-enter from your table card, or reset the filters |
-| "Table is already full" / "Table password is incorrect" | The seat was taken, or the password is wrong | Pick another table, or ask the owner |
+| "This table is already full" / "Table password is incorrect" | The seat was taken, or the password is wrong | Pick another table, or ask the owner |
 
 Deck validation in the client is advisory: it reports problems before you join, and you can apply the suggested printings, accept a substitution, or remove the cards. The server is the final judge, so a deck it rejects still fails at join.
 

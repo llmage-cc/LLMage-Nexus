@@ -26,7 +26,7 @@ Browser (React 19 + TS + Vite) ──WS JSON──▶ Mage.Proxy (Java 17) ─�
 
 ## Two E2E backends, same specs
 
-- **Fake (default)**: `FixtureServer` (`web/fixtures/fake.ts`) + declarative scenarios (`web/fixtures/scenarios/`, mini-engine `humanGame.ts`). Port 8789. No Java, deterministic, daily loop.
+- **Fake (default)**: `FakeServer` (`web/fixtures/fake.ts`) + declarative scenarios (`web/fixtures/scenarios/`, mini-engine `humanGame.ts`). Port 8789. No Java, deterministic, daily loop.
 - **Real (anti-drift net)**: live server + proxy + vite (`E2E_BACKEND=real`). Catches protocol drift. Fragile actions go over the WS `HumanHelper` (`web/e2e/wshelper.ts`); the UI only verifies. The helper never answers the mulligan (web auto-keep does that).
 - **SIM seats**: the proxy joins a deterministic bot (`SimPlayer.java`, own session) so tests and demos run without humans.
 

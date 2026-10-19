@@ -12,7 +12,10 @@ const USER = `wm${Date.now() % 10000}`
 
 const MOUNTAIN_DECK = {
   name: 'Matrix 60 Mountains',
-  cards: [{ cardName: 'Mountain', setCode: 'm21', cardNumber: '274', amount: 60 }],
+  // Engine source of truth: Mage.Sets/src/mage/sets/CoreSet2021.java — M21 269 is
+  // Mountain; 274 is Forest (the fixture used to point there and every deck-carrying
+  // join failed with "Card not found").
+  cards: [{ cardName: 'Mountain', setCode: 'M21', cardNumber: '269', amount: 60 }],
   sideboard: [],
 }
 

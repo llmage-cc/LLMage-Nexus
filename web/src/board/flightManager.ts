@@ -24,13 +24,16 @@ export interface FlightRecord {
   /** Timers de backstop/limpieza: se reprograman al encadenar un redirect. */
   timers?: Array<ReturnType<typeof setTimeout>>
   variant?: FlightVariant
+  trail?: FlightTrail
   /** The clone leaves a compact art-crop tile: it starts as that landscape art crop. */
   fromCompact?: boolean
   /** The clone lands on a compact art-crop tile: it ends as that landscape art crop. */
   toCompact?: boolean
 }
 
-export type FlightVariant = 'destroy' | 'exile' | 'heavy'
+export type FlightVariant = 'destroy' | 'exile' | 'heavy' | 'land'
+
+export type FlightTrail = 'gold'
 
 let activeFlights: FlightRecord[] = []
 let flightCounter = 0
@@ -126,6 +129,7 @@ export interface FlightOptions {
   /** Tamaño real de la carta de origen (sin transforms), si se conoce. */
   sourceSize?: CardSourceSize | null
   variant?: FlightVariant
+  trail?: FlightTrail
   /** The source is a compact art-crop tile. Defaults to `sourceSize.compact`. */
   fromCompact?: boolean
   /** The destination is a compact art-crop tile. Defaults to probing `toSelector` in the DOM. */
@@ -293,6 +297,7 @@ export function startCardFlight(
     duration: scaledDuration,
     rotated90: from.rotated90 || undefined,
     variant: options?.variant,
+    trail: options?.trail,
     fromCompact: fromCompact || undefined,
     toCompact: toCompact || undefined,
   }

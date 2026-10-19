@@ -22,7 +22,7 @@ import { parseSent, sentOf } from './support/frames'
  */
 
 /** Login against the fake backend and open the Create-Table wizard on the
- *  seats step, where the seat-type dropdowns and the preset chip live. */
+ *  seats step, where the seat-type radiogroups and the preset chip live. */
 async function openSeatsStep(page: Page, username: string): Promise<void> {
   const buffers: CaptureBuffers = { frames: [], sent: [], pageErrors: [] }
   installCapture(page, buffers)
@@ -43,7 +43,9 @@ async function openSeatsStep(page: Page, username: string): Promise<void> {
   await page.getByRole('button', { name: /Nueva/i }).first().click()
   await expect(page.getByRole('heading', { name: /Nueva mesa|Crear Mesa/i })).toBeVisible()
   await page.locator('button.wizard-step', { hasText: /Multijugador/i }).click()
-  await expect(page.getByTestId('seat-type-0')).toBeVisible({ timeout: 10_000 })
+  // The seats stage is up once its seat nodes render (the creator's "you" node is
+  // active by default; each spec picks the node it wants to edit).
+  await expect(page.getByTestId('seat-node-1')).toBeVisible({ timeout: 10_000 })
 }
 
 /** Click Siguiente until the submit button shows, then create the table. */
@@ -76,10 +78,14 @@ test.describe('LLM vs LLM preset — fake backend', () => {
       await chip.click()
 
       // It flips the creator to spectator mode and puts LLM in both seat slots.
-      await expect(page.getByTestId('seat-type-0')).toHaveValue('COMPUTER_LLM')
-      await expect(page.getByTestId('seat-type-1')).toHaveValue('COMPUTER_LLM')
-      // seat 0 is no longer the human slot (spectator hint replaces the player box)
-      await expect(page.locator('.create-seats-section .human-seat-box .wizard-hint-box')).toContainText(/espectador|spectator/i)
+      // One seat editor at a time: seat 0 first, then seat 1.
+      await expect(page.getByTestId('seat-node-0')).toContainText(/IA LLM|LLM AI/)
+      await page.getByTestId('seat-node-0').click()
+      await expect(page.getByTestId('seat-type-0').getByRole('radio', { name: /LLM/ })).toBeChecked()
+      await page.getByTestId('seat-node-1').click()
+      await expect(page.getByTestId('seat-type-1').getByRole('radio', { name: /LLM/ })).toBeChecked()
+      // seat 0 is no longer the human slot: the stage toggle offers spectator mode
+      await expect(page.locator('.seats-stage-head').getByRole('button', { name: /Espectadores|Spectator/ })).toBeVisible()
 
       await submitWizard(page)
 
@@ -120,11 +126,9 @@ test.describe('LLM vs LLM preset — fake backend', () => {
       async () => {
         await openSeatsStep(page, `llmoff-${Date.now().toString().slice(-8)}`)
         await expect(page.getByTestId('llm-vs-llm-preset')).toHaveCount(0)
-        const options = await page
-          .getByTestId('seat-type-0')
-          .locator('option')
-          .evaluateAll((els: HTMLOptionElement[]) => els.map((o) => o.value))
-        expect(options).not.toContain('COMPUTER_LLM')
+        await page.getByTestId('seat-node-1').click()
+        const labels = await page.getByTestId('seat-type-0').getByRole('radio').allTextContents()
+        expect(labels.some((label) => /LLM/.test(label))).toBe(false)
         expect(errors).toEqual([])
       },
     )

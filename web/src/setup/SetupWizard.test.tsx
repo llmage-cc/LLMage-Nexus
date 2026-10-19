@@ -9,6 +9,10 @@ import { clearAuthToken, setAuthToken } from '../net/authToken'
 import { DEFAULT_PROXY_CONFIG, resetProxyConfigCache } from '../net/proxyConfig'
 import { t } from '../i18n'
 
+/** Count only /config probes: the wizard's child UI may fetch avatars/news too. */
+const configFetchCount = () =>
+  vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith('/config')).length
+
 vi.mock('../state/store', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../state/store')>()
   return { ...actual, doConnect: vi.fn(async () => {}) }
@@ -386,7 +390,7 @@ describe('SetupWizard — token hand-off on Enter', () => {
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
     // the fresh probe landed on the store before the decision was made
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(configFetchCount()).toBe(1)
     expect(doConnect).not.toHaveBeenCalled()
     expect(isSetupDone()).toBe(true)
     expect(loadConn()?.username).toBe('op')
@@ -414,7 +418,7 @@ describe('SetupWizard — token hand-off on Enter', () => {
     await import('../state/gateway').then(({ probeProxyConfig }) => probeProxyConfig('localhost', 8787))
     setState({ proxyConfig: DEFAULT_PROXY_CONFIG })
     clearAuthToken()
-    const fetchCalls = () => vi.mocked(fetch).mock.calls.length
+    const fetchCalls = () => configFetchCount()
     const before = fetchCalls()
     const onClose = vi.fn()
     render(<SetupWizard onClose={onClose} />)

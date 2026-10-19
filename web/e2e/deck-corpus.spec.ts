@@ -38,7 +38,10 @@ async function openSeatsStep(page: Page, username: string): Promise<void> {
   await page.getByRole('button', { name: /Nueva/i }).first().click()
   await expect(page.getByRole('heading', { name: /Nueva mesa|Crear Mesa/i })).toBeVisible()
   await page.locator('button.wizard-step', { hasText: /Multijugador/i }).click()
-  await expect(page.getByTestId('seat-type-0')).toBeVisible({ timeout: 10_000 })
+  // The seats step now paints a seat map and edits only the picked seat; the
+  // "you" node is index 0 (its editor holds the deck carousel).
+  await expect(page.getByTestId('seat-node-0')).toBeVisible({ timeout: 10_000 })
+  await expect(page.locator('.deck-carousel-track').first()).toBeVisible({ timeout: 15_000 })
 }
 
 test.describe('bundled deck corpus', () => {
@@ -50,35 +53,27 @@ test.describe('bundled deck corpus', () => {
     await withFakeServer(() => llmageScenario(), async () => {
       await openSeatsStep(page, `corpus-${Date.now().toString().slice(-8)}`)
 
-      const select = page.getByTestId('active-deck-select')
-      await expect(select).toBeVisible({ timeout: 15_000 })
-
       // The 9 compiled samples are there right away; the lazily loaded corpus
-      // arrives a moment later. The picker TIERS it: the default
-      // selection is the create-table format (Modern) of the Built-in category, so
-      // that whole library is listed at once. Poll until the corpus lands.
+      // arrives a moment later. The picker is now a carousel of every deck
+      // (upstream's create-table redesign — there is no format tier anymore),
+      // so the corpus landing is the card count crossing the sample count.
+      const track = page.locator('.deck-carousel-track').first()
       await expect
-        .poll(async () => select.locator('option').count(), { timeout: 30_000 })
+        .poll(() => track.locator('.deck-carousel-card').count(), { timeout: 60_000 })
         .toBeGreaterThan(CORPUS_MIN_OPTIONS)
 
-      const names = await select
-        .locator('option')
-        .evaluateAll((els: HTMLOptionElement[]) => els.map((o) => o.textContent ?? ''))
+      const names = await track
+        .locator('.deck-carousel-name')
+        .evaluateAll((els: HTMLElement[]) => els.map((el) => el.textContent ?? ''))
       expect(names.some((n) => n.includes('Boros Burn'))).toBe(true)
-      // a legacy-only corpus deck is NOT in the current selection any more
-      expect(names.some((n) => n.includes(CORPUS_DECK))).toBe(false)
+      // The whole bundled corpus is listed (not one format tier): a legacy-only
+      // corpus deck is reachable in the same carousel.
+      expect(names.some((n) => n.includes(CORPUS_DECK))).toBe(true)
 
-      // The format tier is the corpus libraries: the rest of the ~5,000 decks are
-      // one dropdown away instead of being crammed into one list.
-      const formats = page.getByTestId('active-deck-select-format')
-      const libraries = await formats
-        .locator('option')
-        .evaluateAll((els: HTMLOptionElement[]) => els.map((o) => o.value))
-      expect(libraries).toContain('Modern')
-      expect(libraries).toContain('Legacy')
-
-      await formats.selectOption('Legacy')
-      await expect(select.locator('option', { hasText: CORPUS_DECK })).toHaveCount(1, { timeout: 10_000 })
+      // Picking a corpus deck is a real selection, not just a rendered card.
+      const corpusCard = track.locator('.deck-carousel-card', { hasText: 'Boros Burn' }).first()
+      await corpusCard.click()
+      await expect(corpusCard).toHaveAttribute('aria-checked', 'true')
       expect(errors).toEqual([])
     })
   })

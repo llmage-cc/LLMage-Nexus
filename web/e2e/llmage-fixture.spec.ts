@@ -108,8 +108,13 @@ test('llmage fixture: /config gate + every new WS verb answered', async ({ page 
     await page.getByRole('button', { name: /Nueva/i }).first().click()
     await expect(page.getByRole('heading', { name: /Nueva mesa|Crear Mesa/i })).toBeVisible()
     await page.locator('button.wizard-step', { hasText: /Multijugador/i }).click()
-    await expect(page.getByTestId('seat-type-0')).toBeVisible()
-    await page.getByTestId('seat-type-0').selectOption('COMPUTER_P1')
+    // The seat editor shows one seat at a time: the stage opens on the creator's
+    // own ("you") seat, so select the first configurable seat before editing it.
+    await page.getByTestId('seat-node-1').click()
+    // The seat editor's type control is a radiogroup (upstream replaced the select).
+    const seatType0 = page.getByTestId('seat-type-0')
+    await expect(seatType0).toBeVisible()
+    await seatType0.getByRole('radio', { name: /P1/ }).click()
 
     const picker = page.getByTestId('p1-deck-picker')
     await expect(picker).toBeVisible({ timeout: 15_000 })
@@ -122,7 +127,7 @@ test('llmage fixture: /config gate + every new WS verb answered', async ({ page 
     expect(pickerInfo.options.find((o) => o.value === DEFAULT_P1_DEFAULT)?.label).toContain(DEFAULT_P1_DEFAULT)
 
     // ── LLM seat → fetchModels / fetchPersonalities ──────────────────────────
-    await page.getByTestId('seat-type-0').selectOption('COMPUTER_LLM')
+    await seatType0.getByRole('radio', { name: /LLM/ }).click()
     await expect(page.getByTestId('llm-config-panel-0')).toBeVisible()
     await page.getByTestId('llm-model-fetch').click()
     await expect(page.locator('[data-testid=llm-model-select] option', { hasText: DEFAULT_LLM_MODELS[0] })).toHaveCount(1, { timeout: 10_000 })

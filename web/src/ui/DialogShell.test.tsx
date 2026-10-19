@@ -84,7 +84,7 @@ describe('DialogShell — single, viewport-bounded scroll owner', () => {
 
   it('every shared dialog cap is bounded by the visible viewport too', () => {
     expect(squeeze(globalCss))
-      .toContain('--dlg-max-h:min(780px,90vh,calc(100dvh-var(--dlg-viewport-gutter)))')
+      .toContain('--dlg-max-h:min(calc(780px/var(--ui-zoom)),90vh,calc((100dvh-var(--dlg-viewport-gutter))/var(--ui-zoom)))')
     expect(squeeze(globalCss)).toContain('--dlg-viewport-gutter:24px')
   })
 })

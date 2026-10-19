@@ -287,9 +287,11 @@ async function seedClientKey(
   // Seats step → an LLM seat carrying a client-key apiKey.
   await page.locator('button.wizard-step', { hasText: /Multijugador/i }).click()
   // Turn the human seat OFF so submit needs no human deck (the LLM seat has its own).
-  await page.locator('.human-seat-box').getByRole('button', { name: /Jugador|Player/ }).click()
+  // Upstream moved the toggle into the seats-stage head: it reads "Jugador" while
+  // the creator holds a seat and "Espectadores" once it is flipped off.
+  await page.locator('.seats-stage-head').getByRole('button', { name: /Jugador|Player/ }).click()
   await expect(page.getByTestId('seat-type-0')).toBeVisible()
-  await page.getByTestId('seat-type-0').selectOption('COMPUTER_LLM')
+  await page.getByTestId('seat-type-0').getByRole('radio', { name: /LLM/ }).click()
   await expect(page.getByTestId('llm-config-panel-0')).toBeVisible()
   if (providerId) await page.getByTestId('llm-provider').selectOption(providerId)
   await page.getByTestId('llm-apiKey').fill(apiKey)

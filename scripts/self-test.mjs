@@ -267,6 +267,14 @@ async function main() {
         /* noop */
       }
     }
+    // Log out before closing: the proxy keeps a session (and its SIM seats) alive for the
+    // 180 s grace period after a bare socket close, i.e. through the first minutes of the
+    // verify layer that runs after this one.
+    try {
+      await Promise.race([send('disconnect', {}), timeout(5000, 'disconnect')])
+    } catch {
+      /* noop */
+    }
     try {
       ws.close()
     } catch {

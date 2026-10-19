@@ -50,8 +50,8 @@ test('the game menu (⋯) sits above the dock and the arrows yield while it is o
     //    Measured at 1600x900 (default viewport): strip 432..468, button
     //    735..796 — they do not overlap; the assertion pins the stacking order
     //    that decides painting if a short viewport crosses them.)
-    const dockZ = await effZ(page, '.game-dock > .action-button-container')
-    const stripZ = await effZ(page, '.board-shell-divider.has-strip')
+    const dockZ = await effZ(page, '.game-dock .action-button-container')
+    const stripZ = await effZ(page, '.game-topbar, .board-shell-divider.has-strip')
     expect(stripZ, 'the control strip must remain the island (numeric z)').toBeGreaterThan(0)
     expect(dockZ, 'the action button stays below the control strip').toBeLessThanOrEqual(stripZ)
 

@@ -24,7 +24,7 @@
 // Uso: node scripts/verify-range-attack.mjs
 // Requiere: servidor local (testMode) + proxy (node scripts/ctl.mjs status).
 
-import { wsConn } from './lib.mjs'
+import { startingPlayerTargetId, wsConn } from './lib.mjs'
 
 const WS_URL = 'ws://127.0.0.1:8787'
 const SERVER_HOST = 'localhost'
@@ -75,6 +75,7 @@ function mkConn(name) {
     defenderId: null,
     targetMsg: '',
     selectGen: 0,
+    ended: false,
   }
   const sendBool = (conn, v) => conn.ws.send(JSON.stringify({ action: 'sendPlayerBoolean', args: { gameId: conn.gameId, value: v } }))
   const sendUuid = (conn, v) => conn.ws.send(JSON.stringify({ action: 'sendPlayerUUID', args: { gameId: conn.gameId, value: v } }))
@@ -84,6 +85,7 @@ function mkConn(name) {
     init: { st },
     onMessage(conn, m) {
       if (m.data?.gameView) conn.view = m.data.gameView
+      if (m.method === 'GAME_OVER' || m.method === 'END_GAME_INFO') conn.st.ended = true
       // Defensor declarado: grupo de combate con nuestro Grizzly atacando.
       const grizzlyId = Object.entries(
         ((conn.view?.players ?? []).find((p) => p?.controlled)?.battlefield ?? {}),
@@ -113,6 +115,11 @@ function mkConn(name) {
         return
       }
       if (m.method === 'GAME_TARGET') {
+        const starting = startingPlayerTargetId(m)
+        if (starting) {
+          sendUuid(conn, starting)
+          return
+        }
         const pt = d.options?.possibleTargets ?? d.targets ?? []
         const ids = Array.isArray(pt) ? pt.map((o) => (typeof o === 'string' ? o : o?.id)).filter(Boolean) : Object.keys(pt ?? {})
         if (/attack/i.test(q)) {
@@ -253,10 +260,16 @@ async function runPhase({ label, range, attackOption }) {
         } catch {
           /* noop */
         }
+        // Wait for the end-of-game callback before dropping the table/session: removing the
+        // table while the game thread is still closing leaves the server with a table it
+        // cannot free, and the next phase (or the next script of the layer) pays for it.
+        const until = Date.now() + 10000
+        while (!conn.st.ended && Date.now() < until) await sleep(200)
       }
       if (tableId) {
         try {
-          await conn.call('removeTable', { tableId })
+          const res = await conn.call('removeTable', { tableId }, 10000)
+          if (!res?.ok) console.log(`  nota [${label}]: removeTable falló (${res?.error ?? 'sin respuesta'})`)
         } catch {
           /* noop */
         }

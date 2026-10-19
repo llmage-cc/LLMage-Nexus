@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { isDirectTournamentJoin, isUserInGame } from './lobbyUtils'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { formatSeatHistory, isDirectTournamentJoin, isUserInGame } from './lobbyUtils'
+import { setLanguage } from '../i18n'
 import type { TableView } from '../net/types'
 
 function table(over: Partial<TableView>): TableView {
@@ -63,3 +64,23 @@ describe('isUserInGame (AUDIT)', () => {
     expect(isUserInGame('Wait: 1 Match: 1 ')).toBe(true)
   })
 })
+
+describe('formatSeatHistory', () => {
+  // The tooltip is rebuilt from parsed numbers in the active UI language; pin
+  // English so the expected strings are stable regardless of the runner locale.
+  beforeEach(() => setLanguage('en'))
+
+  it('shows tourneys badge when matches is 0 but tourneys exist', () => {
+    const raw = 'Matches: 0 (0%), Tourneys: 157 (D:11) (7%), Constructed Rating: 800, Limited Rating: 1773'
+    const res = formatSeatHistory(raw)
+    expect(res.short).toBe('T:157')
+    expect(res.full).toBe('0 matches played (0%)')
+  })
+
+  it('shows matches and quit percentage when matches exist', () => {
+    const raw = 'Matches: 25 (0%), Tourneys: 3, Constructed Rating: 1650, Limited Rating: 1500'
+    const res = formatSeatHistory(raw)
+    expect(res.short).toBe('25')
+  })
+})
+

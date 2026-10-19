@@ -33,7 +33,7 @@ describe('dialog height is a share of the screen', () => {
   // is capped by a vh share of the screen, none is left unbounded, and none is
   // hardcoded in px.
   it('caps every dialog by a viewport-height share', () => {
-    expect(styles).toContain('--dlg-max-h: min(780px, 90vh, calc(100dvh - var(--dlg-viewport-gutter)))')
+    expect(styles).toContain('--dlg-max-h: min(calc(780px / var(--ui-zoom)), 90vh, calc((100dvh - var(--dlg-viewport-gutter)) / var(--ui-zoom)))')
   })
 
   it('leaves no popup unbounded (every max-height is viewport-relative, none in px)', () => {

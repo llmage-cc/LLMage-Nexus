@@ -20,7 +20,7 @@
 // Usage: node scripts/verify-rollback-vote.mjs
 // Requires: local server (testMode) + proxy (node scripts/ctl.mjs status).
 
-import { wsConn } from './lib.mjs'
+import { startingPlayerTargetId, wsConn } from './lib.mjs'
 
 const WS_URL = 'ws://127.0.0.1:8787'
 const SERVER_HOST = 'localhost'
@@ -93,6 +93,11 @@ async function mkConn(name) {
         return
       }
       if (m.method === 'GAME_TARGET') {
+        const starting = startingPlayerTargetId(m)
+        if (starting) {
+          conn.ws.send(JSON.stringify({ action: 'sendPlayerUUID', args: { gameId: conn.gameId, value: starting } }))
+          return
+        }
         if (/discard/i.test(q)) {
           const pt = d.options?.possibleTargets ?? d.targets ?? []
           const id = Array.isArray(pt) ? (typeof pt[0] === 'string' ? pt[0] : pt[0]?.id) : Object.keys(pt)[0]
@@ -226,7 +231,7 @@ async function main() {
 
     for (const c of conns) {
       const res = await c.call('connect', { host: SERVER_HOST, port: SERVER_PORT, username: c.name, password: 'x' })
-      if (!check(`connect/login ${c.name}`, !!res.ok, res.error ?? '')) return
+      if (!check(`connect/login ${c.name}`, !!res.ok, res.error ?? '')) throw new Error(`connect/login ${c.name} falló: ${res.error ?? ''}`)
     }
 
     let res = await A.call('createTable', {
@@ -240,16 +245,16 @@ async function main() {
       skipStartingPlayerChoice: true,
     })
     tableId = res.ok ? (res.data?.tableId ?? res.data?.table?.tableId ?? null) : null
-    if (!check('createTable FFA 4 HUMAN with rollbacks', !!tableId, res.error ?? '')) return
+    if (!check('createTable FFA 4 HUMAN with rollbacks', !!tableId, res.error ?? '')) throw new Error(`createTable falló: ${res.error ?? ''}`)
 
     for (const c of conns) {
       res = await c.call('joinTable', { tableId, playerName: c.name, playerType: 'HUMAN', skill: 1, deck: DECK })
-      if (!check(`joinTable ${c.name}`, !!res.ok, res.error ?? '')) return
+      if (!check(`joinTable ${c.name}`, !!res.ok, res.error ?? '')) throw new Error(`joinTable ${c.name} falló: ${res.error ?? ''}`)
     }
 
     const starts = conns.map((c) => c.wait((m) => m.method === 'START_GAME', 30000, 'START_GAME'))
     res = await A.call('startMatch', { tableId })
-    if (!check('startMatch', !!res.ok, res.error ?? '')) return
+    if (!check('startMatch', !!res.ok, res.error ?? '')) throw new Error(`startMatch falló: ${res.error ?? ''}`)
     const startEvents = await Promise.all(starts)
     for (let i = 0; i < conns.length; i++) {
       const c = conns[i]

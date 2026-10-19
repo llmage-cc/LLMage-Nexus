@@ -71,6 +71,7 @@ ops), `docs/testing.md`, `web/AGENTS.md`, `Mage.Proxy/README.md`.
 - The public server takes every new upstream release within hours and refuses any other client version (`MageVersionException`, `VERSION_MISMATCH` from the proxy), so the proxy stops logging anyone in until the fork merges the release. `xmage-status` turns red on the first refused login, which is how the gap gets caught. This repository ships no CI: run `node scripts/check-upstream-release.mjs` on a schedule (cron on the host is enough) to catch a newer `xmage_*` tag first.
 - The version bump alone does not give an LLM-capable dev stack: `forkDir()` prefers `../xmage-fork` (stock, no `COMPUTER_LLM`), so the way to run LLM seats locally is `NEXUS_FORK_DIR=<LLM trunk>` at `ctl.mjs start` — plus, on an existing runtime, `rm -rf local-server .run/server-deps.txt` (the config seed and the deps cache are fork-keyed), versioned copies of the fork's extra player-plugin jars in `local-server/plugins/`, and remember `ensureMageArtifacts()` reinstalls org.mage artifacts from `forkDir()`, which can clobber LLM-bearing `~/.m2` artifacts with stock ones mid-build — always package the proxy with the fork pointed right (see `docs/deployment.md` "LLM-capable dev server").
 - The proxy's default build must compile against the artifacts that carry the fork symbols, never the project's own version: `Mage.Proxy/pom.xml` defaulted `mage.version` to `${project.version}` (1.4.62 = the STOCK engine the fork tracks), so the bare `mvn -f Mage.Proxy/pom.xml clean compile` could not find `PlayerType.COMPUTER_LLM`/`LLMPlayerConfig` — while every documented build command passed `-Dmage.version=1.4.61` explicitly, hiding the broken default for the whole port, and no CI ran on the fork's master. The default is now pinned to the LLMage `1.4.61` artifacts (`scripts/lib.mjs` `XMAGE_VERSION` follows it); exercise the pom's default path — the bare command — whenever the version property changes, not only the flagged path. *(The pin has since moved to `1.4.62` = `${project.version}` after the engine trunk absorbed `xmage_1.4.62V1`; the stock-vs-fork artifact collision this lesson warns about is unchanged — the stock `1.4.62` artifacts still lack the fork symbols.)*
+- A reload during a draft's construction eliminated the player from the tournament. The page sends `leaving` on pagehide, so the proxy kept the XMage session for only 45 s; a reload that took longer hit the grace expiry, the server called `User.removeUserFromAllTables` (`TournamentController.quit` during construction) and the draft table vanished. Measured: a 60 s reload lost the table, a 20 s one kept it. The proxy now uses the full 180 s grace while the session is in its draft/construction phase (`START_DRAFT`/`DRAFT_INIT`/`CONSTRUCT` until `START_GAME`/`GAME_INIT`/`TOURNAMENT_OVER`), so a reload up to 180 s survives; a plain socket drop already had 180 s. A reload longer than that is still fatal, and the server's tournament logic was left alone on purpose.
 
 ## Web client
 
@@ -211,6 +212,49 @@ ops), `docs/testing.md`, `web/AGENTS.md`, `Mage.Proxy/README.md`.
 - Attribute a red leg from `test-results/<test>/error-context.md`, never from the line number in the run summary: Playwright reports a test by its **declaration** line, so a closure report reading `gallery.spec.ts:142` was naming the ASK-Slicer `test(...)` declaration and the failure got attributed to whatever assertion sat at that line — wrong twice over once the file grows lines and the number stops pointing at the same test.
 - Before touching a red spec, run it and check what the dev-only surfaces actually rendered: the test shell exports `NODE_ENV=production`, so a Playwright-spawned `npm run dev` resolves vite in production mode (`import.meta.env.DEV=false`), drops `#/gallery` and fails every gallery leg with `element(s) not found`, which is indistinguishable from a broken assertion. The fake e2e webServer therefore pins `NODE_ENV=development`.
 - When an e2e assertion contradicts a unit-test-pinned product contract, the unit test names the owner: correct and strengthen the e2e, do not relax it. `gallery.spec.ts`'s wizard leg asked for `overflow-y: auto` on `.create-table-body` (upstream scrolls the step inside the panel) after `DialogShell.overflow.test.ts` had pinned `flex: none` with no `overflow-y` at all — an inner cap inside the height-capped panel hid every field below the fold — so the leg was red on a contract the fork had deliberately reversed; assert the scroll owner that exists (the panel really scrolls) instead.
+
+- **Validating an archive entry's path is not validating the archive.** `launcher/src/extract.rs`
+  rejected `..` and absolute entry paths but unpacked symlink entries as they came, so a tarball with
+  `jre -> /somewhere` followed by `jre/owned.txt` wrote outside the destination (the two tests that
+  proved it failed before the fix). Links are now checked against where they would resolve
+  (`link_stays_inside`): relative links that stay under the destination are kept, since a JRE has them.
+  The component hashes in the manifest only help if the manifest itself is trusted.
+
+- **An escape that skips quotes is not an escape.** `renderNewsMarkdown` escaped `& < >` and then built
+  `<a href="…">` from a URL pattern that allowed `"`, so `[x](https://a/"onmouseover="…)` injected an
+  attribute into release notes fetched from GitHub. Escape quotes before building any attribute, and
+  assert on the parsed DOM (`getAttributeNames()`), not on a regex over the string: the first version
+  of that test matched `onmouseover=` inside the `href` value and failed for the wrong reason.
+
+- **`script-src 'unsafe-inline'` was there for one inline script.** The proxy's CSP carried it only
+  because `splash.html` had an inline `<script>`; the app proper never did. The script is
+  `public/splash.js` now, the policy is `script-src 'self'` (`Main.CONTENT_SECURITY_POLICY`, pinned by
+  `MainSecurityTest`), and `cspCompat.test.ts` fails if any page under `web/` grows an inline script or
+  an `on*=` handler again. With that, an injected string cannot run even if an escape is missed.
+
+- **Check what is already covered before writing tests for "files without a test".** A sibling-name
+  scan listed `gateway.ts`, `actions.ts` and `submitTable.ts` as untested; coverage said 98 %, 90 %
+  and 85 %, reached through other suites. The real holes were the two screens with no render test
+  (`GameScreen` 8 %, `LobbyScreen` 0 %). Also: `initialState` is exported from `state/state`, not from
+  `state/store`; importing it from the wrong place spreads `undefined` silently and the "reset"
+  between tests resets nothing.
+
+- A refusal code is not a message. The proxy answers a rate-limited report with `ok: true, stored: false, reason: "rate"`, and `ReportDialog` printed the word `rate` in the warning colour, so a player who pressed Send twice read a working channel as a broken one (the public proxy was healthy: a probe login stored a report). Every code a server can answer needs a sentence the player can act on (`report_rate`, `report_duplicate`, `report_quota`, `report_too_large`, nine locales); the raw text is only for codes nobody has met yet.
+- Measure a payload the way its receiver will. `JSON.stringify(...).length` undercounts what the proxy sees, because Gson's `toString` writes `<`, `>`, `&`, `=` and `'` as six-character `\uXXXX` escapes; a log full of rules text could pass the client's 96 KB check and be refused by the proxy's. `report.ts` `sizeOf` adds five characters per escaped one and `buildReport` has a last-resort trim.
+- A desktop client that talks to its own local proxy cannot say "sent". The report landed in the player's `%LOCALAPPDATA%`, the dialog said "Sent. Reference: …" and nobody ever received it. Decide who the receiver is before choosing the verb (`isLocalProxy` → "Saved on this computer" + a prefilled GitHub issue).
+- `Element.replaceChildren(null)` inserts the text "null". Filter optional children before the call (`ops/status` Reports tab painted `null` between two paragraphs).
+- `width: min(Npx, 96vw)` on a panel inside a backdrop that has its own padding overflows by twice that padding on a phone (create-table dialog: 20..394 in a 390 px window). Cap the panel at `100vw - 2 × backdrop padding`, divided by `--ui-zoom`; guard in `e2e/mobile.spec.ts`, verified red with the cap removed.
+- **The engine skips a step with no stop set without asking whether you have a play.** `HumanPlayer.checkPassStep` passes any step whose `SkipPrioritySteps` flag is off, on an empty stack, before the client sees a `GAME_SELECT`; so a client "smart stops" layer can only ever pass *more*, never stop where the engine already skipped. With the Simple preset (every stop off) the land drop in main 1 never reached the client. The client now sends the engine every stop on while smart stops are active (`serverPhaseStops`) and decides itself (`decideStop`: playable → stop, marked stop → stop, else pass). The engine does list the land drop (`canPlayObjects[...].basicPlayAbilities = "Play Mountain"`, frame `recorded/land-drop.json`) and omits it once a land is played, so the old name-based hand heuristic was both redundant and a source of false stops.
+- Only `BasicManaAbility` lands in `canPlayObjects[...].basicManaAbilities`; Sol Ring (`{T}: Add {C}{C}.`), filter lands (`{U/R}, {T}: Add {U}{U}.`) and Treasures come under `other` (frame `recorded/mana-rocks.json`). `meaningfulPlayables` filters `other` by the `: Add {…}` text, otherwise any untapped rock turned every window into a stop.
+
+- **Two files whose names differ only by case are one file on macOS and Windows.** `game/combatLedger.ts`
+  (the model) next to `game/CombatLedger.tsx` (the component) made `tsc` fail with TS1261 ("already
+  included file name … differs only in casing") and the import resolve to the wrong one on this Mac, while
+  Linux CI would have built both. Give the model a different stem (`combatLedgerModel.ts`).
+- **`@testing-library/react` does not clean up between tests in this repo.** `getByTestId` is bound to
+  `document.body`, so a test that renders the same component after another one finds two matches
+  (`Found multiple elements by: [data-testid="stack-deck-toggle"]`) and passes alone but fails in the file.
+  Call `afterEach(cleanup)` in any spec that queries through the returned `getBy*`.
 
 ## Related
 

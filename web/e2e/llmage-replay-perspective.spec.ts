@@ -108,8 +108,8 @@ function replayLoadRelay(): LlmageScenarioOptions['onVerb'] {
 /** The own (bottom) and opponent seat names the board is currently painting. */
 async function renderedSides(page: import('@playwright/test').Page): Promise<{ own: string | null; opp: string | null }> {
   return page.evaluate(() => ({
-    own: document.querySelector('.game-board > .player-zone')?.getAttribute('data-player-name') ?? null,
-    opp: document.querySelector('.game-board > .opponent-zone')?.getAttribute('data-player-name') ?? null,
+    own: document.querySelector('.board-shell > .player-zone')?.getAttribute('data-player-name') ?? null,
+    opp: document.querySelector('.board-shell .opponent-zone')?.getAttribute('data-player-name') ?? null,
   }))
 }
 
@@ -128,7 +128,7 @@ test('replay "view as": the default auto-pick renders, and picking the other sea
     await expect(page.locator('[data-testid="game-status"]')).toBeVisible({ timeout: 10_000 })
 
     // 2) the default perspective is the auto-pick: Alice own, Bob opponent.
-    await expect(page.locator('.game-board > .player-zone[data-player-name="Alice"]')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.board-shell > .player-zone[data-player-name="Alice"]')).toBeVisible({ timeout: 10_000 })
     expect(await renderedSides(page)).toEqual({ own: 'Alice', opp: 'Bob' })
 
     // 3) the chrome offers one "view as" button per seat; the auto-picked Alice
@@ -144,7 +144,7 @@ test('replay "view as": the default auto-pick renders, and picking the other sea
 
     // 4) picking the other seat SWAPS which side renders as own.
     await bob.click()
-    await expect(page.locator('.game-board > .player-zone[data-player-name="Bob"]')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.board-shell > .player-zone[data-player-name="Bob"]')).toBeVisible({ timeout: 10_000 })
     expect(await renderedSides(page)).toEqual({ own: 'Bob', opp: 'Alice' })
     await expect(bob).toHaveAttribute('aria-pressed', 'true')
     await expect(alice).toHaveAttribute('aria-pressed', 'false')

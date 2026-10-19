@@ -47,6 +47,11 @@ const timeout = (ms, label) =>
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/** A check that already failed and printed its FAIL line: unwind through the finally (which
+ *  removes the tournament table) instead of calling process.exit, which used to skip the
+ *  cleanup and leave the AI games of the bracket running for the rest of the layer. */
+class Stop extends Error {}
+
 async function main() {
   console.log(`[tournament-watch] conectando a ${WS_URL} como ${USER}…`)
 
@@ -114,8 +119,7 @@ async function main() {
       timeout(15000, 'resultado de connect'),
     ])
     if (!check('connect/login', !!res.ok, `lastError='${res.error ?? ''}'`)) {
-      ws.close()
-      process.exit(1)
+      throw new Stop('check falló')
     }
 
     // Constructed Elimination: sin draft ni construcción, arranca directo al run.
@@ -139,8 +143,7 @@ async function main() {
     ])
     tableId = res.ok ? (res.data?.tableId ?? null) : null
     if (!check('createTournamentTable', !!tableId, res.ok ? `tableId=${String(tableId).slice(0, 8)}…` : (res.error ?? ''))) {
-      ws.close()
-      process.exit(1)
+      throw new Stop('check falló')
     }
 
     for (let i = 0; i < 2; i++) {
@@ -155,15 +158,13 @@ async function main() {
         timeout(15000, `joinTournamentTable #${i + 1}`),
       ])
       if (!check(`joinTournamentTable IA ${i + 1}`, !!res.ok, res.error ?? '')) {
-        ws.close()
-        process.exit(1)
+        throw new Stop('check falló')
       }
     }
 
     res = await Promise.race([send('startTournament', { tableId }), timeout(20000, 'startTournament')])
     if (!check('startTournament (owner)', !!res.ok, res.error ?? '')) {
-      ws.close()
-      process.exit(1)
+      throw new Stop('check falló')
     }
 
     // Watch de la tabla torneo -> SHOW_TOURNAMENT (objectId = tournamentId).
@@ -171,8 +172,7 @@ async function main() {
     const showEvP = waitEvent((m) => m.method === 'SHOW_TOURNAMENT', 'SHOW_TOURNAMENT', 20000)
     res = await Promise.race([send('watchTournamentTable', { tableId }), timeout(15000, 'watchTournamentTable (torneo)')])
     if (!check('watchTournamentTable (tabla torneo)', !!res.ok, res.error ?? '')) {
-      ws.close()
-      process.exit(1)
+      throw new Stop('check falló')
     }
     let tournamentId = null
     try {
@@ -183,8 +183,7 @@ async function main() {
       check('evento SHOW_TOURNAMENT recibido', false, e.message)
     }
     if (!tournamentId) {
-      ws.close()
-      process.exit(1)
+      throw new Stop('check falló')
     }
 
     // Poll del bracket hasta que haya un match vivo (mismo dato que pinta el ojo).
@@ -206,8 +205,7 @@ async function main() {
       if (!matchTableId) await sleep(500)
     }
     if (!check('match vivo en el bracket', !!matchTableId, matchTableId ? `matchTable=${String(matchTableId).slice(0, 8)}…` : 'sin Dueling en 60s')) {
-      ws.close()
-      process.exit(1)
+      throw new Stop('check falló')
     }
 
     // El ojo del bracket: watchTournamentTable(matchTableId) -> WATCHGAME.
@@ -226,8 +224,7 @@ async function main() {
       }
     }
     if (!check('evento WATCHGAME del match recibido', !!ev, res.error ?? '')) {
-      ws.close()
-      process.exit(1)
+      throw new Stop('check falló')
     }
     gameId = ev.objectId ?? gameId
     const initEv = waitEvent((m) => m.method === 'GAME_INIT' && (!gameId || m.objectId === gameId), 'GAME_INIT', 30000)
@@ -241,7 +238,9 @@ async function main() {
       check('GAME_INIT con tablero', false, e.message)
     }
   } catch (e) {
-    check('flujo global', false, e.message)
+    // Stop: the failing check already printed its FAIL line; keep unwinding so the finally
+    // removes the bracket's table (process.exit used to skip it and leave AI games running).
+    if (!(e instanceof Stop)) check('flujo global', false, e.message)
   } finally {
     // Higiene: la tabla torneo huérfana deja IAs jugando y degrada el servidor
     // (maxGameThreads=10); si falla, node scripts/clean-tables.mjs <usuario>.

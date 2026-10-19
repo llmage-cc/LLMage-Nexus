@@ -16,9 +16,9 @@
 // Requiere: servidor local (testMode) + proxy (node scripts/ctl.mjs status),
 // con el parche de GameSessionWatcher/GameController compilado.
 //
-// Evidencia de docs/history/plan4.md §3.11 "Espectar partida y torneo" (2026-09-17).
+// Covers the spectator end-of-game path: a watcher receives END_GAME_INFO, not only GAME_OVER.
 
-import { wsConn } from './lib.mjs'
+import { startingPlayerTargetId, wsConn } from './lib.mjs'
 
 const WS_URL = 'ws://127.0.0.1:8787'
 const SERVER_HOST = 'localhost'
@@ -91,6 +91,11 @@ function mkConn(name, { autoAnswer = false } = {}) {
         return
       }
       if (m.method === 'GAME_TARGET') {
+        const starting = startingPlayerTargetId(m)
+        if (starting) {
+          sendUuid(conn, starting)
+          return
+        }
         if (/discard/i.test(q)) {
           const pt = d.options?.possibleTargets ?? d.targets ?? []
           const id = Array.isArray(pt) ? (typeof pt[0] === 'string' ? pt[0] : pt[0]?.id) : Object.keys(pt)[0]
@@ -186,6 +191,11 @@ async function main() {
       await Promise.race([endS, timeout(45000, 'END_GAME_INFO (espectador)')])
     } catch (e) {
       check('el ESPECTADOR recibe END_GAME_INFO', false, e.message)
+      // Evidencia para el informe: el espectador sí recibe GAME_OVER (GameSessionWatcher.gameOver)
+      // pero nunca END_GAME_INFO, porque GameController.endGameInfo() solo recorre getGameSessions().
+      const methods = S.events.map((ev) => ev.method).filter((m, i, a) => a.indexOf(m) === i)
+      console.log(`  evidencia: frames del espectador = [${methods.join(', ')}]`)
+      console.log(`  evidencia: GAME_OVER=${S.events.some((ev) => ev.method === 'GAME_OVER')} END_GAME_INFO=${S.events.some((ev) => ev.method === 'END_GAME_INFO')}`)
       return
     }
     try {
@@ -229,11 +239,14 @@ async function main() {
     try { await S?.call('disconnect', {}, 3000) } catch { /* noop */ }
     P?.close()
     S?.close()
-  }
 
-  console.log('')
-  console.log(`[spectator-end] RESULTADO: ${failCount === 0 ? 'TODO PASS' : `${failCount} FALLOS`} (${passCount} pass, ${failCount} fail)`)
-  process.exit(failCount === 0 ? 0 : 1)
+    // The summary and the exit code must run on every path: the early `return`s above
+    // used to skip the block after the try/finally and the script exited 0 while printing
+    // FAIL. Keep the teardown first so the sockets are closed before process.exit.
+    console.log('')
+    console.log(`[spectator-end] RESULTADO: ${failCount === 0 ? 'TODO PASS' : `${failCount} FALLOS`} (${passCount} pass, ${failCount} fail)`)
+    process.exit(failCount === 0 ? 0 : 1)
+  }
 }
 
 await main()

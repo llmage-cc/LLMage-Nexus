@@ -41,7 +41,7 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { isAlive, readPid } from './lib.mjs'
+import { isAlive, readPid, startingPlayerTargetId } from './lib.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(path.join(ROOT, 'web', 'package.json'))
@@ -118,9 +118,14 @@ function mkConn(label) {
       })
 
     conn.answer = (m) => {
-      const gameId = conn.gameId
+      // The starting-player prompt arrives before START_GAME, so the game id may still be
+      // empty here: take it from the callback itself. A boolean is not a valid answer and
+      // the server would re-ask it forever (game stuck on turn 1).
+      const gameId = conn.gameId ?? (m.objectId ? String(m.objectId) : null)
       const d = m.data ?? {}
       const q = String(d.message ?? '')
+      const starting = startingPlayerTargetId(m)
+      if (starting) return conn.call('sendPlayerUUID', { gameId, value: starting })
       if (m.method === 'GAME_TARGET' && /discard/i.test(q)) {
         const pt = d.options?.possibleTargets ?? d.targets ?? []
         const id = Array.isArray(pt) ? (typeof pt[0] === 'string' ? pt[0] : pt[0]?.id) : Object.keys(pt)[0]
@@ -155,7 +160,11 @@ function mkConn(label) {
         conn.lastViewAt = Date.now()
       }
       conn.events.push({ at: Date.now(), msg: m })
-      if (conn.answering && conn.gameId && m.objectId === conn.gameId && PROMPTS.has(m.method)) void conn.answer(m)
+      // The starting-player GAME_TARGET arrives before START_GAME, when conn.gameId is
+      // still empty; answer it from the callback's own objectId or the game never starts.
+      if (conn.answering && PROMPTS.has(m.method) && (startingPlayerTargetId(m) || (conn.gameId && m.objectId === conn.gameId))) {
+        void conn.answer(m)
+      }
       for (let i = waiters.length - 1; i >= 0; i--) if (waiters[i](m)) waiters.splice(i, 1)
     })
   })
@@ -384,8 +393,13 @@ const SIM_DECK = {
 
 async function startSimGame() {
   const C = await mkConn('C')
+  const bail = async () => {
+    await C.call('disconnect', {}, 3000).catch(() => {})
+    C.ws.close()
+    return null
+  }
   let res = await C.call('connect', { host: SERVER_HOST, port: SERVER_PORT, username: USER_C, password: 'x' })
-  if (!check('[sim] login C', !!res.ok, res.error ?? '')) return null
+  if (!check('[sim] login C', !!res.ok, res.error ?? '')) return bail()
   res = await C.call('createTable', {
     name: `reconnect-sim-${STAMP}`,
     gameType: 'Two Player Duel',
@@ -397,16 +411,16 @@ async function startSimGame() {
     skipStartingPlayerChoice: true,
   })
   const tableId = res.ok ? (res.data?.tableId ?? res.data?.table?.tableId ?? null) : null
-  if (!check('[sim] createTable HUMAN vs SIM', !!tableId, res.error ?? '')) return null
+  if (!check('[sim] createTable HUMAN vs SIM', !!tableId, res.error ?? '')) return bail()
   res = await C.call('joinTable', { tableId, playerName: USER_C, playerType: 'HUMAN', skill: 1, deck: HUMAN_DECK })
-  if (!check('[sim] joinTable C', !!res.ok, res.error ?? '')) return null
+  if (!check('[sim] joinTable C', !!res.ok, res.error ?? '')) return bail()
   const start = C.wait((m) => m.method === 'START_GAME', 30000, 'START_GAME C')
   res = await C.call('startMatch', { tableId })
-  if (!check('[sim] startMatch', !!res.ok, res.error ?? '')) return null
+  if (!check('[sim] startMatch', !!res.ok, res.error ?? '')) return bail()
   const gameId = String((await start).objectId)
   C.gameId = gameId
   await C.call('joinGame', { gameId })
-  if (!check('[sim] the SIM game reached turn >= 2', (await waitAdvance([C], 1, 90000)) >= 2, `turn=${C.maxTurn}`)) return null
+  if (!check('[sim] the SIM game reached turn >= 2', (await waitAdvance([C], 1, 90000)) >= 2, `turn=${C.maxTurn}`)) return bail()
   C.answering = false
   return { C, gameId, tableId }
 }
@@ -432,15 +446,23 @@ async function simAfterRestart(sim, logOffset) {
   C.answering = false
   await C.call('quitMatch', { gameId: sim.gameId })
   await C.call('removeTable', { tableId: sim.tableId })
+  await C.call('disconnect', {}, 3000).catch(() => {})
   C.ws.close()
 }
 
 async function startDuel(labelA, userA, labelB, userB) {
   const A = await mkConn(labelA)
   const B = await mkConn(labelB)
+  const bail = async () => {
+    for (const c of [A, B]) {
+      await c.call('disconnect', {}, 3000).catch(() => {})
+      try { c.ws.close() } catch { /* noop */ }
+    }
+    return null
+  }
   for (const [c, user] of [[A, userA], [B, userB]]) {
     const r = await c.call('connect', { host: SERVER_HOST, port: SERVER_PORT, username: user, password: 'x' })
-    if (!check(`login ${c.label}`, !!r.ok, r.error ?? '')) return null
+    if (!check(`login ${c.label}`, !!r.ok, r.error ?? '')) return bail()
   }
   let res = await A.call('createTable', {
     name: `reconnect-${labelA}-${STAMP}`,
@@ -452,15 +474,15 @@ async function startDuel(labelA, userA, labelB, userB) {
     skipStartingPlayerChoice: true,
   })
   const tableId = res.ok ? (res.data?.tableId ?? res.data?.table?.tableId ?? null) : null
-  if (!check(`createTable ${labelA} vs ${labelB}`, !!tableId, res.error ?? '')) return null
+  if (!check(`createTable ${labelA} vs ${labelB}`, !!tableId, res.error ?? '')) return bail()
   for (const [c, user] of [[A, userA], [B, userB]]) {
     res = await c.call('joinTable', { tableId, playerName: user, playerType: 'HUMAN', skill: 1, deck: HUMAN_DECK })
-    if (!check(`joinTable ${c.label}`, !!res.ok, res.error ?? '')) return null
+    if (!check(`joinTable ${c.label}`, !!res.ok, res.error ?? '')) return bail()
   }
   const startA = A.wait((m) => m.method === 'START_GAME', 30000, `START_GAME ${labelA}`)
   const startB = B.wait((m) => m.method === 'START_GAME', 30000, `START_GAME ${labelB}`)
   res = await A.call('startMatch', { tableId })
-  if (!check(`startMatch ${labelA} vs ${labelB}`, !!res.ok, res.error ?? '')) return null
+  if (!check(`startMatch ${labelA} vs ${labelB}`, !!res.ok, res.error ?? '')) return bail()
   const gameId = String((await startA).objectId)
   await startB
   A.gameId = gameId
@@ -495,6 +517,7 @@ async function leavePhase() {
   G.answering = false
   await G.call('quitMatch', { gameId })
   await G.call('removeTable', { tableId })
+  await G.call('disconnect', {}, 3000).catch(() => {})
   G.ws.close()
 }
 
@@ -581,8 +604,12 @@ async function cleanup(A, B, tableId) {
     await c.call('quitMatch', { gameId: c.gameId })
   }
   await A.call('removeTable', { tableId })
-  A.ws.close()
-  B.ws.close()
+  // Log out before dropping the sockets: a bare close keeps both XMage sessions (and their
+  // SIM seats) in the proxy's 180 s grace, which is what degraded the scripts that ran next.
+  for (const c of [A, B]) {
+    await c.call('disconnect', {}, 3000).catch(() => {})
+    c.ws.close()
+  }
 }
 
 try {

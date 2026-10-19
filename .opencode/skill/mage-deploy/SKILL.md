@@ -152,5 +152,5 @@ Piezas:
   antes de los self-tests.
 - **Trampa `releases/latest`**: el repo comparte releases con el fork (los `engine-*.tar.gz` del motor se publican como `engine-1.4.62-v1` en este mismo repo). El updater apunta a `releases/latest/download/latest.json`: si un release del motor queda como «latest», la URL da 404 y el launcher degrada (check falla y sigue). Al publicar un release del producto, verifica `gh release edit <tag> --latest` y que
   `curl -sL https://github.com/Adamychen/xmage-nexus/releases/latest/download/latest.json` responda JSON con las 3 plataformas (el CDN puede tardar unos minutos en soltar el 302 viejo).
-- No redistribuir sin revisar licencias (JRE + motor XMage) y sin decidir el modelo de
-  distribución (plan4 §10).
+- Do not redistribute without reviewing the licences (JRE + XMage engine) or deciding the
+  distribution model.

@@ -461,6 +461,28 @@ export function logFileFor(component) {
 }
 
 /**
+ * Player id offered by the engine's "Select a starting player" GAME_TARGET, or null.
+ *
+ * GameImpl.startGame() always asks the choosing player for a TargetPlayer before the
+ * first turn; the answer must be a player UUID (a boolean is an invalid answer and the
+ * server keeps the game at turn 1, re-asking the prompt). MatchOptions has
+ * skipStartingPlayerChoice only as a getter/setter in 1.4.62 — nothing reads it — so
+ * every script that auto-answers GAME_TARGET has to answer this one explicitly.
+ */
+export function startingPlayerTargetId(m) {
+  if (m?.method !== 'GAME_TARGET') return null
+  const q = String(m.data?.message ?? m.data?.question ?? '')
+  if (!/starting player/i.test(q)) return null
+  const ids = (v) =>
+    Array.isArray(v)
+      ? v.map((o) => (typeof o === 'string' ? o : o?.id)).filter(Boolean)
+      : v && typeof v === 'object'
+        ? Object.keys(v)
+        : []
+  return [...ids(m.data?.targets), ...ids(m.data?.options?.possibleTargets)][0] ?? null
+}
+
+/**
  * Minimal WebSocket client for the proxy JSON protocol, shared by the verify
  * scripts: `call(action, args, ms)` matches the `result` by its echoed
  * requestId (resolving { ok: false, error: 'timeout' } on expiry),

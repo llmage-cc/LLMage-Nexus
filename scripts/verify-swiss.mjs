@@ -14,8 +14,7 @@
 // Uso: node scripts/verify-swiss.mjs
 // Requiere: servidor local (testMode) + proxy (node scripts/ctl.mjs status).
 //
-// Evidencia de docs/history/plan4.md §3.11 "Suizo | 4+ jugadores | Emparejamientos,
-// standings" (2026-09-17).
+// Covers Swiss pairings and standings with 4+ players.
 
 const WS_URL = 'ws://127.0.0.1:8787'
 const SERVER_HOST = 'localhost'
@@ -292,11 +291,13 @@ async function main() {
     } catch {
       /* noop */
     }
-  }
 
-  console.log('')
-  console.log(`[swiss] RESULTADO: ${failCount === 0 ? 'TODO PASS' : `${failCount} FALLOS`} (${passCount} pass, ${failCount} fail)`)
-  process.exit(failCount === 0 ? 0 : 1)
+    // Same reason as hand-permission: every early `return` in the try lands here, so the
+    // summary and the exit code must live in the finally or a failed check exits 0.
+    console.log('')
+    console.log(`[swiss] RESULTADO: ${failCount === 0 ? 'TODO PASS' : `${failCount} FALLOS`} (${passCount} pass, ${failCount} fail)`)
+    process.exit(failCount === 0 ? 0 : 1)
+  }
 }
 
 await main()

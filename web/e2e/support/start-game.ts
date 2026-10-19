@@ -129,15 +129,16 @@ export interface CreateTableOptions {
 
 /** Pick a deck by name in the wizard selects: the option values now carry the
  *  stable reference (id) and the name in the label. */
-async function selectDeckOption(select: Locator, deckName: string): Promise<void> {
-  const value = await select.evaluate((el, name) => {
-    const options = [...(el as HTMLSelectElement).options]
-    const withCount = options.find((o) => (o.textContent ?? '').startsWith(`${name} (`))
-    const exact = options.find((o) => (o.textContent ?? '').trim() === name)
-    return withCount?.value ?? exact?.value ?? ''
-  }, deckName)
-  if (!value) throw new Error(`Cannot find the deck option "${deckName}" in the wizard`)
-  await select.selectOption(value)
+/** Format fields open the gallery: open the trigger and double-click the tile or mode chip whose value is `option`. */
+export async function pickFormatOption(page: Page, field: 'format-game-type' | 'format-deck-type', option: string): Promise<void> {
+  await page.getByTestId(field).click()
+  await page.locator(`.fg-body [data-value="${option}"]`).dblclick()
+}
+
+async function selectDeckCard(carousel: Locator, deckName: string): Promise<void> {
+  const card = carousel.getByRole('radio', { name: deckName })
+  if (await card.count() === 0) throw new Error(`Cannot find the deck "${deckName}" in the wizard carousel`)
+  await card.click()
 }
 
 export async function createTable(page: Page, tableName: string, opts: CreateTableOptions = {}): Promise<void> {
@@ -147,31 +148,32 @@ export async function createTable(page: Page, tableName: string, opts: CreateTab
 
   if (opts.winsNeeded && opts.winsNeeded > 1) {
     if (opts.winsNeeded === 2) {
-      await page.getByRole('button', { name: /^Bo3/i }).click()
+      await page.getByRole('tab', { name: /^Bo3/i }).click()
     } else if (opts.winsNeeded === 3) {
-      await page.getByRole('button', { name: /^Bo5/i }).click()
+      await page.getByRole('tab', { name: /^Bo5/i }).click()
     }
   }
 
     if (opts.deckType) {
-      await page.getByLabel(/Formato/i).selectOption({ value: opts.deckType })
+      await pickFormatOption(page, 'format-deck-type', opts.deckType)
     }
     if (opts.deck || opts.simDeck || !FAKE_MODE) {
       // wizard step (2026-09 redesign): "🤖 Multiplayer" (scoped to the
       // wizard-step: the "Commander / Multiplayer" mode card matches too)
       await page.locator('button.wizard-step', { hasText: /Multijugador/i }).click()
       if (opts.deck) {
-        await selectDeckOption(page.getByLabel(/Mazo activo/i), opts.deck)
+        await selectDeckCard(page.getByRole('radiogroup', { name: /Mazo activo|Active deck/i }), opts.deck)
       }
       if (!FAKE_MODE) {
         // The proxy's SIM bot is dev-only and the client no longer offers it:
         // real-backend specs opt for the server's native Mad AI (the same
         // source self-test/human-test use over a direct WS).
-        const seatType = page.getByTestId('seat-type-0')
-        if (await seatType.isVisible().catch(() => false)) {
-          await seatType.selectOption({ value: 'COMPUTER_MAD' })
+        const firstOpponent = page.getByTestId('seat-node-1')
+        if (await firstOpponent.isVisible().catch(() => false)) {
+          await firstOpponent.click()
+          await page.getByRole('radio', { name: /Mad/ }).click()
           if (opts.simDeck) {
-            await selectDeckOption(page.getByLabel(/Mazo plaza 2|Seat 2 deck/i), opts.simDeck)
+            await selectDeckCard(page.getByRole('radiogroup', { name: /Mazo plaza 2|Seat 2 deck/i }), opts.simDeck)
           }
         }
       }
@@ -236,7 +238,12 @@ export async function startMatch(page: Page, tableName: string): Promise<void> {
   // The lobby can jump to staging on join: start from there.
   const stagingStart = page.getByTestId('staging-start')
   const row = page.locator('.table-row', { hasText: tableName }).first()
-  const startButton = row.getByRole('button', { name: /Empezar|Iniciar Partida|Start/i })
+  // The active-table strip carries the start button in its top band, not on the card.
+  const activeStrip = page.locator('.active-table-strip', { hasText: tableName })
+  const startButton = row
+    .getByRole('button', { name: /Empezar|Iniciar Partida|Start/i })
+    .or(activeStrip.getByTestId('btn-start'))
+    .first()
   await expect(async () => {
     if (await stagingStartReady(page)) return
     await dismissStaging(page)

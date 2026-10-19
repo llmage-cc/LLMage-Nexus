@@ -41,9 +41,6 @@
   "src/game/attentionAlerts.ts": {
     "react-hooks(exhaustive-deps)": 1
   },
-  "src/game/CommanderDamageMatrix.tsx": {
-    "react-hooks(exhaustive-deps)": 1
-  },
   "src/game/ConstructScreen.tsx": {
     "react-hooks(exhaustive-deps)": 5
   },
@@ -92,7 +89,6 @@
   "src/lobby/CreateTable/useCreateTableForm.ts": {
     "react-hooks(exhaustive-deps)": 3
   },
-  "src/lobby/CreateTable/useDeckChoices.ts": {},
   "src/lobby/JoinTableDialog.tsx": {
     "react-hooks(exhaustive-deps)": 1
   },

@@ -160,6 +160,34 @@ async function stackReady() {
 }
 
 /**
+ * The E2E layers (self-test/human-test/warmup) leave their last XMage sessions in the proxy's
+ * 180 s grace period when they close a socket; while those expire, every callback to them
+ * stalls the server and the verify scripts that run right after fail with "no views" or a
+ * WATCHGAME that never arrives. They now log out, and this waits (bounded) for the proxy to
+ * report zero sessions before the verify layer starts, so a slow grace period cannot leak
+ * into the assertions of the next script.
+ */
+async function waitForSessionsDrained(timeoutMs = 200_000) {
+  const deadline = Date.now() + timeoutMs
+  let waited = false
+  while (Date.now() < deadline) {
+    const health = await proxyHttp('/health')
+    const sessions = health?.sessions ?? 0
+    if (sessions === 0) {
+      if (waited) log('proxy sin sesiones: la capa verify arranca limpia')
+      return true
+    }
+    if (!waited) {
+      log(`esperando a que el proxy cierre ${sessions} sesión(es) de la capa anterior (grace 180 s)…`)
+      waited = true
+    }
+    await new Promise((r) => setTimeout(r, 3000))
+  }
+  logError(`el proxy sigue con sesiones abiertas tras ${timeoutMs / 1000}s; la capa verify puede degradarse`)
+  return false
+}
+
+/**
  * Runs one verify script and prints its own last line (they all end with a RESULTADO summary),
  * so a failure in the middle of the layer is attributable without digging into the log.
  */
@@ -298,12 +326,22 @@ async function main() {
           res = { code: 1, stdout: '', stderr: STACK_HINT }
           break
         }
+        await waitForSessionsDrained()
         const failed = []
+        const details = []
         for (const file of VERIFY_SCRIPTS) {
-          if (runVerifyScript(file).code !== 0) failed.push(file)
+          const r = runVerifyScript(file)
+          if (r.code !== 0) {
+            failed.push(file)
+            // Keep the script's own FAIL lines (and its RESULTADO/timeout lines): the layer
+            // used to report only the last line, which hid the first failing assertion.
+            const lines = `${r.stdout}\n${r.stderr}`.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+            const meaningful = lines.filter((l) => /\bFAIL\b|RESULTADO|FALLOS|Error|timeout/i.test(l))
+            details.push(`${file}:\n${(meaningful.length ? meaningful.slice(0, 8) : lines.slice(-4)).map((l) => `    ${l}`).join('\n')}`)
+          }
         }
         res = failed.length
-          ? { code: 1, stdout: '', stderr: `${failed.length} de ${VERIFY_SCRIPTS.length} verify scripts fallaron: ${failed.join(', ')}` }
+          ? { code: 1, stdout: '', stderr: `${failed.length} de ${VERIFY_SCRIPTS.length} verify scripts fallaron: ${failed.join(', ')}\n${details.join('\n')}` }
           : { code: 0, stdout: '', stderr: '' }
         break
       }
@@ -341,7 +379,7 @@ async function main() {
       const lines = `${res.stderr ?? ''}\n${res.stdout ?? ''}`.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
       if (lines.length) {
         console.log('  salida de error:')
-        lines.slice(-12).forEach((l) => console.log(`    ${l}`))
+        lines.slice(-20).forEach((l) => console.log(`    ${l}`))
       }
     }
   }

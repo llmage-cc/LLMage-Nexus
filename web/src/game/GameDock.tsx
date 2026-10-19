@@ -69,10 +69,11 @@ export function useDockOffset(wrapRef: RefObject<HTMLElement | null>, deps: read
 
 interface GameDockProps {
   action: ReactNode
+  rewind?: ReactNode
   onPromptSlot: (el: HTMLElement | null) => void
 }
 
-export default function GameDock({ action, onPromptSlot }: GameDockProps) {
+export default function GameDock({ action, rewind = null, onPromptSlot }: GameDockProps) {
   // With a read-only viewer open (card inspector z 12000, stack/revealed/
   // companion viewers z 100, both in the body-level overlayRoot) the non-modal
   // confirmation used to paint underneath — and it is the turn's only exit:
@@ -92,7 +93,14 @@ export default function GameDock({ action, onPromptSlot }: GameDockProps) {
       data-prompt-above-modal={hasQuietViewer || undefined}
     >
       <div className="game-dock-prompt" ref={onPromptSlot} />
-      {action}
+      <div className="game-dock-row">
+        {rewind && (
+          <div className="game-dock-rewind" data-testid="game-dock-rewind">
+            {rewind}
+          </div>
+        )}
+        {action}
+      </div>
     </div>
   )
 }

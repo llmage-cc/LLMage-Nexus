@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { GameTypeInfo, P1DeckEntry } from '../../net/commands'
 import type { Deck } from '../decks'
-import type { CreateTab, DraftTiming, SeatConfig, TableCategory, TournamentCategory, WizardStep } from './constants'
+import type { CreateKind, CreateTab, DraftTiming, SeatConfig, TableCategory, TournamentCategory, WizardStep } from './constants'
 
 /**
  * Lifecycle of the once-per-open COMPUTER_P1 training-deck pool fetch:
@@ -13,6 +13,7 @@ export type P1PoolStatus = 'loading' | 'ready' | 'error'
 
 /** Everything the Create Table wizard tabs read and change (see `useCreateTableForm`). */
 export interface CreateTableForm {
+  kind: CreateKind
   wizardSteps: WizardStep[]
   activeTab: CreateTab
   setActiveTab: (t: CreateTab) => void
@@ -26,7 +27,6 @@ export interface CreateTableForm {
   setTableCategory: (v: TableCategory) => void
   tournamentCategory: TournamentCategory
   setTournamentCategory: (v: TournamentCategory) => void
-  applyMode: (cat: TableCategory) => void
   applyPreset: (key: string) => void
   /**
    * One-click all-bot LLM duel: creator becomes a spectator and both seats are
@@ -161,6 +161,7 @@ export interface CreateTableForm {
   compatibilityError: string | null
   validateStep: (tab: CreateTab) => string | null
   submit: () => Promise<void>
+  resetToDefaults: () => void
   runDemoTable: () => Promise<void>
   /**
    * Cancel: discards the persisted draft (so an explored preset does not

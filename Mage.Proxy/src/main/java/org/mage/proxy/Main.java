@@ -54,9 +54,18 @@ public class Main {
                     + (deployment.hideServerTarget() ? " (hidden from clients)" : ""));
         }
 
-        startHttpServer(config, gateway, deployment);
+        StatsService stats = config.isStatsServiceEnabled() ? StatsService.forProxy(config, gateway) : null;
+        if (stats != null) {
+            stats.start();
+            System.out.println("[proxy]   statistics API    : /api/ranking, /api/matches (session as " + StatsService.USERNAME + ")");
+        }
+
+        startHttpServer(config, gateway, stats, deployment);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (stats != null) {
+                stats.stop();
+            }
             for (ProxyClient pc : gateway.getSessions()) {
                 pc.shutdown();
             }
@@ -67,7 +76,7 @@ public class Main {
         }));
     }
 
-    private static void startHttpServer(Config config, Gateway gateway, DeploymentConfig deployment) throws IOException {
+    private static void startHttpServer(Config config, Gateway gateway, StatsService stats, DeploymentConfig deployment) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(config.getBindAddress(), config.getHttpPort()), 0);
         // Without an executor the JDK uses a single-threaded dispatcher, so one slow
         // /admin/status (it serialises 500 events) or one large static file blocked every other
@@ -85,6 +94,8 @@ public class Main {
         // deployment name). Cache-Control: no-store so a restarted proxy's new config is never
         // served stale from a browser cache.
         server.createContext("/config", exchange -> serveConfig(exchange, deployment));
+        StatsApi.Source source = stats != null ? stats : StatsApi.UNAVAILABLE;
+        server.createContext("/api/", exchange -> serveStats(exchange, source, config.getAllowedOrigins()));
         if (!config.getAdminToken().isEmpty()) {
             server.createContext("/admin/status", exchange -> serveAdmin(exchange, gateway, config.getAdminToken()));
         }
@@ -99,6 +110,29 @@ public class Main {
         // control is the gate). Strict UUID-name allowlist + canonical containment, see ReplayFileDownload.
         server.createContext(ReplayFileDownload.ROUTE_PREFIX, new ReplayFileDownload(config.getReplayDir()));
         server.start();
+    }
+
+    /** The public statistics API: routing and CORS live in {@link StatsApi}, this only writes the result. */
+    private static void serveStats(HttpExchange exchange, StatsApi.Source source, java.util.Set<String> allowedOrigins) {
+        try {
+            java.net.URI uri = exchange.getRequestURI();
+            StatsApi.Response response = StatsApi.handle(exchange.getRequestMethod(), uri.getPath(),
+                    uri.getRawQuery(), exchange.getRequestHeaders().getFirst("Origin"), allowedOrigins, source);
+            for (java.util.Map.Entry<String, String> header : response.headers.entrySet()) {
+                exchange.getResponseHeaders().add(header.getKey(), header.getValue());
+            }
+            byte[] bytes = response.body == null ? null
+                    : response.body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(response.status, bytes == null ? -1 : bytes.length);
+            if (bytes != null) {
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(bytes);
+                }
+            }
+        } catch (IOException ignored) {
+        } finally {
+            exchange.close();
+        }
     }
 
     /**
@@ -297,14 +331,16 @@ public class Main {
      * Fingerprinted build assets may be cached forever; {@code index.html} and the splash may not,
      * or a deploy would keep serving the old client.
      */
+    static final String CONTENT_SECURITY_POLICY =
+            "default-src 'self'; connect-src 'self' ws: wss: http: https:; "
+                    + "img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; "
+                    + "script-src 'self'; media-src 'self' data: blob:";
+
     private static void applySecurityHeaders(HttpExchange exchange, String name) {
         exchange.getResponseHeaders().add("X-Content-Type-Options", "nosniff");
         exchange.getResponseHeaders().add("X-Frame-Options", "DENY");
         exchange.getResponseHeaders().add("Referrer-Policy", "same-origin");
-        exchange.getResponseHeaders().add("Content-Security-Policy",
-                "default-src 'self'; connect-src 'self' ws: wss: http: https:; "
-                        + "img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; "
-                        + "script-src 'self' 'unsafe-inline'; media-src 'self' data: blob:");
+        exchange.getResponseHeaders().add("Content-Security-Policy", CONTENT_SECURITY_POLICY);
         if (isFingerprinted(name)) {
             exchange.getResponseHeaders().add("Cache-Control", "public, max-age=31536000, immutable");
         } else {

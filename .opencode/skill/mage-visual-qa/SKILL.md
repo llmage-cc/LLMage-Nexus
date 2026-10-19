@@ -57,8 +57,8 @@ description: QA visual y UX: MCP Playwright (snapshot para actuar + screenshot p
   devuelvas el dash sin resolver antes esa fase.
 - `maxDiffPixels: 1200` queda como margen del AA del marcador; no lo bajes sin
   repetir la medición (regresiones reales >2 500 px).
-- Pendiente (plan4): cablear la matriz en CI (necesita baselines Linux,
-  `playwright install --with-deps webkit`) y la revisión de `solo teclado`.
+- Pending: wire the matrix into CI (needs Linux baselines,
+  `playwright install --with-deps webkit`) and the keyboard-only review.
 - Capturas de verificación humana: `web/e2e/fixtures.ts` (`autoShot`, fullPage, sufijo
   `-FAILED`) en `web/e2e/shots/` (gitignored); varios specs escriben PNG propios.
 
@@ -98,5 +98,5 @@ description: QA visual y UX: MCP Playwright (snapshot para actuar + screenshot p
   sidebar dev: no es bug real.
 - Puertos aislados (fake 5175/8789, real 5173/8787): no compartir; el fake usa FakeServer, no
   el proxy.
-- Hallazgos UX abiertos de plan4 (§5): revisar `docs/history/plan4.md`, `docs/history/qa/p5-1-prompt-checklist.md` y
-  `docs/history/qa/p5-2-heuristic-findings.md` antes de dar por cerrada una auditoría.
+- Open UX findings: review `docs/history/qa/p5-1-prompt-checklist.md` and
+  `docs/history/qa/p5-2-heuristic-findings.md` before closing an audit.

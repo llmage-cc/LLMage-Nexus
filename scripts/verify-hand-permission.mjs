@@ -6,7 +6,7 @@
 // Uso: node scripts/verify-hand-permission.mjs
 // Requiere: servidor local (testMode) + proxy (node scripts/ctl.mjs status).
 
-import { repoRoot } from './lib.mjs'
+import { repoRoot, startingPlayerTargetId } from './lib.mjs'
 
 const WS_URL = 'ws://127.0.0.1:8787'
 const SERVER_HOST = 'localhost'
@@ -20,8 +20,8 @@ const STARTER_DECK = {
   cards: [
     { cardName: 'Plains', setCode: 'LEA', cardNumber: '286', amount: 12 },
     { cardName: 'Island', setCode: 'LEA', cardNumber: '288', amount: 12 },
-    { cardName: 'Silvercoat Lion', setCode: 'M10', cardNumber: '36', amount: 12 },
-    { cardName: 'Giant Growth', setCode: 'LEA', cardNumber: '202', amount: 12 },
+    { cardName: 'Silvercoat Lion', setCode: 'M10', cardNumber: '32', amount: 12 },
+    { cardName: 'Giant Growth', setCode: 'LEA', cardNumber: '197', amount: 12 },
     { cardName: 'Lightning Bolt', setCode: 'M10', cardNumber: '146', amount: 12 },
   ],
   sideboard: [],
@@ -131,7 +131,18 @@ function makeConn(tag) {
       return false
     })
   }
-  return { ws, send, waitEvent, opened, autoPlay }
+  return { ws, send, waitEvent, opened, autoPlay, autoStart }
+
+  // The engine's starting-player GAME_TARGET arrives BEFORE GAME_INIT, so autoPlay (which
+  // needs myPlayerId from the init view) is too late to answer it. Register this before
+  // startMatch: the game thread blocks in choose() until the prompt gets a player UUID.
+  function autoStart() {
+    waiters.push((ev) => {
+      const id = startingPlayerTargetId(ev)
+      if (id) void send('sendPlayerUUID', { gameId: ev.objectId, value: id })
+      return false
+    })
+  }
 }
 
 function gameViewOf(ev) {
@@ -192,6 +203,7 @@ async function main() {
     if (!check('joinTable IA', !!res.ok, res.error ?? '')) return
 
     const initP = A.waitEvent((m) => m.method === 'GAME_INIT', 'GAME_INIT de A', 30000)
+    A.autoStart()
     res = await Promise.race([A.send('startMatch', { tableId }), timeout(20000, 'startMatch')])
     if (!check('startMatch', !!res.ok, res.error ?? '')) return
 
@@ -353,11 +365,14 @@ async function main() {
     try { await Promise.race([B.send('disconnect', {}), timeout(5000, 'disconnect')]) } catch { /* noop */ }
     try { A.ws.close() } catch { /* noop */ }
     try { B.ws.close() } catch { /* noop */ }
-  }
 
-  console.log('')
-  console.log(`[hand-permission] RESULTADO: ${failCount === 0 ? 'TODO PASS' : `${failCount} FALLOS`} (${passCount} pass, ${failCount} fail)`)
-  process.exit(failCount === 0 ? 0 : 1)
+    // Every early `return` above lands here, so the summary and the exit code live in the
+    // finally too: leaving them after the try block made every failed check exit 0 (the
+    // return skipped them) and test.mjs scored the script green.
+    console.log('')
+    console.log(`[hand-permission] RESULTADO: ${failCount === 0 ? 'TODO PASS' : `${failCount} FALLOS`} (${passCount} pass, ${failCount} fail)`)
+    process.exit(failCount === 0 ? 0 : 1)
+  }
 }
 
 await main()

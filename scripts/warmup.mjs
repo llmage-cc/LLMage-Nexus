@@ -82,6 +82,10 @@ async function waitProxyReady() {
     } catch (e) {
       reason = e instanceof Error ? e.message : String(e)
     } finally {
+      // Log out before dropping the socket: a plain close leaves the XMage session alive for
+      // the proxy's 180 s grace period, and every later script (the verify layer runs right
+      // after this one) pays for it while it expires.
+      await c?.call('disconnect', {}, 3000).catch(() => {})
       c?.close()
     }
     if (Date.now() > deadline) {
@@ -155,6 +159,8 @@ async function runOnce() {
 
     await c.call('quitMatch', { gameId }, 10000).catch(() => {})
     await c.call('removeTable', { tableId }, 10000).catch(() => {})
+    await c.call('disconnect', {}, 5000).catch(() => {})
+    c.close()
     return { ok: true, gameId }
   } catch (e) {
     c.close()

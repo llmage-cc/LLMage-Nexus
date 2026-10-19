@@ -312,12 +312,15 @@ test('replay browser: opening a replay shows a player perspective (own side) @re
     }, replayView as unknown as Record<string, unknown>)
 
     // The bottom (own) seat renders a real player name, not the spectator layout.
-    const bottom = page.locator('.game-board > .player-zone').first()
+    // The concrete board (standard/pod/arena) depends on the seat count and the
+    // chrome revision; the stable contract is the shell's own zone, which every
+    // layout mounts as a direct child.
+    const bottom = page.locator('.board-shell > .player-zone').first()
     await expect(bottom).toBeVisible({ timeout: 10_000 })
     await expect(bottom).toHaveAttribute('data-role', 'player')
     await expect(bottom).toHaveAttribute('data-player-name', 'Alice')
     // The other seat is the opponent, so both are on opposite sides.
-    await expect(page.locator('.game-board > .opponent-zone').first()).toHaveAttribute('data-player-name', 'Bob')
+    await expect(page.locator('.board-shell .opponent-zone').first()).toHaveAttribute('data-player-name', 'Bob')
 
     expect(pageErrors, `pageerrors: ${pageErrors.map(String).join(' | ')}`).toEqual([])
   })

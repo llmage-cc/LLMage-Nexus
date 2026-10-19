@@ -22,6 +22,7 @@ interface ActionButtonProps {
   /** The pass this client already sent is still the answer to the open
    *  priority request: the button is spent until the server asks again. */
   answered?: boolean
+  variant?: 'bar' | 'dial'
 }
 
 const SHORTCUT_HINT = /\s*[(（][^)）]*[)）]\s*$/
@@ -59,6 +60,7 @@ export default function ActionButton({
   onSkip,
   busy = false,
   answered = false,
+  variant = 'bar',
 }: ActionButtonProps) {
   const { t } = useTranslation()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -152,7 +154,7 @@ export default function ActionButton({
   const isInteractive = canPass && !busy && !answered && modeClass !== 'action-waiting'
 
   return (
-    <div className="action-button-container" ref={containerRef}>
+    <div className={`action-button-container${variant === 'dial' ? ' action-button-container--dial' : ''}`} ref={containerRef}>
       <div className={`big-action-split ${activeSkip ? 'has-skip' : ''}`}>
         <button
           type="button"

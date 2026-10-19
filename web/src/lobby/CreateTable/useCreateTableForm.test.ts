@@ -91,12 +91,29 @@ async function constructedTourneyWithBots(bots: number) {
   return m
 }
 
+describe('defaults match the official client', () => {
+  it('opens as a limited duel of "Game" with 2 wins, multiple-player attack and EDH power level 0', async () => {
+    const m = await mount()
+    expect(m.form().name).toBe('Game')
+    expect(m.form().deckType).toBe('Limited')
+    expect(m.form().wins).toBe(2)
+    expect(m.form().attackOption).toBe('MULTIPLE')
+    expect(m.form().edhPowerLevel).toBe(0)
+  })
+
+  it('an explicit attack choice wins over the default', async () => {
+    const m = await mount()
+    act(() => m.form().setAttackOption('LEFT'))
+    expect(m.form().attackOption).toBe('LEFT')
+  })
+})
+
 describe('table category', () => {
   it('multiplayer picks a game type for more than 2 and keeps a compatible format', async () => {
     const m = await mount()
     act(() => m.form().setTableCategory('multi'))
     expect(m.form().gameType).toBe('Free For All')
-    expect(m.form().deckType).toBe('Constructed - Modern')
+    expect(m.form().deckType).toBe('Limited')
     expect(m.form().numPlayers).toBe(4)
 
     act(() => m.form().setTableCategory('duel'))
@@ -221,6 +238,7 @@ describe('submit: constructed tournament with native AI', () => {
 describe('submit: match with native AI', () => {
   async function duelVsBot() {
     const m = await mount()
+    act(() => m.form().setDeckType('Constructed - Modern'))
     act(() => m.form().setNumPlayers(2))
     act(() => m.form().applySeatTypeToAll('COMPUTER_MAD'))
     return m
@@ -575,6 +593,13 @@ describe('LLM vs LLM all-bot preset (discoverability fix)', () => {
 
   it('the preset submit carries playerTypes [COMPUTER_LLM,COMPUTER_LLM] and one llmConfig per LLM seat', async () => {
     setState({ capabilities: LLM_CAPS } as never)
+    // The preset stamps the curated bundled deck; the submit resolves it again,
+    // so the corpus must be present (the loader awaits it before paint in prod).
+    setBundledCorpusForTests([{
+      id: 'burn', name: PRESET_DEFAULT_DECK_NAME,
+      cards: [{ cardName: 'Lightning Bolt', setCode: '', cardNumber: '', amount: 4 }],
+      sideboard: [],
+    }])
     const m = await mount()
     act(() => m.form().setNumPlayers(2))
     act(() => m.form().applyLlmVsLlm())
@@ -684,7 +709,7 @@ describe('cancel discards the unsubmitted draft (parity 2026-10-10, gap 2 half)'
     const second = renderHook(() => useCreateTableForm(vi.fn()))
     await waitFor(() => expect(cmds.getTournamentTypes).toHaveBeenCalled())
     await act(async () => {})
-    expect(second.result.current.name).toBe("player's table")
+    expect(second.result.current.name).toBe('Game')
     expect(second.result.current.numPlayers).toBe(2)
     expect(second.result.current.draftSetsRaw).toBe('M21, M21, M21')
   })
@@ -871,13 +896,16 @@ describe('COMPUTER_P1 training-deck picker — capabilities gate + deck plumbing
     const m = await mount()
     await waitFor(() => expect(m.form().p1Decks).toHaveLength(2))
     act(() => m.form().setNumPlayers(2))
+    // P1 is a constructed-only seat; the merged wizard defaults a match to
+    // Limited, where the P1 deck branch is deliberately skipped.
+    act(() => m.form().setDeckType('Constructed - Modern'))
     act(() => m.form().setSeatType(0, 'COMPUTER_P1'))
     await act(() => m.form().submit())
 
     expect(cmds.createTable).toHaveBeenCalledOnce()
     expect(vi.mocked(cmds.createTable).mock.calls[0][0].playerTypes).toEqual(['HUMAN', 'COMPUTER_P1'])
-    const botJoin = vi.mocked(cmds.joinTable).mock.calls[0][0]
-    expect(botJoin.playerType).toBe('COMPUTER_P1')
+    // Join order is the host's; find the P1 seat instead of assuming index 0.
+    const botJoin = vi.mocked(cmds.joinTable).mock.calls.map(([a]) => a).find((a) => a.playerType === 'COMPUTER_P1')!
     expect(botJoin.deck?.cards.map((c) => c.cardName)).toContain('Lightning Bolt')
     expect(botJoin.deck?.cards.map((c) => c.cardName)).toContain('Island')
     // the P1 seat skips the format-fix dialog (it could break pool membership):
@@ -906,5 +934,33 @@ describe('COMPUTER_P1 training-deck picker — capabilities gate + deck plumbing
     const m = await mount()
     await waitFor(() => expect(m.form().p1PoolStatus).toBe('ready'))
     expect(m.form().p1Decks).toHaveLength(0)
+  })
+})
+
+describe('reset and submit guard', () => {
+  it('resetToDefaults clears the saved form and asks the host to remount', async () => {
+    const onReset = vi.fn()
+    const hook = renderHook(() => useCreateTableForm(vi.fn(), 'match', onReset))
+    await waitFor(() => expect(cmds.getTournamentTypes).toHaveBeenCalled())
+    await act(async () => {})
+    act(() => hook.result.current.setName('Mesa'))
+    expect(ls.has(STORAGE_KEY)).toBe(true)
+
+    act(() => hook.result.current.resetToDefaults())
+
+    expect(ls.has(STORAGE_KEY)).toBe(false)
+    expect(onReset).toHaveBeenCalledTimes(1)
+  })
+
+  it('submit with an empty name moves to General with the error and creates nothing', async () => {
+    const m = await mount()
+    act(() => m.form().setName('  '))
+    act(() => m.form().setActiveTab('review'))
+    await act(() => m.form().submit())
+
+    expect(cmds.createTable).not.toHaveBeenCalled()
+    expect(cmds.createTournamentTable).not.toHaveBeenCalled()
+    expect(m.form().activeTab).toBe('general')
+    expect(m.form().error).toBeTruthy()
   })
 })

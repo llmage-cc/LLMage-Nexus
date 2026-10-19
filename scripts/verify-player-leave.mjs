@@ -24,7 +24,7 @@
 // Uso: node scripts/verify-player-leave.mjs
 // Requiere: servidor local (testMode) + proxy (node scripts/ctl.mjs status).
 
-import { wsConn } from './lib.mjs'
+import { startingPlayerTargetId, wsConn } from './lib.mjs'
 
 const WS_URL = 'ws://127.0.0.1:8787'
 const SERVER_HOST = 'localhost'
@@ -108,6 +108,11 @@ function mkConn(name) {
         return
       }
       if (m.method === 'GAME_TARGET') {
+        const starting = startingPlayerTargetId(m)
+        if (starting) {
+          sendUuid(conn, starting)
+          return
+        }
         if (/discard/i.test(q)) {
           // El descarte de limpieza NO se puede declinar: primera carta.
           const pt = d.options?.possibleTargets ?? d.targets ?? []

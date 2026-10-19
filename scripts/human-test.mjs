@@ -998,6 +998,11 @@ async function main() {
       }
     }
     try {
+      await Promise.race([send('disconnect', {}), timeout(5000, 'disconnect')])
+    } catch {
+      // noop
+    }
+    try {
       ws.close()
     } catch {
       // noop

@@ -6,7 +6,7 @@ import { withFakeServer } from './support/fake-backend'
 import { llmageScenario } from '../fixtures/scenarios/llmageGate'
 import { STOCK_FAKE_CAPABILITIES } from '../fixtures/fake'
 import { gotoLogin } from './support/proxy-config'
-import { dismissSetupWizard } from './support/start-game'
+import { dismissSetupWizard, pickFormatOption } from './support/start-game'
 
 /**
  * COMPUTER_P1 training-deck picker E2E.
@@ -21,8 +21,11 @@ import { dismissSetupWizard } from './support/start-game'
 const DEFAULT_DECKS = ['Izzet Spellementals', 'Mono Red Aggro', 'Azorius Control', 'Golgari Midrange']
 
 /** Login against the active backend and open the Create-Table wizard on the
- *  `Multijugador` (seats) step, where the seat-type dropdowns live. */
-async function openSeatsStep(page: Page, username: string): Promise<void> {
+ *  `Multijugador` (seats) step, where the seat-type radiogroups live.
+ *  `deckType` (optional) is picked on the General step first: upstream now opens
+ *  a match as `Limited`, where bot seats carry no per-seat deck, so a spec that
+ *  inspects the wire must ask for a constructed table explicitly. */
+async function openSeatsStep(page: Page, username: string, deckType?: string): Promise<void> {
   if (!FAKE_MODE) {
     // the gated real deployment pins the server; the proxy dials the args target,
     // so the documented URL params must point the app at 127.0.0.1:17181.
@@ -43,7 +46,11 @@ async function openSeatsStep(page: Page, username: string): Promise<void> {
 
   await page.getByRole('button', { name: /Nueva/i }).first().click()
   await expect(page.getByRole('heading', { name: /Nueva mesa|Crear Mesa/i })).toBeVisible()
+  if (deckType) await pickFormatOption(page, 'format-deck-type', deckType)
   await page.locator('button.wizard-step', { hasText: /Multijugador/i }).click()
+  // The stage opens on the creator's own ("you") seat; the first editable seat is
+  // node 1, and its editor is the one that carries `seat-type-0`.
+  await page.getByTestId('seat-node-1').click()
   await expect(page.getByTestId('seat-type-0')).toBeVisible({ timeout: 10_000 })
 }
 
@@ -51,6 +58,20 @@ async function pickerOptionValues(page: Page): Promise<string[]> {
   return page.getByTestId('p1-deck-picker').locator('option').evaluateAll((els: HTMLOptionElement[]) =>
     els.map((o) => o.value),
   )
+}
+
+/**
+ * Pick a seat type in seat `idx`'s editor. Upstream replaced the per-seat
+ * `<select data-testid="seat-type-N">` with a radiogroup of chips carrying the
+ * same testid, so the type is chosen by its visible label.
+ */
+async function pickSeatType(page: Page, idx: number, name: RegExp): Promise<void> {
+  await page.getByTestId(`seat-type-${idx}`).getByRole('radio', { name }).click()
+}
+
+/** The visible type labels offered for seat `idx` (the chip radiogroup). */
+async function seatTypeLabels(page: Page, idx: number): Promise<string[]> {
+  return page.getByTestId(`seat-type-${idx}`).getByRole('radio').allTextContents()
 }
 
 /** Click Siguiente until the submit button shows, then create the table. */
@@ -71,7 +92,7 @@ test.describe('COMPUTER_P1 picker — fake backend', () => {
     page.on('pageerror', (e) => errors.push(e))
     await withFakeServer(() => llmageScenario(), async () => {
       await openSeatsStep(page, `p1-${Date.now().toString().slice(-8)}`)
-      await page.getByTestId('seat-type-0').selectOption('COMPUTER_P1')
+      await pickSeatType(page, 0, /P1/)
 
       const picker = page.getByTestId('p1-deck-picker')
       await expect(picker).toBeVisible({ timeout: 10_000 })
@@ -99,11 +120,8 @@ test.describe('COMPUTER_P1 picker — fake backend', () => {
         }),
       async () => {
         await openSeatsStep(page, `p1off-${Date.now().toString().slice(-8)}`)
-        const options = await page
-          .getByTestId('seat-type-0')
-          .locator('option')
-          .evaluateAll((els: HTMLOptionElement[]) => els.map((o) => o.value))
-        expect(options).not.toContain('COMPUTER_P1')
+        const labels = await seatTypeLabels(page, 0)
+        expect(labels.some((label) => /P1/.test(label))).toBe(false)
         await expect(page.getByTestId('p1-deck-picker')).toHaveCount(0)
         expect(errors).toEqual([])
       },
@@ -130,8 +148,8 @@ test.describe('COMPUTER_P1 picker — fake backend, seat wiring', () => {
     await withFakeServer(() => llmageScenario(), async () => {
       const username = `p1seat-${Date.now().toString().slice(-8)}`
       cleanupUser(username)
-      await openSeatsStep(page, username)
-      await page.getByTestId('seat-type-0').selectOption('COMPUTER_P1')
+      await openSeatsStep(page, username, 'Constructed - Modern')
+      await pickSeatType(page, 0, /P1/)
 
       const picker = page.getByTestId('p1-deck-picker')
       await expect(picker).toBeVisible({ timeout: 10_000 })
@@ -179,7 +197,7 @@ test.describe('COMPUTER_P1 picker — refused pool (fake backend)', () => {
         }),
       async () => {
         await openSeatsStep(page, `p1err-${Date.now().toString().slice(-8)}`)
-        await page.getByTestId('seat-type-0').selectOption('COMPUTER_P1')
+        await pickSeatType(page, 0, /P1/)
 
         await expect(page.getByTestId('p1-deck-picker-error')).toBeVisible({ timeout: 10_000 })
         // the refused pool is NOT disguised as the loading hint
@@ -200,7 +218,7 @@ test.describe('COMPUTER_P1 picker — real proxy on 8787', () => {
 
   test('getP1Decks serves the 55 training decks with the real default', async ({ page }) => {
     await openSeatsStep(page, `p1real-${Date.now().toString().slice(-8)}`)
-    await page.getByTestId('seat-type-0').selectOption('COMPUTER_P1')
+    await pickSeatType(page, 0, /P1/)
     const picker = page.getByTestId('p1-deck-picker')
     await expect(picker).toBeVisible({ timeout: 15_000 })
     await expect(page.locator('[data-testid=p1-deck-picker] option')).toHaveCount(55)

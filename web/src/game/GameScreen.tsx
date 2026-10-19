@@ -7,6 +7,10 @@ import OpponentSwitcherBar from '../board/OpponentSwitcherBar'
 import { DividerSlotContext } from '../board/BoardShell'
 import TurnOrderRing from '../board/TurnOrderRing'
 import * as cmds from '../net/commands'
+import RewindBar from './RewindBar'
+import MobileSpectator from './MobileSpectator'
+import { useNarrowScreen } from './useNarrowScreen'
+import { useRewind, viewedSnapshot } from './rewind'
 import { isRollbackVoteBlocking, maybeAutoPass, claimPriorityAnswer, priorityAnswerPending, setStoreError, useGame, useSettings, useStore, clearError } from '../state/store'
 import ErrorBanner from '../ui/ErrorBanner'
 import FeedbackDialog from './FeedbackDialog'
@@ -22,19 +26,28 @@ import GameMenu from './GameMenu'
 import PhaseBar, { PhaseName } from './PhaseBar'
 import ActionButton from './ActionButton'
 import GameDock, { PromptSlotProvider, useDockOffset } from './GameDock'
+import { isUnplayableHandClick } from './handClick'
 import GameStrip from './GameStrip'
+import { useChangeFlag } from './useChangeFlag'
 import GameDrawer, { DrawerToggles, useLlmTabOffered, type DrawerTab } from './GameDrawer'
 import { effectiveDrawerTab } from './llmTab'
+import SidePanel, { type SidePanelTab } from './SidePanel'
+import GameTopBar from './GameTopBar'
+import PhaseDial from './PhaseDial'
+import ReplayControls from './ReplayControls'
+import { ChromeActionsContext } from './chromeActions'
+import LogTicker from './LogTicker'
+import CombatLedger from './CombatLedger'
 import StackZone from '../board/StackZone'
-import { isUnplayableHandClick } from './handClick'
+import StackDeck from '../board/StackDeck'
 import { targetsStackObject } from './stackTargeting'
 import CombatArrowsOverlay from '../board/CombatArrowsOverlay'
 import FeedbackOverlay from '../board/FeedbackOverlay'
 import ImpactOverlay from '../board/ImpactOverlay'
+import ProjectileOverlay from '../board/ProjectileOverlay'
 import LowLifeVignette from '../board/LowLifeVignette'
 import TurnRecapStrip from './TurnRecapStrip'
 import { useAttentionAlerts } from './attentionAlerts'
-import ReplayControls from './ReplayControls'
 import { identityColors, playmatVars } from '../appearance/playmatIdentity'
 import { CUSTOM_PLAYMAT_ID, effectivePlaymat } from '../appearance/playmats'
 import { useCustomPlaymat } from '../appearance/customPlaymat'
@@ -42,9 +55,7 @@ import type { ManaColor } from '../board/impactFx'
 import '../appearance/playmats.css'
 import { musicEngine } from '../audio/musicEngine'
 import { musicIntensity } from '../audio/musicIntensity'
-import { applyFxRoot } from '../board/fx'
 import { hasCommanders as hasCommandersInGame } from '../board/commanders'
-import { dayNightStateOf } from '../board/dayNight'
 import TournamentPanel from './TournamentPanel'
 import { resolveTargetSourceId } from './resolveTargetSourceId'
 import { SPACE_PASS_REGION_SELECTOR, SPACE_SHORTCUT_OFF_SELECTOR } from '../ui/clickable'
@@ -52,7 +63,8 @@ import { crossZonePlayables } from '../board/crossZone'
 import { resolveTargetHits, targetZoneKindOf } from '../board/targetZones'
 import { combatActorsFrom } from '../state/gameUtils'
 import { effectiveBoardLayout } from '../board/boardLayout'
-import { pickPerspectivePlayer } from '../board/useBoardPresenter'
+import { MAX_BOARD_PLAYERS } from '../board/boardShared'
+import { useOverlayGutters } from './useOverlayGutters'
 import { useTranslation } from '../i18n'
 import { soundManager } from '../audio/soundManager'
 import { inverseZoom } from '../appearance/zoom'
@@ -61,7 +73,9 @@ import { isControllingPriority } from '../state/control'
 import { perfMark } from '../system/perfProbe'
 import './GameScreen.css'
 import './TournamentPanel.css'
-import { commandItems } from './commandItems'
+import { activeMechanicsCount } from './mechanicsState'
+import { usePriorityOrbs } from './usePriorityOrbs'
+import PriorityOrbLayer from './PriorityOrbLayer'
 
 /** El atajo global Space no debe disparar cuando el foco está en un control
  *  nativo (doble acción: el control + el pass). Cubre el caso en que el
@@ -104,46 +118,49 @@ export function mouseFocusedGameControl(target: EventTarget | null, root: HTMLEl
 
 export default function GameScreen() {
   const { t } = useTranslation()
-  const game = useGame()
+  const liveGame = useGame()
+  const rewind = useRewind()
+  const narrowScreen = useNarrowScreen()
+  const [fullBoardOnNarrow, setFullBoardOnNarrow] = useState(false)
+  const rewindView = viewedSnapshot(rewind)
+  const game = rewindView?.game ?? liveGame
   const settings = useSettings()
   const gameId = useStore((s) => s.gameId)
   const feedback = useStore((s) => s.feedback)
+  const storeError = useStore((s) => s.error)
   const playableIds = useStore((s) => s.playableIds)
   const combat = useStore((s) => s.combat)
-  const replay = useStore((s) => s.replay)
-  const replayActive = replay != null
-  const username = useStore((s) => s.conn?.username ?? null)
   const rollbackBlocking = useStore((s) => isRollbackVoteBlocking(s.rollbackVote))
-  // Game errors (a send rejected by the server, a network failure on the
-  // send...) live in store.error and the game screen was the ONLY phase that
-  // did not paint it: a rejected play (stale playable marker, lost priority)
-  // sank silently.
-  const storeError = useStore((s) => s.error)
   const gameRootRef = useRef<HTMLDivElement>(null)
   const gameBodyRef = useRef<HTMLDivElement>(null)
   const boardWrapRef = useRef<HTMLDivElement>(null)
+  const v2 = settings.gameUi === 'v2'
   const [drawerTab, setDrawerTab] = useState<DrawerTab | null>(null)
+  const [sidePanelTab, setSidePanelTab] = useState<SidePanelTab | null>(null)
+  const [deckOpen, setDeckOpen] = useState(false)
+  const [stackFocus, setStackFocus] = useState<ReadonlySet<string> | null>(null)
   const [promptSlot, setPromptSlot] = useState<HTMLElement | null>(null)
   const [dividerSlot, setDividerSlot] = useState<HTMLElement | null>(null)
   const [handPromptSlot, setHandPromptSlot] = useState<HTMLElement | null>(null)
   const [busy, setBusy] = useState(false)
+  const priorityAnswered = useStore(priorityAnswerPending)
   const stackCount = Object.keys(game?.stack ?? {}).length
   const prevStackCountRef = useRef(0)
 
   useEffect(() => {
     const prev = prevStackCountRef.current
     prevStackCountRef.current = stackCount
+    if (v2) {
+      if (stackCount === 0 && prev > 0) setDeckOpen(false)
+      return
+    }
     if (stackCount > 0 && prev === 0) setDrawerTab((cur) => cur ?? 'stack')
     if (stackCount === 0 && prev > 0) setDrawerTab((cur) => (cur === 'stack' ? null : cur))
-  }, [stackCount])
+  }, [stackCount, v2])
 
   useEffect(() => {
-    if (game) maybeAutoPass(game)
-  }, [game])
-
-  useEffect(() => {
-    applyFxRoot()
-  }, [settings.effects, settings.animationSpeed])
+    if (liveGame) maybeAutoPass(liveGame)
+  }, [liveGame])
 
   const gameOver = useStore((s) => s.gameEnd != null)
   const hasGame = !!game
@@ -168,12 +185,10 @@ export default function GameScreen() {
     return matKey ? (playmatVars(matKey.split('') as ManaColor[]) as React.CSSProperties) : undefined
   }, [matKey, playmatId, customPlaymat])
 
-  const meControlled = game?.players?.find((p) => p.controlled)
-  // Replay viewing perspective: a replay GameView carries no `controlled` seat,
-  // so pick a default seat to render as the player's own side. A live game (or a
-  // spectator of a live game) is untouched — only an open replay gets one.
-  const me = meControlled ?? pickPerspectivePlayer(game?.players ?? [], { replay: replayActive, username, perspectivePlayerId: replay?.perspectivePlayerId ?? null })
+  const me = game?.players?.find((p) => p.controlled)
   const priorityPlayer = game?.players?.find((p) => p.hasPriority) ?? game?.players?.find((p) => p.isActive)
+  const priorityHolderId = game?.players?.find((p) => p.hasPriority)?.playerId ?? null
+  const { orbs: priorityOrbs, done: doneOrb } = usePriorityOrbs(gameId, priorityHolderId)
   const timerSecs = priorityPlayer?.priorityTimeLeftSecs ?? 0
   const isTimerTicking = !!priorityPlayer?.hasPriority
 
@@ -183,10 +198,6 @@ export default function GameScreen() {
     }
   }, [timerSecs, isTimerTicking])
   const controllingPriority = isControllingPriority(game)
-  // The answer this client sent is still the answer to the open priority
-  // request (the server has not asked again): every pass surface must stay
-  // spent until it does, or a second click lands on a later window.
-  const priorityAnswered = useStore(priorityAnswerPending)
   const canPass =
     !!gameId &&
     (!!me?.hasPriority ||
@@ -199,9 +210,7 @@ export default function GameScreen() {
   const targetIdSet = useMemo(() => new Set(targetIds), [targetIds])
   const targetSourceId = game && feedback?.method === 'GAME_TARGET' ? resolveTargetSourceId(game, feedback.sourceName) : undefined
   const combatActors = useMemo(() => combatActorsFrom(game), [game])
-  // Replay mode: a detached historical view has no "your turn"/"your response" —
-  // suppress attention alerts (title/favicon/notification) for replay frames.
-  useAttentionAlerts(replayActive ? null : game, replayActive ? null : gameId, replayActive ? null : feedback, replayActive ? null : combat, settings.browserNotifications)
+  useAttentionAlerts(liveGame, gameId, feedback, combat, settings.browserNotifications)
 
   // Anti doble-envío del mismo objetivo mientras no llega el eco: el CardSlot
   // cubre las cartas; este ref cubre el resto de superficies (headers, pila...).
@@ -212,11 +221,13 @@ export default function GameScreen() {
 
   const stackTargeted = targetsStackObject(game?.stack, targetIds)
   useEffect(() => {
-    if (stackTargeted) setDrawerTab('stack')
-  }, [stackTargeted])
+    if (!stackTargeted) return
+    if (v2) setDeckOpen(true)
+    else setDrawerTab('stack')
+  }, [stackTargeted, v2])
 
   const onTargetClick = async (id: string) => {
-    if (!gameId || replayActive) return
+    if (!gameId) return
     if (pendingTargetsRef.current.has(id)) return
     pendingTargetsRef.current.add(id)
     perfMark('click', 'target', undefined, { id })
@@ -228,21 +239,14 @@ export default function GameScreen() {
   }
 
   const onPlayableClick = async (id: string, e?: React.MouseEvent) => {
-    if (!gameId || replayActive) return
-    // Sin prompt abierto el clic de mano solo puede ser un play, así que solo
-    // vale si la propia carta está marcada jugable: el clic se descarta antes
-    // del claim (un clic descartado no consume la ventana de prioridad).
+    if (!gameId || rewindView) return
+    // Without an open prompt a hand click can only be a play: drop it before
+    // the claim when the app has not marked the card playable (stale marker).
     if (isUnplayableHandClick(!!feedback, playableIdSet, id)) return
-    // An open prompt that is NOT mana/combat consumes the card click
-    // (uuid/string/boolean asks answer through THEIR dialog): the `playable`
-    // marker may be stale (game window closed, old canPlayObjects) and the
-    // server would reject the play anyway — do not send knowingly.
-    // EXCEPTION: in a uuid card choice (hand-pick GAME_TARGET,
-    // GAME_SELECT_CARDS/GAME_CHOOSE_CARDS…) the painted card itself
-    // (`targetable`) IS the answer — the hand is the selector when the grid is
-    // omitted — so the click routes to the same verb the grid uses
-    // (sendPlayerUUID via onTargetClick). Only when the clicked id is a legal
-    // option of the prompt; any other mode still falls through.
+    // An open prompt that is NOT mana/combat consumes the card click: uuid,
+    // string and boolean asks answer through their own dialog. Exception:
+    // in a uuid card-choice the painted hand card IS the answer, so route it to
+    // the same verb the grid uses; any other mode falls through as a discard.
     if (feedback && feedback.mode !== 'mana' && feedback.mode !== 'combat') {
       if (feedback.mode === 'uuid' && feedback.options.some((option) => option.id === id)) {
         await onTargetClick(id)
@@ -252,9 +256,8 @@ export default function GameScreen() {
     // One answer per priority request (2026-10-13 stale-playable-marker): a play
     // sent while THIS window's answer is already out (a pass, a previous play, a
     // smart auto-pass) is not a play — `HumanPlayer.waitResponseOpen` parks it and
-    // the engine applies it at the NEXT ask, which is how a land plays a main
-    // phase later or "a click has no effect and no error". The claim is shared
-    // with the pass button and the auto-pass.
+    // the engine applies it at the NEXT ask. The claim is shared with the pass
+    // button and the auto-pass; a mana-payment click stays outside it.
     if (feedback?.mode !== 'mana' && !claimPriorityAnswer()) return
     perfMark('click', feedback?.mode === 'mana' ? 'mana' : 'playable', undefined, { id })
     if (e?.ctrlKey || e?.metaKey || e?.shiftKey) {
@@ -267,7 +270,7 @@ export default function GameScreen() {
   const crossZone = crossZonePlayables(game, feedback ?? undefined)
 
   const onCombatClick = async (id: string) => {
-    if (!gameId || replayActive) return
+    if (!gameId) return
     perfMark('click', 'combat', undefined, { id })
     const result = await cmds.sendPlayerUUID(id, gameId)
     if (!result.ok) setStoreError(result.error ?? t('errors', 'send_failed_combat'))
@@ -293,7 +296,7 @@ export default function GameScreen() {
   }
 
   const onResolveClick = useCallback(async () => {
-    if (!gameId || busy || replayActive) return
+    if (!gameId || busy || rewindView) return
     // One answer per priority request: a click with nothing left to answer is
     // dropped here, not sent — the engine would park it and spend it on the
     // next window (the stack skipping past the player).
@@ -307,7 +310,7 @@ export default function GameScreen() {
     } finally {
       setBusy(false)
     }
-  }, [gameId, busy, t, replayActive])
+  }, [gameId, busy, t, rewindView])
 
   const pointerFocusRef = useRef(false)
   useEffect(() => {
@@ -336,22 +339,21 @@ export default function GameScreen() {
       if (released) released.blur()
       if (released || !isSpaceShortcutBlocked(e.target)) {
         e.preventDefault()
-        // Replay viewer: Space is Play/Pause (ReplayControls owns it), never pass.
-        if (replayActive) return
         // No enviar pass a ciegas si hay un diálogo de maná o target abierto
         if (feedback && feedback.mode !== 'combat') return
         if (rollbackBlocking) return
+        if (gameRootRef.current?.dataset.rewind) return
         if (canPass) void onResolveClick()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [canPass, feedback, onResolveClick, rollbackBlocking, replayActive])
+  }, [canPass, feedback, onResolveClick, rollbackBlocking])
 
   // Desktop-style one-shot skips. One action is left out: the desktop client
   // keeps it disabled ("Skip action don't used").
   const sendSkip = useCallback(async (action: string) => {
-    if (!gameId || busy || replayActive) return
+    if (!gameId || busy) return
     perfMark('click', 'skip', undefined, { action })
     setBusy(true)
     perfMark('ack', 'skip', undefined, { action })
@@ -361,7 +363,7 @@ export default function GameScreen() {
     } finally {
       setBusy(false)
     }
-  }, [gameId, busy, t, replayActive])
+  }, [gameId, busy, t])
 
   useEffect(() => {
     const handleSkipKeys = (e: KeyboardEvent) => {
@@ -371,6 +373,7 @@ export default function GameScreen() {
       // Sin diálogos modales abiertos (misma guarda que Space)
       if (feedback && feedback.mode !== 'combat') return
       if (rollbackBlocking) return
+      if (gameRootRef.current?.dataset.rewind) return
       const skip = skipForShortcut(e.key)
       void sendSkip(skip ? skip.action : CANCEL_SKIP_ACTION)
     }
@@ -378,7 +381,7 @@ export default function GameScreen() {
     return () => window.removeEventListener('keydown', handleSkipKeys)
   }, [feedback, sendSkip, rollbackBlocking])
 
-  const opps = game?.players?.filter((p) => !p.controlled && p !== me) ?? []
+  const opps = game?.players?.filter((p) => !p.controlled) ?? []
   const isSpectator = !me
   const topOpps = isSpectator ? (opps.length >= 2 ? opps.slice(0, opps.length - 1) : []) : opps
 
@@ -395,56 +398,42 @@ export default function GameScreen() {
     return topOpps[0]
   }, [topOpps, selectedOppId, game?.activePlayerId])
 
-  const hasActiveMechanics = useMemo(() => {
-    if (!game) return false
-    if (dayNightStateOf(game)) return true
-    if (!game.players) return false
-    return game.players.some((p) => {
-      const items = commandItems(p)
-      const hasRing = items.some((c) => String(c?.name ?? '').toLowerCase().includes('the ring'))
-      const hasDungeon = items.some(
-        (c) => Array.isArray(c?.cardTypes) && c.cardTypes.map((t) => String(t).toLowerCase()).includes('dungeon')
-      )
-      const hasMonarch = !!p.monarch
-      const hasInitiative = !!p.initiative
-      const hasBlessing = p.designationNames?.some((d) => d.toLowerCase().includes('blessing'))
-      const hasSpeed = p.designationNames?.some((d) => d.toLowerCase().includes('speed'))
-      return hasRing || hasDungeon || hasMonarch || hasInitiative || hasBlessing || hasSpeed
-    })
-  }, [game])
+  const mechanicsCount = useMemo(() => activeMechanicsCount(game), [game])
+  const hasActiveMechanics = mechanicsCount > 0
 
   const hasCommanders = useMemo(() => hasCommandersInGame(game), [game])
 
   const totalPlayers = game?.players?.length ?? opps.length + (isSpectator ? 0 : 1)
-  const effectiveLayout = effectiveBoardLayout(settings.boardLayout, settings.boardLayoutManual ?? false, opps.length, totalPlayers)
+  const effectiveLayout =
+    v2 && totalPlayers <= MAX_BOARD_PLAYERS
+      ? 'arena'
+      : effectiveBoardLayout(settings.boardLayout, settings.boardLayoutManual ?? false, opps.length, totalPlayers)
   const isArenaLayout = effectiveLayout === 'arena'
   const isPodLayout = effectiveLayout === 'pod'
 
-  useDockOffset(boardWrapRef, [effectiveLayout, isSpectator, !!game, game?.turn])
+  useDockOffset(boardWrapRef, [effectiveLayout, isSpectator, !!game, game?.turn, v2])
+  const [turnGlow, clearTurnGlow] = useChangeFlag(game?.turn)
 
-  const toggleDrawer = useCallback((tab: DrawerTab) => setDrawerTab((cur) => (cur === tab ? null : tab)), [])
-  // A stored tab no longer offered (e.g. the LLM tab's gate flips off) must never
-  // paint: ports RightRail's effectiveRightTab onto the drawer's toggled model.
+  const toggleDrawer = useCallback((tab: DrawerTab) => {
+    if (tab === 'stack') return
+    setSidePanelTab((cur) => (cur === tab ? null : tab))
+  }, [])
+  const toggleLegacyDrawer = useCallback((tab: DrawerTab) => setDrawerTab((cur) => (cur === tab ? null : tab)), [])
+  const activeDrawerTab = drawerTab === 'commander' && !hasCommanders ? null : drawerTab
+  // A stored panel no longer offered (e.g. the LLM tab's gate flips off) must
+  // never paint: fall back to no panel instead of rendering a missing tab.
   const llmTabOffered = useLlmTabOffered()
-  const offeredDrawerTabs: DrawerTab[] = llmTabOffered
-    ? ['stack', 'log', 'chat', 'tracker', 'commander', 'mechanics', 'llm']
-    : ['stack', 'log', 'chat', 'tracker', 'commander', 'mechanics']
-  let activeDrawerTab = effectiveDrawerTab(drawerTab, offeredDrawerTabs)
-  if (activeDrawerTab === 'commander' && !hasCommanders) activeDrawerTab = null
+  const offeredSidePanelTabs: SidePanelTab[] = llmTabOffered
+    ? ['log', 'chat', 'tracker', 'commander', 'mechanics', 'llm']
+    : ['log', 'chat', 'tracker', 'commander', 'mechanics']
+  let activeSidePanelTab = effectiveDrawerTab(sidePanelTab, offeredSidePanelTabs)
+  if (activeSidePanelTab === 'commander' && !hasCommanders) activeSidePanelTab = null
+  const chromeLeft = v2 && activeSidePanelTab ? 372 : 0
+  const chromeRight = v2 && stackCount > 0 ? (deckOpen ? 372 : 284) : 0
+  useOverlayGutters(boardWrapRef, v2 && isArenaLayout, `${isSpectator}|${!!game}|${chromeLeft}|${chromeRight}`)
 
-  const strip = (
-    <GameStrip
-      left={
-        game && (
-          <div className="game-state" data-testid="game-status">
-            <span className="game-turn">{t('game', 'turn')} {game.turn}</span>
-            <PhaseName step={game.step ?? ''} />
-            <PhaseBar step={game.step ?? ''} />
-          </div>
-        )
-      }
-      center={
-        isPodLayout ? (
+  const stripCenter = (
+        isPodLayout || (v2 && isArenaLayout) ? (
           <TurnOrderRing players={game?.players ?? []} activePlayerId={game?.activePlayerId ?? ''} />
         ) : topOpps.length > 1 ? (
           <OpponentSwitcherBar
@@ -460,13 +449,31 @@ export default function GameScreen() {
         ) : (
           <TurnOrderRing lane players={game?.players ?? []} activePlayerId={game?.activePlayerId ?? ''} />
         )
+  )
+
+  const strip = (
+    <GameStrip
+      left={
+        game && (
+          <div className="game-state" data-testid="game-status">
+            <span
+              className={`game-turn${turnGlow ? ' turn-glow' : ''}`}
+              onAnimationEnd={turnGlow ? clearTurnGlow : undefined}
+            >
+              {t('game', 'turn')} {game.turn}
+            </span>
+            <PhaseName step={game.step ?? ''} />
+            <PhaseBar step={game.step ?? ''} />
+          </div>
+        )
       }
+      center={stripCenter}
       right={
         <>
           <DrawerToggles
             active={activeDrawerTab}
             stackCount={stackCount}
-            onToggle={toggleDrawer}
+            onToggle={toggleLegacyDrawer}
             hasCommanders={hasCommanders}
             hasActiveMechanics={hasActiveMechanics}
           />
@@ -485,7 +492,7 @@ export default function GameScreen() {
                 onCardClick={onTargetClick}
                 targetIds={new Set(targetIds)}
                 onResolveClick={onResolveClick}
-                canResolve={canPass && !priorityAnswered}
+                canResolve={canPass}
                 players={game?.players}
                 myPlayerId={me?.playerId}
               />
@@ -496,10 +503,64 @@ export default function GameScreen() {
     />
   )
 
+  const actionButton = (
+    <ActionButton
+      game={game}
+      feedback={feedback}
+      gameId={gameId}
+      canPass={canPass}
+      onPass={onResolveClick}
+      onSkip={sendSkip}
+      busy={busy}
+      answered={priorityAnswered}
+      variant={v2 ? 'dial' : 'bar'}
+    />
+  )
+  const dockAction = v2 ? (
+    <PhaseDial step={game?.step ?? ''} mine={!!me?.hasPriority && stackCount === 0} action={actionButton} />
+  ) : (
+    actionButton
+  )
+  const topBar = (
+    <GameTopBar
+      game={game}
+      menu={<GameMenu />}
+      center={stripCenter}
+      toggles={
+        <DrawerToggles
+          active={activeSidePanelTab}
+          stackCount={stackCount}
+          onToggle={toggleDrawer}
+          hasCommanders={hasCommanders}
+          hasActiveMechanics={hasActiveMechanics}
+          mechanicsCount={mechanicsCount}
+          exclude={['stack']}
+        />
+      }
+    />
+  )
+
+  const sidePanelOpen = activeSidePanelTab !== null
+  const chromeActions = useMemo(() => ({ openPanel: (tab: SidePanelTab) => setSidePanelTab(tab), sidePanelOpen }), [sidePanelOpen])
+
+  if (narrowScreen && isSpectator && !fullBoardOnNarrow) {
+    return (
+      <div className="game game--mobile-spectator" ref={gameRootRef} style={{ zoom: inverseZoom(settings.uiScale) }}>
+        <MobileSpectator onFullBoard={() => setFullBoardOnNarrow(true)} />
+      </div>
+    )
+  }
+
   return (
     <PromptSlotProvider value={promptSlot} hand={handPromptSlot} onHandSlot={setHandPromptSlot}>
+      <ChromeActionsContext.Provider value={v2 ? chromeActions : null}>
       <DividerSlotContext.Provider value={setDividerSlot}>
-        <div className="game" ref={gameRootRef} style={{ zoom: inverseZoom(settings.uiScale) }}>
+        <div
+          className={`game${v2 ? ' game--v2' : ''}${rewindView ? ' game--rewind' : ''}`}
+          ref={gameRootRef}
+          data-rewind={rewindView ? 'true' : undefined}
+          style={{ zoom: inverseZoom(settings.uiScale) }}
+        >
           {storeError && (
             <ErrorBanner
               message={storeError}
@@ -508,11 +569,25 @@ export default function GameScreen() {
               testId="game-error"
             />
           )}
-          {!dividerSlot && <header className="game-top">{strip}</header>}
-          {dividerSlot && createPortal(strip, dividerSlot)}
+          {v2 ? (
+            <>
+              <header className="game-top game-top--v2">{topBar}</header>
+            </>
+          ) : (
+            <>
+              {!dividerSlot && <header className="game-top">{strip}</header>}
+              {dividerSlot && createPortal(strip, dividerSlot)}
+            </>
+          )}
           <ReplayControls />
           <div className="game-body" ref={gameBodyRef} data-space-passes-priority="true">
-            <div className="board-wrap" ref={boardWrapRef} data-playmat={playmatId}>
+            <div
+              className="board-wrap"
+              ref={boardWrapRef}
+              data-playmat={playmatId}
+              data-ui={v2 ? 'v2' : undefined}
+              style={v2 ? ({ '--chrome-l': `${chromeLeft}px`, '--chrome-r': `${chromeRight}px` } as React.CSSProperties) : undefined}
+            >
               {playmatId !== 'classic' && (
                 <div className="playmat-layer" data-playmat={playmatId} data-testid="playmat-layer" style={matStyle} aria-hidden="true" />
               )}
@@ -527,24 +602,42 @@ export default function GameScreen() {
               <TurnRecapStrip />
               <FeedbackOverlay />
               <ImpactOverlay />
+              <ProjectileOverlay />
+              {v2 && stackCount > 0 && (
+                <StackDeck
+                  stack={game?.stack ?? null}
+                  open={deckOpen}
+                  onOpenChange={setDeckOpen}
+                  onCardClick={onTargetClick}
+                  targetIds={targetIdSet}
+                  onResolveClick={onResolveClick}
+                  canResolve={canPass}
+                  players={game?.players}
+                  myPlayerId={me?.playerId}
+                  onFocusIds={setStackFocus}
+                />
+              )}
+              {v2 && activeSidePanelTab !== 'log' && <LogTicker />}
+              {v2 && <CombatLedger />}
+              {v2 && activeSidePanelTab && (
+                <SidePanel
+                  tab={activeSidePanelTab}
+                  onTabChange={setSidePanelTab}
+                  onClose={() => setSidePanelTab(null)}
+                  hasCommanders={hasCommanders}
+                  hasActiveMechanics={hasActiveMechanics}
+                />
+              )}
               <GameDock
                 onPromptSlot={setPromptSlot}
-                action={
-                  <ActionButton
-                    game={game}
-                    feedback={feedback}
-                    gameId={gameId}
-                    canPass={canPass}
-                    onPass={onResolveClick}
-                    onSkip={sendSkip}
-                    busy={busy}
-                    answered={priorityAnswered}
-                  />
-                }
+                rewind={(settings.boardRewind || rewind.replay) ? <RewindBar rewind={rewind} /> : null}
+                action={dockAction}
               />
             </div>
             <CombatArrowsOverlay
               game={game}
+              stackFocusIds={v2 ? stackFocus : null}
+              variant={v2 ? 'v2' : 'v1'}
               boardRef={gameBodyRef}
               targetSourceId={targetSourceId}
               chosenTargetIds={chosenTargetIds}
@@ -552,6 +645,7 @@ export default function GameScreen() {
               combatMode={combat?.mode ?? null}
             />
           </div>
+          <PriorityOrbLayer orbs={priorityOrbs} onDone={doneOrb} />
           <FeedbackDialog />
           <UserRequestDialog />
           <RollbackDialog />
@@ -569,6 +663,7 @@ export default function GameScreen() {
           <TournamentPanel />
         </div>
       </DividerSlotContext.Provider>
+      </ChromeActionsContext.Provider>
     </PromptSlotProvider>
   )
 }

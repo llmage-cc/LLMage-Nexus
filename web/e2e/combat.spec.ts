@@ -71,6 +71,18 @@ test('combate determinista: el Sim lanza una criatura, ataca con todo y el daño
     // La clase `tapped` debe traducirse en rotación REAL: el transform computado
     // no puede quedar en identidad. (Regresión 2026-09-01: `entering` clavado +
     // fill forwards de cardAppear pisaba `.tapped` con transform identidad en dev.)
+    // `.card-slot` anima `transform` con una curva de overshoot (0.28s,
+    // cubic-bezier(.34,1.56,.64,1)): el primer fotograma tras `tapped` puede
+    // quedar por encima de 90° (medido 91.3° en CI bajo carga). Esperar a que la
+    // transición asiente — el producto tiene que LLEGAR a 90°, no solo pasar por ahí.
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector<HTMLElement>('.card-slot.tapped[data-card-name="Raging Goblin"]')
+        return el !== null && getComputedStyle(el).transform === 'matrix(0, 1, -1, 0, 0, 0)'
+      },
+      undefined,
+      { timeout: 2000 },
+    )
     const attackerTransform = await page.evaluate(
       () => document.querySelector<HTMLElement>('.card-slot.tapped[data-card-name="Raging Goblin"]')
         ? getComputedStyle(document.querySelector<HTMLElement>('.card-slot.tapped[data-card-name="Raging Goblin"]')!).transform

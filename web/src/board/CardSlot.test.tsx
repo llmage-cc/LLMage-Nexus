@@ -2,14 +2,17 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { act, StrictMode } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import CardSlot from './CardSlot'
+import { clearFlights, getActiveFlights, markFlightLanded } from './flightManager'
+import { getPreviousCardPosition } from './cardPositionRegistry'
 import type { PermanentView } from '../net/types'
 import type { FeedbackPrompt } from '../game/feedback'
 import { getState, setState, setSetting } from '../state/store'
 import { perfClear, perfEntries } from '../system/perfProbe'
 
 vi.mock('./cardPositionRegistry', () => ({
-  getPreviousCardPosition: vi.fn(() => undefined),
+  getPreviousCardPosition: vi.fn(() => null),
   getPreviousCardZone: vi.fn(() => undefined),
+  getPreviousCardSize: vi.fn(() => ({ w: 100, h: 140, compact: false })),
   recordCardPosition: vi.fn(),
 }))
 
@@ -829,5 +832,108 @@ describe('CardSlot ptBadgeMode con base desconocida', () => {
     } finally {
       setSetting('ptBadgeMode', 'always')
     }
+  })
+})
+
+// Los timers y suscripciones del vuelo/entrada siguen vivos cuando el slot se va. Si disparan
+// después del desmontaje, el dispatch entra en react-dom, que resuelve la prioridad leyendo
+// `window.event`: con jsdom ya desmontado eso es `ReferenceError: window is not defined` y vitest
+// lo cuenta como error no capturado — la run de cobertura moría con 421/421 ficheros y 4129/4129
+// tests verdes. Estos tests reproducen ese estado exacto: desmontar primero, tirar el global para
+// que cualquier dispatch reviente, y después soltar el aterrizaje y los timers. Verdes significan
+// "no se despachó nada", no "el error se tragó".
+describe('CardSlot: nada se despacha después del desmontaje', () => {
+  const realRect = Element.prototype.getBoundingClientRect
+
+  const rectAt = (left: number, top: number): DOMRect =>
+    ({ x: left, y: top, width: 100, height: 140, left, top, right: left + 100, bottom: top + 140, toJSON: () => ({}) }) as DOMRect
+
+  const flightCard = (id: string) =>
+    ({ id, name: 'Grizzly Bears', cardTypes: ['Creature'], power: '2', toughness: '2' }) as unknown as PermanentView
+
+  const withoutWindow = (run: () => void) => {
+    const saved = (globalThis as { window?: Window }).window
+    delete (globalThis as { window?: Window }).window
+    try {
+      expect(run).not.toThrow()
+    } finally {
+      Object.defineProperty(globalThis, 'window', { configurable: true, enumerable: true, writable: true, value: saved })
+    }
+  }
+
+  /** Monta un slot que arranca un vuelo real (hay posición previa en otra zona). */
+  const mountFlying = (id: string) => {
+    vi.mocked(getPreviousCardPosition).mockReturnValue(rectAt(400, 300))
+    const view = render(<CardSlot card={flightCard(id)} />)
+    const slot = view.container.querySelector('.card-slot')!
+    expect(slot.classList.contains('flight-hidden'), 'el vuelo debe arrancar ocultando la carta real').toBe(true)
+    const flightId = getActiveFlights().find((f) => f.cardId === id)?.flightId
+    expect(flightId, 'el fixture debe dejar un vuelo activo').toBeTruthy()
+    return { view, flightId: flightId! }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    clearFlights()
+    Element.prototype.getBoundingClientRect = () => rectAt(8, 8)
+  })
+
+  afterEach(() => {
+    Element.prototype.getBoundingClientRect = realRect
+    vi.mocked(getPreviousCardPosition).mockReturnValue(null)
+    clearFlights()
+    vi.useRealTimers()
+  })
+
+  it('suelta el aterrizaje del vuelo: ni el callback ni el backstop despachan tras el desmontaje', () => {
+    const { view, flightId } = mountFlying('flight-unmount-1')
+    view.unmount()
+
+    withoutWindow(() => {
+      markFlightLanded(flightId)
+      // Los backstops del vuelo (340 + 120 / 340 + 240) también disparan `land()`.
+      vi.advanceTimersByTime(800)
+    })
+
+    expect(vi.getTimerCount(), 'el desmontaje no debe dejar ni el timer de 180 ms ni backstops').toBe(0)
+  })
+
+  it('cancela el timer de 180 ms del aterrizaje al desmontar', () => {
+    const { view, flightId } = mountFlying('flight-unmount-2')
+    act(() => { markFlightLanded(flightId) })
+    const slot = view.container.querySelector('.card-slot')!
+    expect(slot.classList.contains('flight-land'), 'el vuelo debe quedar aterrizando antes del desmontaje').toBe(true)
+
+    view.unmount()
+    withoutWindow(() => vi.advanceTimersByTime(1000))
+
+    expect(vi.getTimerCount(), 'el timer de 180 ms debe morir con el slot').toBe(0)
+  })
+
+  it('cancela el timer de 250 ms de la animación de entrada al desmontar', () => {
+    // Sin posición previa el slot entra con la animación de 250 ms.
+    const view = render(<CardSlot card={flightCard('enter-unmount-1')} />)
+    expect(view.container.querySelector('.card-slot')!.classList.contains('entering')).toBe(true)
+    expect(vi.getTimerCount(), 'la entrada debe dejar su timer armado').toBe(1)
+
+    view.unmount()
+    expect(vi.getTimerCount(), 'el desmontaje debe cancelarlo').toBe(0)
+  })
+
+  it('el vuelo en curso sobrevive al doble montaje de StrictMode', () => {
+    vi.mocked(getPreviousCardPosition).mockReturnValue(rectAt(400, 300))
+    const view = render(
+      <StrictMode>
+        <CardSlot card={flightCard('flight-strict-1')} />
+      </StrictMode>,
+    )
+    const slot = view.container.querySelector('.card-slot')!
+    expect(slot.classList.contains('flight-hidden'), 'el vuelo debe seguir ocultando la carta tras el remontaje').toBe(true)
+
+    const flightId = getActiveFlights().find((f) => f.cardId === 'flight-strict-1')?.flightId
+    expect(flightId, 'StrictMode no debe duplicar ni perder el vuelo').toBeTruthy()
+    act(() => { markFlightLanded(flightId!) })
+
+    expect(slot.classList.contains('flight-land'), 'el aterrizaje debe seguir enganchado').toBe(true)
   })
 })

@@ -15,10 +15,10 @@ const DEFAULT_DECK = {
   sideboard: [],
 }
 
-// ORDENADO para partidas deterministas (skipInitShuffling): mano inicial con
-// 3 Mountain + Plains + Bolt + Blaze + Arc Trail (todo jugable en los turnos
-// 2-4), Boros y Ballista en los dos primeros robos, y tierras después para el
-// Ballista X=4 (8 maná).
+// ORDERED for deterministic games (skipInitShuffling): the opening hand holds
+// 3 Mountain + Plains + Bolt + Blaze + Arc Trail (all playable on turns 2-4),
+// Boros and Ballista in the first two draws, and lands afterwards for the
+// Ballista X=4 (8 mana).
 const HUMAN_DECK = {
   name: 'Mage Web playable human test',
   cards: [
@@ -40,6 +40,51 @@ const HUMAN_DECK = {
     { cardName: 'Mountain', setCode: 'LEA', cardNumber: '292', amount: 2 },
   ],
   sideboard: [],
+}
+
+// Test-mode table options. `skipInitShuffling` is what makes the opening hand
+// deterministic; it travels in createTable but NOT in the ack (mage.view.TableView
+// does not publish it), so its effect is verified on the deal itself (see
+// assertOrderedOpeningHand).
+const TABLE_OPTIONS = { skipInitShuffling: true, skipStartingPlayerChoice: true }
+
+const OPENING_HAND_SIZE = 7
+// Do not raise this without diagnostics (issue 2026-10-21): 4 mulligan decisions,
+// and an attempt counts ONLY when keep/mulligan is actually answered. A duplicate
+// ask or a view without a hand consumes no attempt.
+const MULLIGAN_ATTEMPTS = 4
+// Bounded wait for an ask whose view carries no human hand (startup race).
+const MAX_UNREADABLE_ASKS = 3
+
+const BASIC_LANDS = new Set(['Plains', 'Island', 'Swamp', 'Mountain', 'Forest', 'Wastes'])
+
+/** Ordered prefix of `size` cards from the deck: what skipInitShuffling deals. */
+function openingHandFromDeck(deck, size = OPENING_HAND_SIZE) {
+  const names = []
+  for (const entry of deck.cards) {
+    for (let i = 0; i < (entry.amount ?? 1) && names.length < size; i++) names.push(entry.cardName)
+  }
+  return names
+}
+
+const EXPECTED_OPENING_HAND = openingHandFromDeck(HUMAN_DECK)
+
+/**
+ * Typed harness error: stable `code` plus `observed`, so a CI failure says WHAT
+ * happened without instrumenting anything again.
+ */
+class HumanTestError extends Error {
+  constructor(code, message, observed) {
+    super(`${code}: ${message}${observed === undefined ? '' : ` — observed: ${JSON.stringify(observed)}`}`)
+    this.name = 'HumanTestError'
+    this.code = code
+    this.observed = observed
+  }
+}
+
+/** Informational line that does not count as PASS/FAIL (decision diagnostics). */
+function note(text) {
+  console.log(`  INFO  ${text}`)
 }
 
 let ws
@@ -119,6 +164,65 @@ function controlledPlayer(game) {
   return game?.players?.find((player) => player.controlled)
 }
 
+/** Is the card (CardView) a land? `cardTypes` travels as an uppercase enum ("LAND"). */
+function isLandCard(card) {
+  const types = Array.isArray(card?.cardTypes) ? card.cardTypes.map((type) => String(type).toUpperCase()) : []
+  if (types.length > 0) return types.includes('LAND')
+  return BASIC_LANDS.has(card?.name) || BASIC_LANDS.has(card?.displayName)
+}
+
+/**
+ * Human seat's hand in an ask's view. `readable` is the gate the issue requires:
+ * without a non-empty `myHand` from the controlled seat, `keep` is not evaluated
+ * (an ask carrying the GAME_INIT view — empty hand — made the harness mulligan
+ * blind, and since a mulligan shuffles there was no way back).
+ */
+function humanHand(view) {
+  const seat = controlledPlayer(view)
+  const cards = Object.values(view?.myHand ?? {})
+  const names = cards.map((card) => card?.name ?? card?.displayName ?? '?')
+  const lands = cards.filter(isLandCard).length
+  const foreign = seat ? cards.filter((card) => card?.controllerId && card.controllerId !== seat.playerId) : []
+  const unreadable = []
+  if (!view) unreadable.push('no gameView')
+  if (!seat) unreadable.push('no controlled seat')
+  if (cards.length === 0) unreadable.push('empty myHand')
+  if (foreign.length > 0) unreadable.push(`${foreign.length} card(s) from another seat`)
+  if (names.some((name) => name === '?')) unreadable.push('card without a name')
+  return {
+    seat,
+    cards,
+    names,
+    lands,
+    spells: cards.length - lands,
+    readable: unreadable.length === 0,
+    reason: unreadable.join(', '),
+    text: `${cards.length} cards (lands=${lands}, spells=${cards.length - lands}) [${names.join(', ')}]`,
+  }
+}
+
+/**
+ * (b) `skipInitShuffling` is not published in `createTable`'s ack
+ * (`mage.view.TableView` has no such field), so its observable EFFECT is
+ * verified: the first 7-card hand must be exactly the deck's ordered prefix. If
+ * the server shuffled, a typed error carries what was seen — mulliganing "just in
+ * case" shuffles the library and makes the result luck-dependent (the 33/34
+ * flake of run 513).
+ */
+function assertOrderedOpeningHand(hand) {
+  const expected = [...EXPECTED_OPENING_HAND].sort()
+  const observed = [...hand.names].sort()
+  const same = observed.length === expected.length && observed.every((name, index) => name === expected[index])
+  if (same) return
+  throw new HumanTestError(
+    'INIT_SHUFFLE_NOT_SKIPPED',
+    `the opening hand is not the deck's ordered prefix: the server shuffled despite skipInitShuffling=true `
+      + `(see mage.server.TableController.startGame: it must copy MatchOptions.isSkipInitShuffling() `
+      + `into GameOptions, and Deck.getMaindeckCards() must preserve the order)`,
+    { expected, observed: hand.names, sizes: { expected: expected.length, observed: hand.names.length } },
+  )
+}
+
 function plainsUntappedIn(game) {
   return Object.values(controlledPlayer(game)?.battlefield ?? {})
     .some((perm) => !perm.tapped && (perm.displayName ?? perm.name) === 'Plains')
@@ -142,7 +246,11 @@ function targetIds(event) {
 }
 
 function askFingerprint(event) {
-  return `ask:${String(event.data?.message ?? '')}`
+  // `messageId` identifies the specific request: a resend of the same callback
+  // repeats it (ignored), but a NEW ask from the mulligan cycle does not. The text
+  // alone is not a key: two mulligans can share a message, and a legitimate ask
+  // was then discarded as a "duplicate".
+  return `ask:${event?.messageId ?? String(event?.data?.message ?? '')}`
 }
 
 function bottomFingerprint(event) {
@@ -538,7 +646,7 @@ function handleMessage(raw) {
   }
   if (message.type !== 'event') return
   if (['GAME_ASK', 'GAME_OVER', 'END_GAME_INFO', 'GAME_TARGET', 'GAME_PLAY_MANA', 'GAME_GET_AMOUNT', 'GAME_CHOOSE_CHOICE'].includes(message.method)) {
-    console.error(`[dbg] ${message.method} msg=${String(message.data?.message ?? '').slice(0, 90)}`)
+    console.error(`[dbg] ${message.method} id=${message.messageId ?? '?'} msg=${String(message.data?.message ?? '').slice(0, 90)}`)
   }
   events.push(message)
   if (hasHumanPriority(message)) openPriorityEvent = message
@@ -578,8 +686,7 @@ async function main() {
         deckType: 'Constructed - Modern',
         winsNeeded: 1,
         playerTypes: ['HUMAN', 'COMPUTER_MAD'],
-        skipInitShuffling: true,
-        skipStartingPlayerChoice: true,
+        ...TABLE_OPTIONS,
       }),
       timeout(15000, 'createTable'),
     ])
@@ -629,16 +736,47 @@ async function main() {
     const answeredAsks = new Set()
     const answeredBottom = new Set()
     let keptHand = false
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const hand = Object.values(eventGame(ask)?.myHand ?? {})
-      const keep = hand.some((card) => card.name === 'Mountain') && hand.some((card) => card.name === 'Lightning Bolt')
+    // (c) hands actually evaluated: names + lands/spells, for the failure message.
+    const evaluatedHands = []
+    let attempts = 0
+    let unreadableAsks = 0
+    let firstHandVerified = false
+    while (attempts < MULLIGAN_ATTEMPTS && ask) {
       const currentAskFingerprint = askFingerprint(ask)
+      // Exact duplicate from startup (same messageId): ignored WITHOUT consuming an attempt.
       if (answeredAsks.has(currentAskFingerprint)) {
-        check('ask de mulligan duplicado ignorado', true)
+        check('duplicate mulligan ask ignored', true, 'same messageId, no attempt consumed')
         ask = await waitForNextMulliganDecision(gameId, currentAskFingerprint, answeredBottom)
         continue
       }
+      const hand = humanHand(eventGame(ask))
+      // (a) With no human-seat hand nothing is decided: this ask is not answered
+      // (no blind mulligan) and the next one is awaited, bounded.
+      if (!hand.readable) {
+        unreadableAsks++
+        note(`mulligan ask without a human hand (${hand.reason}): waiting for the next one without answering or consuming an attempt`)
+        if (unreadableAsks > MAX_UNREADABLE_ASKS) {
+          throw new HumanTestError(
+            'MULLIGAN_ASK_UNREADABLE',
+            `${unreadableAsks} consecutive asks without a human-seat hand; the server never resent a view carrying a hand`,
+            { lastAsk: { messageId: ask.messageId, message: String(ask.data?.message ?? ''), reason: hand.reason }, attempts },
+          )
+        }
+        ask = await waitForNextMulliganDecision(gameId, currentAskFingerprint, answeredBottom)
+        continue
+      }
+      // (b) The first readable hand proves whether the server honored skipInitShuffling.
+      if (!firstHandVerified) {
+        firstHandVerified = true
+        assertOrderedOpeningHand(hand)
+        check('skipInitShuffling honored (opening hand = ordered deck prefix)', true, hand.text)
+      }
       answeredAsks.add(currentAskFingerprint)
+      attempts++
+      const keep = hand.names.includes('Mountain') && hand.names.includes('Lightning Bolt')
+      evaluatedHands.push({ attempt: attempts, size: hand.cards.length, lands: hand.lands, spells: hand.spells, names: hand.names })
+      // (c) every evaluated hand also lands in the log, not only in the failure message.
+      console.error(`[dbg] hand evaluated #${attempts}: ${hand.cards.length} cards lands=${hand.lands} spells=${hand.spells} keep=${keep} [${hand.names.join(', ')}]`)
       const askGameId = ask.objectId ?? gameId
       // XMage: sendPlayerBoolean(true) = tomar mulligan, false = mantener la mano.
       result = await Promise.race([
@@ -654,7 +792,15 @@ async function main() {
       // London mulligan: el servidor pide elegir cartas para el fondo de la library antes del siguiente ask.
       ask = await waitForNextMulliganDecision(gameId, currentAskFingerprint, answeredBottom)
     }
-    if (!check('mano inicial contiene tierra y hechizo', keptHand)) return
+    if (!check(
+      'mano inicial contiene tierra y hechizo',
+      keptHand,
+      keptHand
+        ? ''
+        : `no valid hand in ${evaluatedHands.length}/${MULLIGAN_ATTEMPTS} attempt(s) — ${evaluatedHands.length
+          ? evaluatedHands.map((h) => `#${h.attempt}(${h.size} cards, lands=${h.lands}, spells=${h.spells}) [${h.names.join(', ')}]`).join(' | ')
+          : `no readable ask (${unreadableAsks} without a hand)`}`,
+    )) return
 
     const gameCursor = events.length
     const update = await waitEvent((event) =>

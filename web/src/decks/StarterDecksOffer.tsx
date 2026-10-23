@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Button from '../ui/Button'
 import Icon from '../ui/Icon'
 import { useTranslation } from '../i18n'
@@ -10,7 +10,21 @@ export default function StarterDecksOffer({ onAdded }: { onAdded: (decks: DeckV2
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
-  const names = starterDeckItems().map((d) => d.name).join(', ')
+  const [names, setNames] = useState('')
+
+  // The catalog is its own chunk: the button works without it (adopting awaits the same loader),
+  // the copy names them once it lands.
+  useEffect(() => {
+    let cancelled = false
+    void starterDeckItems()
+      .then((items) => {
+        if (!cancelled) setNames(items.map((d) => d.name).join(', '))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const add = async () => {
     setBusy(true)
@@ -27,7 +41,7 @@ export default function StarterDecksOffer({ onAdded }: { onAdded: (decks: DeckV2
   return (
     <div className="starter-decks-offer" data-testid="starter-decks-offer">
       <span className="starter-decks-offer-title"><Icon name="layers" size={13} /> {t('decks', 'starter_title')}</span>
-      <span>{t('decks', 'starter_desc', { names })}</span>
+      {names && <span>{t('decks', 'starter_desc', { names })}</span>}
       <Button variant="primary" size="sm" icon="plus" disabled={busy} onClick={() => void add()} data-testid="starter-decks-add">
         {t('decks', 'starter_add')}
       </Button>

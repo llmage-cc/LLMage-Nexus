@@ -10,6 +10,35 @@ function status(code: number, headers: Record<string, string> = {}): Response {
   return { ok: false, status: code, json: async () => ({}), headers: { get: (k: string) => headers[k] ?? null } } as unknown as Response
 }
 
+/**
+ * A synchronous stall in the client's pre-fetch path stands in for what a loaded
+ * CI runner does to this code: the thread gets preempted between `pump()` handing
+ * the task over and `fetch()` being called. If the slot were anchored at the
+ * dequeue, that stall would be subtracted from the spacing (50 ms slot, 40 ms
+ * stall → the two sends start ~10 ms apart).
+ */
+class StallingAbortSignal {
+  private readonly inner = new AbortController()
+
+  constructor(private readonly stallMs: number) {}
+
+  get aborted(): boolean {
+    return this.inner.signal.aborted
+  }
+
+  addEventListener(type: 'abort', listener: () => void): void {
+    const until = Date.now() + this.stallMs
+    while (Date.now() < until) {
+      // Deliberate busy wait: holds the thread, exactly like a preemption does.
+    }
+    this.inner.signal.addEventListener(type, listener)
+  }
+
+  removeEventListener(type: 'abort', listener: () => void): void {
+    this.inner.signal.removeEventListener(type, listener)
+  }
+}
+
 describe('scryfallFetch', () => {
   beforeEach(() => {
     resetScryfallClient()
@@ -39,6 +68,30 @@ describe('scryfallFetch', () => {
     for (let i = 1; i < starts.length; i++) {
       expect(starts[i] - starts[i - 1]).toBeGreaterThanOrEqual(45)
     }
+  })
+
+  // Control for the test above: it must fail if the slot goes back to being
+  // measured from the dequeue instead of from the send. The slow step lives
+  // inside the client (the abort listener runs after `pump()` dequeues and before
+  // `fetch`), and `Date.now()` is still read from the fetch stub, so the gap is
+  // between the two real send times.
+  it('measures the spacing from the actual dispatch, not from the dequeue', async () => {
+    setScryfallPacing({ spacingMs: 50, maxConcurrent: 2 })
+    const starts: number[] = []
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      starts.push(Date.now())
+      return ok({})
+    }))
+
+    await Promise.all([
+      scryfallFetch('https://api.scryfall.com/cards/y/0', { signal: new StallingAbortSignal(40) as unknown as AbortSignal }),
+      scryfallFetch('https://api.scryfall.com/cards/y/1'),
+    ])
+
+    expect(starts).toHaveLength(2)
+    // 45 and not 50 for the same reason as above: Date.now() truncates to the
+    // millisecond, so a correct slot can be observed as 49.
+    expect(starts[1] - starts[0]).toBeGreaterThanOrEqual(45)
   })
 
   it('always sends the Accept header', async () => {

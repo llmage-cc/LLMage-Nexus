@@ -2,11 +2,22 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { render, cleanup, waitFor } from '@testing-library/react'
 import App from './App'
 
-const { doConnect } = vi.hoisted(() => ({ doConnect: vi.fn<() => Promise<void>>() }))
+const { doConnect, getNewsMock } = vi.hoisted(() => ({
+  doConnect: vi.fn<() => Promise<void>>(),
+  getNewsMock: vi.fn(),
+}))
 
 vi.mock('./state/gateway', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./state/gateway')>()
   return { ...actual, doConnect }
+})
+
+// The badge's `getNews()` is a GitHub round-trip. Left real, this file fires one at boot and the
+// promise lands after the test dropped jsdom, so the late setState dies as an uncaught
+// `ReferenceError` from react-dom. Never resolve by default: no test here needs a news payload.
+vi.mock('./system/news', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./system/news')>()
+  return { ...actual, getNews: getNewsMock }
 })
 
 const store = new Map<string, string>()
@@ -30,6 +41,9 @@ const session = {
 
 beforeEach(() => {
   doConnect.mockClear()
+  getNewsMock.mockReset()
+  // Never resolves: the tests that do not drive it must not leave a continuation behind.
+  getNewsMock.mockImplementation(() => new Promise(() => {}))
   store.clear()
   vi.stubGlobal('localStorage', stub)
 })
@@ -76,5 +90,26 @@ describe('what App does on load', () => {
     store.set('mage-web-conn', JSON.stringify(session))
     const second = render(<App />)
     expect(second.queryByTestId('setup-wizard')).toBeNull()
+  })
+
+  it('drops the news refresh that resolves after the app unmounted', () => {
+    store.set('mage-web-conn', JSON.stringify(session))
+    let resume: ((value: { releases: unknown[]; offline: boolean }) => void) | null = null
+    getNewsMock.mockImplementationOnce(() => ({
+      then: (onFulfilled: (value: { releases: unknown[]; offline: boolean }) => void) => { resume = onFulfilled },
+    }) as never)
+
+    const view = render(<App />)
+    expect(resume, 'el badge de noticias debe haber pedido las releases al montar').not.toBeNull()
+    view.unmount()
+
+    // No window: a setTick after unmount walks react-dom's resolveUpdatePriority and throws.
+    const saved = globalThis.window
+    delete (globalThis as { window?: Window }).window
+    try {
+      expect(() => resume!({ releases: [{ tag: 'v0.4.7' }], offline: false })).not.toThrow()
+    } finally {
+      Object.defineProperty(globalThis, 'window', { configurable: true, enumerable: true, writable: true, value: saved })
+    }
   })
 })

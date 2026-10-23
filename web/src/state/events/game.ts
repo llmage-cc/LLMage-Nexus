@@ -1,5 +1,5 @@
 import * as cmds from '../../net/commands'
-import type { GameEndInfo, GameView } from '../../net/types'
+import type { GameEndInfo, GameView, TableView } from '../../net/types'
 import { parseFeedback } from '../../game/feedback'
 import { manaPaymentActions } from '../../game/manaPayment'
 import { serverAutoAnswerActions } from '../../game/autoAnswers'
@@ -185,6 +185,20 @@ export function handleGameUpdate(method: string, objectId: string | null, data: 
   }
 }
 
+/**
+ * The game a watched table exposes right now, if it is watchable at all.
+ *
+ * `TableView.games` is the MATCH's game list, so a table that is staging again
+ * (Bo3 between games) still lists the games already played. Only `DUELING`
+ * means there is a live game to subscribe to — exactly the condition XMage's
+ * `TableController.watchTable` enforces before it registers a watcher.
+ */
+export function watchableGameId(table: TableView | null | undefined): string | null {
+  if (!table || table.tableState !== 'DUELING') return null
+  const games = table.games ?? []
+  return games.length ? games[games.length - 1] : null
+}
+
 export function handleWatchGame(objectId: string | null): void {
   const prevGameId = getState().gameId
   if (objectId) {
@@ -198,7 +212,11 @@ export function handleWatchGame(objectId: string | null): void {
     setState({
       phase: 'spectating_pending',
       gameId: objectId,
-      watchingTable: null,
+      // The spectated table is KEPT: staging keeps showing it while the first
+      // frame is in flight (it used to fall back to "Preparing to start…" /
+      // 0 seats between the ack and the board) and it is what lets the table
+      // watch be promoted to a game watch when the table reports that the match
+      // started (see the `lobby` case in eventHandler).
       // El id de torneo resuelto (SHOW_TOURNAMENT) ya no hace falta: evita que al
       // volver del juego espectado el lobby reabra el cuadro solo.
       spectateTournament: null,

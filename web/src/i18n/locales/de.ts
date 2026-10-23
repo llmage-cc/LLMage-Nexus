@@ -893,6 +893,8 @@ export const de: TranslationSchema = {
     game_over: 'Spiel beendet',
     victory: 'Sieg!',
     defeat: 'Niederlage',
+    victory_forfeit: 'Sieg (durch Aufgabe)',
+    end_forfeit_note: 'Der LLM-Anbieter deines Gegners ist ausgefallen, daher wurde die Partie nicht zu Ende gespielt.',
     end_stat_turns: 'Züge',
     end_stat_life_taken: 'Abgezogene Lebenspunkte',
     end_stat_life_lost: 'Verlorene Lebenspunkte',

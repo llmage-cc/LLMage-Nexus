@@ -102,10 +102,20 @@ export default function CardSlot({
   const isFirstMountRef = useRef(true)
   const [entering, setEntering] = useState(false)
   const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** `entering` sigue pendiente de su timer: sobrevive a un cleanup de desmontaje
+   *  que luego resulta ser el doble montaje de StrictMode. */
+  const enterPendingRef = useRef(false)
   const mountedRef = useRef(false)
   const [flightState, setFlightState] = useState<'none' | 'hidden' | 'landing'>('none')
   const flightStateRef = useRef(flightState)
   flightStateRef.current = flightState
+  /** Timer de los 180 ms de `landing` → `none` (aterrizaje del vuelo). */
+  const flightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Suscripciones vivas del vuelo en curso: `offLanded` + `unsub`. */
+  const flightCleanupRef = useRef<(() => void) | null>(null)
+  /** El cleanup de desmontaje soltó un vuelo vivo (doble montaje de StrictMode):
+   *  el efecto que vuelve a ejecutarse tiene que reengancharlo. */
+  const flightDetachedRef = useRef(false)
   const [held, setHeld] = useState(false)
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -146,9 +156,22 @@ export default function CardSlot({
     else if (pendingAck === 'pending' && !isPlayable && !isChosen && !attacking && !blocking) clearPending()
   }, [pendingAck, isChosen, isTarget, isPlayable, attacking, blocking, clearPending])
 
+  // El desmontaje es el ÚNICO punto donde se sueltan los timers/suscripciones
+  // con vida propia. No puede hacerse en el cleanup del layout effect de
+  // montaje: ese cleanup también corre cuando un GAME_UPDATE trae un `card`
+  // nuevo (deps `[effectiveId, card]`), y cancelar ahí el timer de `entering`
+  // dejaba la carta clavada en la animación de entrada, y soltar el aterrizaje
+  // de un vuelo en curso la dejaba oculta hasta el backstop de 700 ms.
   useEffect(() => () => {
-    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
-    if (holdTimerRef.current) clearTimeout(holdTimerRef.current)
+    if (pendingTimerRef.current) { clearTimeout(pendingTimerRef.current); pendingTimerRef.current = null }
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null }
+    if (enterTimerRef.current) { clearTimeout(enterTimerRef.current); enterTimerRef.current = null }
+    if (flightTimerRef.current) { clearTimeout(flightTimerRef.current); flightTimerRef.current = null }
+    if (flightCleanupRef.current) {
+      flightDetachedRef.current = true
+      flightCleanupRef.current()
+      flightCleanupRef.current = null
+    }
   }, [])
 
   useEffect(() => {
@@ -159,6 +182,56 @@ export default function CardSlot({
   useLayoutEffect(() => {
     const el = slotRef.current
     if (!el || !effectiveId) return
+
+    /** Engancha este slot al vuelo `flightId`: aterrizaje + backstop. Se puede
+     *  llamar dos veces (reemplaza las suscripciones anteriores) porque
+     *  StrictMode desmonta y remonta los efectos sobre el mismo árbol. */
+    const attachFlight = (flightId: string) => {
+      // Un solo vuelo vivo por slot: soltar el enganche anterior si lo hubiera.
+      flightCleanupRef.current?.()
+      const land = () => {
+        // El vuelo puede aterrizar —o expirar su backstop— después del
+        // desmontaje. Sin guard el dispatch entra en react-dom, que en
+        // `resolveUpdatePriority` lee `window.event`: con jsdom ya desmontado
+        // eso es `ReferenceError: window is not defined`, y vitest lo cuenta
+        // como error no capturado aunque todas las aserciones hayan pasado.
+        if (!mountedRef.current) return
+        if (flightStateRef.current !== 'hidden') return
+        setFlightState('landing')
+        if (flightTimerRef.current) clearTimeout(flightTimerRef.current)
+        flightTimerRef.current = setTimeout(() => {
+          flightTimerRef.current = null
+          if (mountedRef.current) setFlightState('none')
+        }, 180)
+      }
+      const offLanded = onFlightLanded(flightId, land)
+      const unsub = subscribeFlights(() => {
+        if (!getActiveFlights().some((f) => f.flightId === flightId)) {
+          land()
+          offLanded()
+          unsub()
+        }
+      })
+      flightCleanupRef.current = () => {
+        offLanded()
+        unsub()
+        if (flightTimerRef.current) { clearTimeout(flightTimerRef.current); flightTimerRef.current = null }
+      }
+    }
+
+    /** Arma (o rearma) el final de la animación de entrada. */
+    const startEnterTimer = () => {
+      enterTimerRef.current = setTimeout(() => {
+        enterTimerRef.current = null
+        enterPendingRef.current = false
+        if (mountedRef.current) setEntering(false)
+      }, 250)
+    }
+    const armEnter = () => {
+      enterPendingRef.current = true
+      setEntering(true)
+      startEnterTimer()
+    }
 
     if (isFirstMountRef.current) {
       isFirstMountRef.current = false
@@ -179,26 +252,15 @@ export default function CardSlot({
               const flightId = startCardFlight(card, prev, toRect, 340, `[data-card-id="${effectiveId}"]`, { sourceSize, toCompact: compact, variant: enteringLand ? 'land' : undefined })
               if (!flightId) return
               setFlightState('hidden')
-              const land = () => {
-                if (flightStateRef.current !== 'hidden') return
-                setFlightState('landing')
-                setTimeout(() => setFlightState('none'), 180)
-              }
-              const offLanded = onFlightLanded(flightId, land)
-              const unsub = subscribeFlights(() => {
-                if (!getActiveFlights().some((f) => f.flightId === flightId)) {
-                  land()
-                  offLanded()
-                  unsub()
-                }
-              })
+              attachFlight(flightId)
             }
             const holdMs = combatHoldRemaining(String(effectiveId))
             if (holdMs > 0) {
               setHeld(true)
               holdTimerRef.current = setTimeout(() => {
                 holdTimerRef.current = null
-                if (mountedRef.current) setHeld(false)
+                if (!mountedRef.current) return
+                setHeld(false)
                 if (el.isConnected) flyIn(el.getBoundingClientRect())
               }, holdMs)
             } else {
@@ -206,14 +268,29 @@ export default function CardSlot({
             }
           } else {
             noteFlightEvent({ kind: 'skip', reason: 'same-zone', cardId: String(effectiveId), detail: `slot:${prevZone || '?'}>${curZoneClass || '?'}` })
-            setEntering(true)
-            enterTimerRef.current = setTimeout(() => { enterTimerRef.current = null; if (mountedRef.current) setEntering(false) }, 250)
+            armEnter()
           }
         } else {
           const mountZone = el.closest('.opponent-zone, .player-zone, .stack-zone, .hand-zone')
           noteFlightEvent({ kind: 'skip', reason: 'no-prev', cardId: String(effectiveId), detail: `slot-mount:${mountZone ? mountZone.className.split(' ')[0] : '?'}` })
-          setEntering(true)
-          enterTimerRef.current = setTimeout(() => { enterTimerRef.current = null; if (mountedRef.current) setEntering(false) }, 250)
+          armEnter()
+        }
+      }
+    } else {
+      // Rearme tras el doble montaje de StrictMode (dev), que ejecuta el cleanup
+      // de desmontaje sobre un árbol que sigue vivo: sin esto, el timer de
+      // `entering` y el aterrizaje del vuelo en curso se quedan sin reenganchar
+      // (la carta se clava en `entering` o espera al backstop de 700 ms). Un
+      // eco normal de GAME_UPDATE llega con ambos ya armados y no toca nada.
+      if (enterPendingRef.current && !enterTimerRef.current) startEnterTimer()
+      if (flightDetachedRef.current && !flightCleanupRef.current) {
+        // Solo el vuelo que este mismo slot perdió en el cleanup: adoptar
+        // cualquier vuelo activo del mismo id ocultaría una carta que no vuela.
+        const active = getActiveFlights().find((f) => f.cardId === String(card.id) || f.cardId === String(effectiveId))
+        flightDetachedRef.current = false
+        if (active) {
+          setFlightState('hidden')
+          attachFlight(active.flightId)
         }
       }
     }

@@ -3,10 +3,17 @@
 }
 
 .end-summary,
+.end-forfeit-note,
 .end-stats,
 .end-hint,
 .end-actions {
   margin-top: var(--sp-3);
+}
+
+.end-forfeit-note {
+  margin-bottom: 0;
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
 }
 
 .end-winner-badge:first-child {

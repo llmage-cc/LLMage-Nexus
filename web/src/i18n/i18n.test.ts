@@ -204,4 +204,13 @@ describe('translateError — el fallback de un FAILED desnudo depende de la supe
     expect(translateError(mismatch, 'login')).toBe(mismatch)
     expect(translateError(mismatch, 'login')).toBe(translateError(mismatch))
   })
+
+  it('keeps the server text of a SERVER_MESSAGE refusal verbatim', async () => {
+    const detail = 'User name may not be longer than 14 characters'
+    expect(translateError(detail, 'login', 'SERVER_MESSAGE')).toBe(detail)
+    // the code itself is protocol jargon: it must never surface as the message
+    expect(translateError('SERVER_MESSAGE', 'login', 'SERVER_MESSAGE')).toBe(t('errors.login_failed'))
+    expect(translateError('', 'login', 'SERVER_MESSAGE')).toBe(t('errors.login_failed'))
+    expect(translateError('SERVER_MESSAGE')).toBe(t('errors.create_table_failed'))
+  })
 })

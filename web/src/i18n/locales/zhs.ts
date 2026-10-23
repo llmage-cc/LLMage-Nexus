@@ -896,6 +896,8 @@ export const zhs: TranslationSchema = {
     game_over: '对局结束',
     victory: '胜利！',
     defeat: '战败',
+    victory_forfeit: '胜利（对手弃权）',
+    end_forfeit_note: '对手的 LLM 服务商发生故障，因此对局未能正常进行。',
     end_stat_turns: '回合数',
     end_stat_life_taken: '夺取的生命',
     end_stat_life_lost: '失去的生命',

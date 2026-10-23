@@ -5,24 +5,25 @@
   "project": {
     "name": "XMage Nexus",
     "tagline": "Modern, polished web client for XMage (React 19 + TypeScript + WebSocket proxy).",
-    "version": "0.3.0",
+    "version": "0.4.7",
     "repo": "Adamychen/xmage-nexus",
     "playUrl": "https://web.xmage-nexus.com",
-    "stack": "XMage Server 1.4.61-V1 · Mage.Proxy (Java 17) · React 19 + Vite + TS"
+    "stack": "XMage Server 1.4.62-V1 · Mage.Proxy (Java 17) · React 19 + Vite + TS"
   },
   "release": {
-    "version": "0.3.0",
-    "date": "2026-09-27",
-    "tag": "v0.3.0",
+    "version": "0.4.7",
+    "date": "2026-10-14",
+    "tag": "v0.4.7",
     "status": "published",
-    "notes": "v0.3.0: games survive dropped connections, proxy restarts and server outages; compact Arena-style battlefield cards with a configurable tap style; combat strikes land before life drops; table owners can delete tables from the lobby; blocking rollback vote dialog; Archidekt import and desktop News freeze fixed. Rebuilds the proxy component.",
+    "notes": "v0.4.7: cards are drawn from card data instead of images alone (hand column, battlefield, piles, hover preview) behind a setting, with a gallery and a layout classifier; players can report a bug from the lobby or mid-game and the report carries the game state; the SIM bot becomes dev-only and seats run the server's native AI; an interactive demo ships on GitHub Pages; the proxy journals commander damage and how every game ends; a multiplayer game can be left early. Follows v0.4.4 (2026-10-06), v0.4.5 (2026-10-07) and v0.4.6 (2026-10-09).",
     "highlights": [
-      "Games survive every kind of disconnect: a proxy restart keeps the games, a dropped connection has a grace period, the proxy re-logs in by itself after losing the XMage server, and a resumable stream replays exactly the frames a reconnecting tab missed",
-      "Compact Arena-style battlefield cards (art-crop tiles with name, type, P/T and mana pips) and a Tilted 45° tap style, with a {T} marker and compact command-zone tiles",
-      "Combat strikes: attackers lunge one after another and life and damage drop when each strike lands",
-      "Table owners can delete their tables from the lobby; a failed table creation no longer leaves stray tables behind",
-      "Rollback vote dialog listing every player's vote; SIM seats accept rollbacks",
-      "Fixes: Archidekt URL import, desktop About → News freeze, Space passing priority after a click, board scrolling up while playing"
+      "Rendered cards: battlefield, hand column, piles, grid and hover preview drawn from card data when the setting is on, with a gallery and a layout classifier",
+      "Bug reports from the lobby or mid-game carry the live game state (commander damage, counters, turn) instead of a bare description",
+      "The proxy SIM bot is dev-only (`--sim on`); tables seat the server's native AI (`COMPUTER_MAD` / `COMPUTER_MONTE_CARLO` / `COMPUTER_DRAFT_BOT`)",
+      "Interactive demo on GitHub Pages: the real client on scripted scenarios, no install",
+      "Hand as a scrollable full-card row, a hand column with the side panel closed, and the any-time top-card peek beside the library",
+      "Leave a multiplayer game early instead of waiting for it to end; top-card peek names the real card the wire points at",
+      "Launcher: component downloads no longer hang forever on a stalled connection"
     ],
     "downloads": [
       {
@@ -74,7 +75,7 @@
           "playNote": "Demo en vivo · abre el cliente y elige tu servidor · sin instalar nada",
           "trust": [
             "React 19 + TypeScript",
-            "XMage 1.4.61-V1",
+            "XMage 1.4.62-V1",
             "Proxy multi-tenant",
             "Web o escritorio"
           ]
@@ -268,7 +269,7 @@
           "playNote": "Live demo · opens the client, pick your server · no install",
           "trust": [
             "React 19 + TypeScript",
-            "XMage 1.4.61-V1",
+            "XMage 1.4.62-V1",
             "Multi-tenant proxy",
             "Web or desktop"
           ]
@@ -550,7 +551,7 @@
       "name": "Advanced Formats & Tournaments",
       "status": "done",
       "date": "2026-09-13",
-      "desc": "Commander pod (PodBoard 2x2 render clamp 4 — server supports FFA 3-10 — + TurnOrderRing + CommanderDamageMatrix), Booster Draft & Sealed (8-player, DraftScreen + ConstructScreen), Swiss/SE brackets (TournamentBracket/Panel) + Replay entry from the match history (view-only; transport controls pending). Live 2026-09-13: Sealed Elimination end-to-end (audit-sealed-2, joinTournament discovery, auto-submit, 40-card game to Finished) + tournament wizard with real data (19 types). Draft picks and sealed ConstructScreen submit via web UI validated live 2026-09-14."
+      "desc": "Commander pod (PodBoard 2x2 render clamp 4 — server supports FFA 3-10 — + TurnOrderRing + CommanderDamageMatrix), Booster Draft & Sealed (8-player, DraftScreen + ConstructScreen), Swiss/SE brackets (TournamentBracket/Panel) + Replay entry from the match history (view-only) with a full transport bar (`ReplayControls`: previous / play-pause / next / skip / stop, slider, Space/←/→/Esc). Live 2026-09-13: Sealed Elimination end-to-end (audit-sealed-2, joinTournament discovery, auto-submit, 40-card game to Finished) + tournament wizard with real data (19 types). Draft picks and sealed ConstructScreen submit via web UI validated live 2026-09-14."
     },
     {
       "id": 6,

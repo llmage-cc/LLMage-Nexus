@@ -17,7 +17,7 @@ import { observeBattlefieldEntries, resetBattlefieldEntries, sameEntries } from 
 import { notifyFeedbackOpened } from '../audio/promptSound'
 import { handleChatMessage, handleShowUserMessage, handleServerMessage } from './events/chat'
 import {
-  handleJoinedTable, handleStartGame, handleGameUpdate, handleWatchGame,
+  handleJoinedTable, handleStartGame, handleGameUpdate, handleWatchGame, watchableGameId,
   handleGameInform, handleGameOver, handleEndGameInfo, handleGameError, handleRedrawGui,
 } from './events/game'
 import { handleGameTarget, handleGameAsk, handleUserRequestDialog, applyChoiceMemory } from './events/prompts'
@@ -74,6 +74,20 @@ export function handleMessage(msg: ProxyMessage) {
         notifyStagingRoster(prevStaged, nextStaged, s.conn?.username)
       }
       setState({ lobby: msg, watchingTable: updatedWatching })
+      // Spectating a table that is STILL IN STAGING subscribes to nothing: XMage
+      // refuses a table watch while the table is not DUELING
+      // (`TableController.watchTable`) and `SessionImpl.watchTable` returns true
+      // anyway, so the ack is a silent no-op and no frame arrives when the host
+      // starts. The lobby is the first place the created game appears: promote
+      // the table watch to a game watch — the same subscription a late spectator
+      // gets from WATCHGAME — as soon as the table exposes a live game.
+      if (s.phase === 'spectating_pending') {
+        const gameId = watchableGameId(updatedWatching)
+        if (gameId && gameId !== s.gameId) {
+          addLog('partida', 'Espectador: la mesa arrancó la partida; suscribiendo al tablero…')
+          handleWatchGame(gameId)
+        }
+      }
       break
     }
     case 'result': {

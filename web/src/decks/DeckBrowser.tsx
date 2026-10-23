@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, type ReactNode } from 'react'
 import Chip from '../ui/Chip'
 import type { MetaDeckItem } from './metaDeckCatalog'
-import { META_DECK_CATALOG } from './metaDeckCatalog'
+import { loadMetaDeckCatalog, metaDeckCatalogIfLoaded } from './metaDeckCatalog'
 import { DeckInspectorModal } from './DeckInspectorModal'
 import { colorIdentityFromCards, type DeckFormat, type DeckV2 } from './types'
 import { ALL_FORMATS } from './formatRules'
@@ -63,6 +63,17 @@ export function DeckBrowser({
   const [colorFilter, setColorFilter] = useState<Set<string>>(new Set())
   const [inspectingDeck, setInspectingDeck] = useState<MetaDeckItem | null>(null)
   const [corpus, setCorpus] = useState<Deck[]>(() => bundledCorpusDecks())
+  // The curated catalog is its own chunk (50 KB of decklists): paint the filters first, fill the
+  // list when it lands. A reopen of the gallery finds it already in memory.
+  const [catalog, setCatalog] = useState<MetaDeckItem[]>(() => metaDeckCatalogIfLoaded() ?? [])
+
+  useEffect(() => {
+    let cancelled = false
+    void loadMetaDeckCatalog().then((items) => {
+      if (!cancelled) setCatalog(items)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   // The ~5,000-deck corpus lands lazily off the login path; when it does, its
   // decks become searchable here too (see `results`).
@@ -90,16 +101,16 @@ export function DeckBrowser({
       (archetypeFilter === 'All Archetypes' || d.archetype === archetypeFilter) &&
       (colorFilter.size === 0 || [...colorFilter].every((c) => d.colors.includes(c as never)))
 
-    const catalog = META_DECK_CATALOG.filter((d) => matchQuery(d) && passFilters(d))
+    const curated = catalog.filter((d) => matchQuery(d) && passFilters(d))
     // The curated catalog stays the default list: only a search reaches into the
     // bundled corpus, so the pane is never drowned by 5,000 boxes.
-    if (!query) return catalog
+    if (!query) return curated
     const corpusMatches = corpus
       .filter((d) => matchQuery(d))
       .map(corpusDeckToItem)
       .filter(passFilters)
-    return [...catalog, ...corpusMatches]
-  }, [search, formatFilter, archetypeFilter, colorFilter, corpus])
+    return [...curated, ...corpusMatches]
+  }, [search, formatFilter, archetypeFilter, colorFilter, corpus, catalog])
 
   const shown = results.slice(0, BROWSER_RENDER_CAP)
 

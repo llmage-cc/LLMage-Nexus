@@ -1,6 +1,6 @@
 import { useSyncExternalStore, useCallback } from 'react'
 import type { SupportedLanguage, LanguageInfo, TranslationSchema } from './types'
-import { en } from './locales/en'
+import { enFallback } from './enFallback'
 
 export * from './types'
 
@@ -30,9 +30,11 @@ export const CARD_LANGUAGES: Array<{ code: string; name: string; flag: string }>
 
 /**
  * The nine locales are ~1.15 MB of source: statically imported they were roughly half the bundle,
- * and a player only ever reads one of them. English stays eager because it is also the fallback
- * every `t()` call falls back to, so the app is never without strings; the other eight load as
- * their own chunk on demand and the store notifies when they land.
+ * and a player only ever reads one of them. English is the fallback every `t()` call falls back to,
+ * so `enFallback.ts` keeps the pre-login strings eager — the splash, setup, login and connection
+ * banners are readable before any chunk lands — while the full catalog (the other categories and
+ * the generated keyword glossary, ~36 KB gzip) is a chunk like the rest. `preloadInitialLocale`
+ * always starts it at boot, so the full English is in memory long before the lobby can render.
  */
 const LOCALE_LOADERS: Record<SupportedLanguage, () => Promise<TranslationSchema>> = {
   en: () => import('./locales/en').then((m) => m.en),
@@ -46,8 +48,19 @@ const LOCALE_LOADERS: Record<SupportedLanguage, () => Promise<TranslationSchema>
   zhs: () => import('./locales/zhs').then((m) => m.zhs),
 }
 
-/** Only the locales whose strings are in memory right now. */
-const loaded = new Map<SupportedLanguage, TranslationSchema>([['en', en]])
+/** A catalog that may still be missing the categories its chunk carries. */
+type PartialSchema = { [K in keyof TranslationSchema]?: TranslationSchema[K] extends object
+  ? Partial<TranslationSchema[K]>
+  : TranslationSchema[K] }
+
+/**
+ * What `t()` falls back to when the active language has no string: the full English catalog once
+ * its chunk has landed, the eager pre-login slice until then.
+ */
+let englishFallback = enFallback as PartialSchema
+
+/** Only the locales whose full strings are in memory right now. */
+const loaded = new Map<SupportedLanguage, TranslationSchema>()
 const inFlight = new Map<SupportedLanguage, Promise<void>>()
 
 /** Fills the store with a language, at most once per language. */
@@ -58,6 +71,8 @@ export function ensureLocaleLoaded(lang: SupportedLanguage): Promise<void> {
   const promise = LOCALE_LOADERS[lang]()
     .then((schema) => {
       loaded.set(lang, schema)
+      // English is the fallback for every other language: keep it whole as soon as it lands
+      if (lang === 'en') englishFallback = schema
       notifyListeners()
     })
     .catch(() => {
@@ -70,8 +85,8 @@ export function ensureLocaleLoaded(lang: SupportedLanguage): Promise<void> {
   return promise
 }
 
-function localeOf(lang: SupportedLanguage): TranslationSchema {
-  return loaded.get(lang) ?? en
+function localeOf(lang: SupportedLanguage): PartialSchema {
+  return loaded.get(lang) ?? englishFallback
 }
 
 const STORAGE_KEY_LANG = 'nexus_lang'
@@ -102,10 +117,12 @@ let storeVersion = 0
 const listeners = new Set<() => void>()
 
 /**
- * Starts the fetch of the saved/browser language. English renders until it lands, so this is
- * fire-and-forget and the app never waits on it; the listeners re-render when it resolves.
+ * Starts the fetch of the full English catalog (the fallback every `t()` reaches for) and of the
+ * saved/browser language. English renders until they land, so this is fire-and-forget and the app
+ * never waits on it; the listeners re-render when it resolves.
  */
 export function preloadInitialLocale(): void {
+  void ensureLocaleLoaded('en')
   void ensureLocaleLoaded(currentLanguage)
 }
 
@@ -142,10 +159,13 @@ export function setLanguage(lang: SupportedLanguage): void {
  * Switches language and resolves once its strings are in memory, so a caller can read `t()`
  * immediately after. `setLanguage` alone paints English for the few ms the chunk takes, which is
  * what a player sees; a test has no such grace period and would assert the fallback.
+ *
+ * English is awaited too: it is what every missing key falls back to, so a caller that resolves a
+ * switch must not still be reading the eager pre-login slice.
  */
 export async function switchLanguage(lang: SupportedLanguage): Promise<void> {
   setLanguage(lang)
-  await ensureLocaleLoaded(lang)
+  await Promise.all([ensureLocaleLoaded('en'), ensureLocaleLoaded(lang)])
 }
 
 export function getCardLanguage(): string {
@@ -207,7 +227,7 @@ export function t(
       current = (current as Record<string, unknown>)[part]
     } else {
       // Fallback to English or key if missing
-      let fallback: unknown = en
+      let fallback: unknown = englishFallback
       for (const p of parts) {
         if (fallback && typeof fallback === 'object' && p in fallback) {
           fallback = (fallback as Record<string, unknown>)[p]
@@ -328,7 +348,9 @@ export function translateError(error: string | null | undefined, action?: string
   if (lower.includes('invalid game type') || lower.includes('gametype') || str === 'INVALID_GAME_TYPE') {
     return `${t('errors.create_table_failed')}: ${t('errors.invalid_game_type')}`
   }
-  if (str === 'FAILED' || lower === 'failed') {
+  // SERVER_MESSAGE: the proxy flagged the text as the server's own reason (no specific class).
+  // With text present it already returned above, so only the bare code lands here.
+  if (str === 'FAILED' || lower === 'failed' || str === 'SERVER_MESSAGE') {
     if (action === 'joinTable' || action === 'joinTournamentTable' || action === 'joinTournament' || action === 'joinDraft') return t('errors.join_table_failed')
     if (action === 'watchTable' || action === 'watchTournamentTable') return t('errors.table_not_found')
     if (action === 'startMatch' || action === 'startTournament') return t('errors.start_game_failed')

@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import SpectatorStagingScreen from './SpectatorStagingScreen'
 import ConfirmHost from '../ui/ConfirmHost'
@@ -438,5 +439,85 @@ describe('SpectatorStagingScreen', () => {
 
     expect(getByText('(1480)')).not.toBeNull()
     expect(queryByText('(1600)')).toBeNull()
+  })
+})
+
+// The timers that end the swap/join highlights only ever clear local state, so they must not fire
+// into a root that is already gone. In CI vitest tears jsdom down while they are still armed and the
+// late dispatch dies in react-dom's `resolveUpdatePriority` (`window.event`) as an uncaught
+// `ReferenceError` that reds the whole run although every assertion passed. These tests reproduce
+// that exact state: unmount first, drop the global so any dispatch would throw, then let the timer
+// run. Green therefore means "nothing was dispatched", not "the error was swallowed".
+describe('SpectatorStagingScreen: nada se despacha después del desmontaje', () => {
+  const withoutWindow = (run: () => void) => {
+    const saved = globalThis.window
+    delete (globalThis as { window?: Window }).window
+    try {
+      expect(run).not.toThrow()
+    } finally {
+      Object.defineProperty(globalThis, 'window', { configurable: true, enumerable: true, writable: true, value: saved })
+    }
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('no despacha el resaltado del intercambio si se desmonta antes de los 700 ms', async () => {
+    vi.useFakeTimers()
+    setState({
+      conn: { username: 'Bob' } as never,
+      stagingTableId: MOCK_COMMANDER_TABLE.tableId,
+      lobby: { type: 'lobby', tables: [MOCK_COMMANDER_TABLE] } as never,
+    })
+    const view = render(<SpectatorStagingScreen mode="player" />)
+
+    fireEvent.click(view.getByTestId('staging-seat-down-0'))
+    // swapSeats resolves in a microtask; flush it so the 700 ms timer is really armed.
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(view.container.querySelectorAll('.seat-just-moved').length, 'el intercambio debe haber resaltado dos plazas').toBe(2)
+    expect(vi.getTimerCount(), 'el resaltado debe dejar un temporizador armado').toBe(1)
+
+    view.unmount()
+    withoutWindow(() => vi.advanceTimersByTime(700))
+    expect(vi.getTimerCount(), 'el desmontaje debe cancelarlo').toBe(0)
+  })
+
+  it('no despacha el resaltado de una plaza ocupada si se desmonta antes de los 1400 ms', () => {
+    vi.useFakeTimers()
+    const view = render(<SpectatorStagingScreen table={MOCK_DUEL_TABLE} />)
+    const withJoiner: TableView = {
+      ...MOCK_DUEL_TABLE,
+      seats: [MOCK_DUEL_TABLE.seats[0], { playerName: 'Zoe', seatIndex: 1, playerType: 'HUMAN' }],
+    }
+    view.rerender(<SpectatorStagingScreen table={withJoiner} />)
+    expect(view.container.querySelectorAll('.seat-just-joined').length, 'la plaza nueva debe estar resaltada').toBe(1)
+    expect(vi.getTimerCount(), 'la animación de entrada debe dejar un temporizador armado').toBe(1)
+
+    view.unmount()
+    withoutWindow(() => vi.advanceTimersByTime(1400))
+    expect(vi.getTimerCount(), 'el desmontaje debe cancelarlo').toBe(0)
+  })
+
+  it('no arma el resaltado si el intercambio resuelve con la pantalla ya desmontada', async () => {
+    vi.useFakeTimers()
+    let resolveSwap: (v: { ok: boolean }) => void = () => {}
+    swapSeatsMock.mockImplementationOnce(() => new Promise((res) => { resolveSwap = res }))
+    setState({
+      conn: { username: 'Bob' } as never,
+      stagingTableId: MOCK_COMMANDER_TABLE.tableId,
+      lobby: { type: 'lobby', tables: [MOCK_COMMANDER_TABLE] } as never,
+    })
+    const view = render(<SpectatorStagingScreen mode="player" />)
+
+    fireEvent.click(view.getByTestId('staging-seat-down-0'))
+    await act(async () => { await Promise.resolve() })
+    view.unmount()
+
+    // The continuation runs on the promise queue; a mounted-guard makes it a no-op, so the late
+    // success neither sets state nor arms the 700 ms timer on a dead root.
+    await act(async () => { resolveSwap({ ok: true }); await Promise.resolve(); await Promise.resolve() })
+    withoutWindow(() => vi.advanceTimersByTime(700))
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

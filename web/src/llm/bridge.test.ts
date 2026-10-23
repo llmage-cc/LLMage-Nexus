@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import type { LlmPromptFrame } from '../net/types.generated'
 import {
   callProvider, clampTimeoutSeconds, flushUndeliveredLlmAnswers, handleLlmPrompt, isOpencodeHost,
+  isRelayRouteMissing, LlmRelayUnavailableError,
   MAX_OPENCODE_SESSIONS, MAX_UNDELIVERED_LLM_ANSWERS, opencodeSessionCount, providerUrl,
   scrubBearerTokens, undeliveredLlmAnswerCount, RELAY_PATH, type LlmBridgeTransport,
 } from './bridge'
 import { clearSeatKeys, getSeatKey, setSeatEndpoint, setSeatKey, seatEndpointOf } from '../lobby/CreateTable/llmSeatKeys'
 import { LLM_PROVIDERS, isRelayEndpoint } from '../lobby/CreateTable/llmConfig'
+import { getProxyConfig, resetProxyConfigCache } from '../net/proxyConfig'
 
 const TAG = 'tag-seat-1'
 const KEY = 'XXXXXX-not-a-real-key'
@@ -279,6 +281,76 @@ describe('relay decision (single source: the provider table)', () => {
   it('an unknown/custom endpoint is browser-direct', () => {
     expect(isRelayEndpoint('https://custom.example/v1/chat/completions')).toBe(false)
     expect(isRelayEndpoint('')).toBe(false)
+  })
+})
+
+describe('relay route availability (G1 — deployment without /llm-relay)', () => {
+  /** Probe a deployment whose /config reports the given llmRelay flag. */
+  const probeRelay = (llmRelay: boolean) =>
+    getProxyConfig(
+      async () => ({ ok: true, status: 200, json: async () => ({ llmRelay }) }),
+      'http://proxy:8788',
+    )
+
+  afterEach(() => resetProxyConfigCache())
+
+  it('callProvider refuses a relay endpoint before any fetch and raises the typed error', async () => {
+    await probeRelay(false)
+    expect(isRelayRouteMissing()).toBe(true)
+
+    await expect(callProvider(OLLAMA_CLOUD, TAG, '{}', 30)).rejects.toBeInstanceOf(LlmRelayUnavailableError)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('answers a relay-only provider with a non-retryable llm_error naming the cause', async () => {
+    await probeRelay(false)
+    const t = transport()
+
+    handleLlmPrompt(promptFrame({ apiEndpoint: OLLAMA_CLOUD }), t)
+
+    await vi.waitFor(() => expect(t.sendError).toHaveBeenCalledTimes(1))
+    const err = t.sendError.mock.calls[0][0]
+    expect(err.retryable).toBe(false)
+    expect(err.httpStatus).toBeUndefined()
+    expect(err.message).toContain(RELAY_PATH)
+    expect(err.message).toContain('--llmRelayEnabled')
+    expect(err.message).toContain(OLLAMA_CLOUD)
+    expect(t.log).toHaveBeenCalledWith('error', err.message, 'system')
+    expect(t.sendDecision).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('a direct provider still works when the deployment has no relay', async () => {
+    await probeRelay(false)
+    const t = transport()
+
+    handleLlmPrompt(promptFrame(), t)
+
+    await vi.waitFor(() => expect(t.sendDecision).toHaveBeenCalledTimes(1))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe(OPENAI)
+    expect(t.sendError).not.toHaveBeenCalled()
+  })
+
+  it('a relay provider still routes through /llm-relay when the deployment enables it', async () => {
+    await probeRelay(true)
+    expect(isRelayRouteMissing()).toBe(false)
+    const t = transport()
+
+    handleLlmPrompt(promptFrame({ apiEndpoint: OPENCODE }), t)
+
+    await vi.waitFor(() => expect(t.sendDecision).toHaveBeenCalledTimes(1))
+    expect(fetchMock.mock.calls[0][0]).toBe(`${RELAY_PATH}?url=${encodeURIComponent(OPENCODE)}`)
+  })
+
+  it('an unprobed deployment is attempted instead of blocked', async () => {
+    expect(isRelayRouteMissing()).toBe(false)
+    const t = transport()
+
+    handleLlmPrompt(promptFrame({ apiEndpoint: OPENCODE }), t)
+
+    await vi.waitFor(() => expect(t.sendDecision).toHaveBeenCalledTimes(1))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
 

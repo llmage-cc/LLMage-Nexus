@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test'
 import { fakeOnly } from './support/fake-mode'
 import { withFakeServer } from './support/fake-backend'
 import { login, createTable } from './support/start-game'
-import { makeBaseScenario } from '../fixtures/fake'
-import { playerGameView } from '../src/__fixtures__/gameViews'
+import { makeBaseScenario, makeTable, type FakeConn } from '../fixtures/fake'
+import { makeGameView, makePermanent, makePlayer, playerGameView } from '../src/__fixtures__/gameViews'
 
 fakeOnly()
 
@@ -195,6 +195,112 @@ test.describe('Player staging room (JOINED_TABLE)', () => {
       await page.getByRole('button', { name: /Unirse \(Humano\)|Join \(Human\)/ }).click()
       await expect(page.getByTestId('join-table-dialog')).toBeHidden()
       await expect(page.getByTestId('staging-player-actions')).toBeVisible({ timeout: 15_000 })
+    })
+  })
+})
+
+/**
+ * B7 (audit 2026-10-21): a spectator who starts watching while the table is
+ * still staging stayed on the staging screen forever. XMage refuses a table
+ * watch until the table is DUELING (`TableController.watchTable`) and
+ * `SessionImpl.watchTable` returns true anyway, so the ack is a silent no-op;
+ * the client only learns the match started from the lobby (the table then
+ * carries a game id) and must promote the table watch to a game watch.
+ *
+ * The fake models exactly that: `watchTable` subscribes to nothing and the
+ * frames only start once the client sends `watchGame` — so this test is red
+ * unless the promotion exists.
+ */
+test.describe('Spectator staging (watch a table that has not started yet)', () => {
+  const SPEC_GAME_ID = 'game-stg-spec-1'
+  const SPEC_TABLE_ID = 'table-stg-spec-1'
+  const SPEC_TABLE_NAME = 'staging-spectate-e2e'
+
+  const spectatorBoard = makeGameView({
+    turn: 1,
+    step: 'UPKEEP',
+    myPlayerId: null,
+    activePlayerName: 'host',
+    priorityPlayerName: 'host',
+    players: [
+      makePlayer({
+        playerId: 'p1',
+        name: 'host',
+        battlefield: { 'bf-1': makePermanent({ name: 'Serra Angel', parentId: 'bf-1' }) },
+      }),
+      makePlayer({ playerId: 'p2', name: 'sim', battlefield: {} }),
+    ],
+  })
+
+  /** The table while the game has not been created: `games` is empty, exactly
+   *  what `TableView` publishes for a READY_TO_START table. */
+  const stagingTable = () => ({
+    ...makeTable({ tableId: SPEC_TABLE_ID, tableName: SPEC_TABLE_NAME, gameId: SPEC_GAME_ID }),
+    games: [],
+    tableState: 'READY_TO_START',
+    tableStateText: 'READY_TO_START (2/2)',
+  })
+  const runningTable = () => ({
+    ...makeTable({ tableId: SPEC_TABLE_ID, tableName: SPEC_TABLE_NAME, gameId: SPEC_GAME_ID }),
+    games: [SPEC_GAME_ID],
+    tableState: 'DUELING',
+    tableStateText: 'DUELING',
+  })
+
+  /** Trigger for "the host pressed Start Match", armed by the watchTable ack:
+   *  the test decides WHEN the table turns DUELING, so there is no timer race. */
+  let startMatch: (() => void) | null = null
+
+  function spectatorStagingScenario() {
+    return makeBaseScenario({
+      tableId: SPEC_TABLE_ID,
+      tableName: SPEC_TABLE_NAME,
+      gameId: SPEC_GAME_ID,
+      gameView: spectatorBoard,
+      onRequest: (conn: FakeConn, action: string, _args: unknown, requestId: string | number) => {
+        if (action === 'watchTable') {
+          // Real server: the watch is refused (table not DUELING) but the proxy
+          // acks ok:true — no subscription, no frames.
+          conn.ok(requestId, action, { tableId: SPEC_TABLE_ID })
+          conn.lobby([stagingTable()])
+          // The host starts the match: the lobby then carries the game id.
+          startMatch = () => { if (conn.isOpen()) conn.lobby([runningTable()]) }
+          return true
+        }
+        if (action === 'watchGame') {
+          conn.ok(requestId, action, { tableId: SPEC_TABLE_ID })
+          // The watcher seed is the cached turn-0 view; the real state follows
+          // as a normal update (the client discards the cached INIT).
+          conn.event('GAME_INIT', { gameView: makeGameView({ turn: 0, phase: null, step: null, myPlayerId: null }) }, SPEC_GAME_ID)
+          conn.event('GAME_UPDATE', { gameView: spectatorBoard }, SPEC_GAME_ID)
+          return true
+        }
+        return false
+      },
+    })
+  }
+
+  test('al arrancar el host, el espectador pasa del staging al tablero', async ({ page }) => {
+    startMatch = null
+    await withFakeServer(spectatorStagingScenario, async () => {
+      await login(page, 'e2e')
+      const watchBtn = page.locator('.table-card [data-testid="watch-btn"]').first()
+      await expect(watchBtn).toBeVisible({ timeout: 10_000 })
+      await watchBtn.click()
+
+      // Staging screen with the real table (name + roster).
+      await expect(page.getByTestId('staging-back')).toBeVisible({ timeout: 10_000 })
+      await expect(page.locator('.staging-table-name')).toContainText(SPEC_TABLE_NAME)
+      await expect(page.locator('.spectator-staging-screen')).toHaveCount(1)
+
+      // The host starts: the board must replace the staging screen.
+      expect(startMatch).not.toBeNull()
+      startMatch!()
+      await expect(page.getByTestId('arena-board')).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByRole('banner')).toContainText(/(Turno|Turn)\s*1/i)
+      await expect(page.getByTestId('arena-board')).toContainText('Serra Angel')
+      await expect(page.locator('.card-image').first()).toBeVisible()
+      await expect(page.locator('.spectator-staging-screen')).toHaveCount(0)
     })
   })
 })

@@ -65,7 +65,7 @@ import { FAKE_MODE } from './dual'
 import { getFakePort, setFakePort } from './support/fake-port'
 import { dismissSetupWizard, installCapture, login, type CaptureBuffers } from './support/start-game'
 import { parseSent, sentOf } from './support/frames'
-import { installProxyConfigStub, DEFAULT_FAKE_PROXY_CONFIG } from './support/proxy-config'
+import { installProxyConfigStub } from './support/proxy-config'
 
 const FAKE_ONLY =
   'fake-only: drives the deterministic FixtureServer scenario (no real proxy here).'
@@ -177,7 +177,11 @@ async function connectLobby(page: import('@playwright/test').Page, username: str
   const buffers: CaptureBuffers = { frames: [], sent: [], pageErrors: [] }
   installCapture(page, buffers)
   if (FAKE_MODE) {
-    await installProxyConfigStub(page, DEFAULT_FAKE_PROXY_CONFIG)
+    // The deployment these specs simulate is the LLMage proxy, whose release/dev
+    // launch enables the relay (--llmRelayEnabled). With llmRelay:false the bridge
+    // now refuses relay-routed providers before fetching (typed llm_error), which
+    // is correct product behaviour but not the deployment under test here.
+    await installProxyConfigStub(page, { llmRelay: true })
     await login(page, username)
     return buffers
   }

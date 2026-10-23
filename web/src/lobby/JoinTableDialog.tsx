@@ -178,10 +178,22 @@ export default function JoinTableDialog({
   const [importError, setImportError] = useState<string | null>(null)
   const [joinError, setJoinError] = useState<string | null>(null)
 
-  const startersFit = useMemo(
-    () => rankDecksForTable(starterDeckItems() as JoinDeck[], profile).some(({ fit }) => isGoodFit(fit)),
-    [profile],
-  )
+  const [startersFit, setStartersFit] = useState(false)
+
+  // The starter decks live in the catalog's own chunk; the offer is only worth showing when one
+  // of them actually fits this table, so it appears once the chunk has been resolved.
+  useEffect(() => {
+    let cancelled = false
+    void starterDeckItems()
+      .then((items) => {
+        if (cancelled) return
+        setStartersFit(rankDecksForTable(items as JoinDeck[], profile).some(({ fit }) => isGoodFit(fit)))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [profile])
 
   const adoptStarterDecks = (decks: JoinDeck[]) => {
     const merged = [...allDecks, ...decks]

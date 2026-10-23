@@ -34,7 +34,7 @@ proxy over a JSON WebSocket and contains **no XMage/Java code**.
   `node ../scripts/verify-demo.mjs dist-demo`. New build-time constants go in both
   `vite.config.ts` and `vitest.config.ts`.
 - `#/gallery` — P3 gallery of states (dev only): 160+ entries (the builder
-  reads `web/fixtures/recorded/manifest.json` dynamically: 119 recorded frames
+  reads `web/fixtures/recorded/manifest.json` dynamically: 125 recorded frames
   today + prompts + screens/variants), no stack needed. `npx playwright test
   e2e/gallery.spec.ts` walks every entry (0 page errors); visual regression is
   opt-in (`E2E_VISUAL=1`) with baselines per platform/browser/viewport, matrix

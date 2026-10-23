@@ -13,10 +13,9 @@ import { useCardImageUrl } from '../cards/useCardImageUrl'
 import { particleVectors } from '../board/impactFx'
 import { cardName } from '../cards/cardImages'
 import type { CardView } from '../net/types'
+import { endDialogPresentation, type EndTone as Tone } from './endDialogPresentation'
 import './GameEndDialog.css'
 import Button from '../ui/Button'
-
-type Tone = 'victory' | 'defeat' | 'neutral'
 
 function EndCinematic({ tone, title }: { tone: Tone; title: string }) {
   return (
@@ -105,8 +104,10 @@ export default function GameEndDialog() {
   const showScore = !isSpectator && (end.wins != null || end.winsNeeded != null)
   const hint = matchOver ? (followGameId ? t('game', 'spectator_game_changed') : null) : t('game', 'match_continues')
 
-  const tone: Tone = isSpectator ? 'neutral' : end.won ? 'victory' : 'defeat'
-  const title = isSpectator ? t('game', 'game_over') : (end.won ? t('game', 'victory') : t('game', 'defeat'))
+  const presentation = endDialogPresentation(end, isSpectator)
+  const tone = presentation.tone
+  const title = t('game', presentation.titleKey)
+  const forfeitNote = presentation.noteKey ? t('game', presentation.noteKey) : null
   const stats = getMatchStats()
   const ownStats = !isSpectator && stats.gameId != null && stats.gameId === watchedGameId
   const keyCard = ownStats ? keyCardOf(stats) : null
@@ -130,7 +131,7 @@ export default function GameEndDialog() {
       size="sm"
       legacyBackdropClass="end-backdrop"
       legacyPanelClass="end-dialog"
-      kickerIcon={isSpectator || end.won ? 'trophy' : 'skull'}
+      kickerIcon={presentation.kickerIcon}
       kickerLabel={t('lobby', 'match_result_label')}
       title={title}
       trailing={<EndCinematic tone={tone} title={title} />}
@@ -139,6 +140,10 @@ export default function GameEndDialog() {
           <div className="end-winner-badge">
             <span>{t('game', 'winner')} <strong>{winnerName}</strong></span>
           </div>
+        )}
+
+        {forfeitNote && (
+          <p className="end-forfeit-note" data-testid="end-forfeit-note">{forfeitNote}</p>
         )}
 
         {(end.gameInfo || (end.matchInfo && end.matchInfo !== end.gameInfo)) && (

@@ -162,6 +162,39 @@ class MainConfigRouteTest {
         assertEquals(405, ex.getResponseCode());
     }
 
+    /** A cross-origin dev UI (vite on 5173) must be allowed to read the deployment config. */
+    @Test
+    void theConfigIsReadableAcrossOrigins() {
+        FakeExchange ex = new FakeExchange("GET");
+        Main.serveConfig(ex, cfg());
+        assertEquals(200, ex.getResponseCode());
+        assertEquals("*", ex.getResponseHeaders().getFirst("Access-Control-Allow-Origin"));
+        assertEquals("Origin", ex.getResponseHeaders().getFirst("Vary"));
+        String methods = ex.getResponseHeaders().getFirst("Access-Control-Allow-Methods");
+        assertTrue(methods.contains("GET"), "preflight must allow GET: " + methods);
+        assertTrue(methods.contains("OPTIONS"), "preflight must allow OPTIONS: " + methods);
+    }
+
+    /** The preflight is answered on its own: 204, the same CORS headers, no body. */
+    @Test
+    void aPreflightIsAnsweredWithNoContent() {
+        FakeExchange ex = new FakeExchange("OPTIONS");
+        Main.serveConfig(ex, cfg());
+        assertEquals(204, ex.getResponseCode());
+        assertEquals("*", ex.getResponseHeaders().getFirst("Access-Control-Allow-Origin"));
+        assertEquals("Origin", ex.getResponseHeaders().getFirst("Vary"));
+        assertEquals("", ex.bodyString());
+    }
+
+    /** A rejected method still carries the CORS headers, so the browser can read the 405. */
+    @Test
+    void aRejectedMethodIsStillReadableAcrossOrigins() {
+        FakeExchange ex = new FakeExchange("POST");
+        Main.serveConfig(ex, cfg());
+        assertEquals(405, ex.getResponseCode());
+        assertEquals("*", ex.getResponseHeaders().getFirst("Access-Control-Allow-Origin"));
+    }
+
     @Test
     void noCacheControlHeaderIsEverMissing() {
         // a restarted proxy's new config must never be served stale from a browser cache

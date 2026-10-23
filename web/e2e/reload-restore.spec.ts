@@ -9,6 +9,7 @@ import {
   GAME_ID, HUMAN_NAME, HUMAN_PLAYER_ID, SIM_NAME, SIM_PLAYER_ID, TABLE_ID,
 } from '../fixtures/humanGameConstants'
 import { parseSent, sentOf } from './support/frames'
+import type { Page } from '@playwright/test'
 import type { GameView } from '../src/net/types'
 
 fakeOnly()
@@ -60,14 +61,24 @@ function reloadScenario() {
 }
 
 /**
+ * `connect` commands sent so far. Counted instead of sliced by a captured index:
+ * `__sent` is the Node-side capture buffer of `start-game.ts`, which survives the
+ * reload, but it is capped at MAX_FRAMES and trims from the front, so an index
+ * taken before the reload can shift. A count cannot.
+ */
+function connectCount(page: Page): number {
+  return parseSent(sentOf(page)).filter((f) => f.action === 'connect').length
+}
+
+/**
  * The reload of a real player, which no spec used to cover: a device that already
  * logged in (a stored connection + a stored active game) and never finished the setup
  * wizard. Measured 2026-10-09 on the deployed build over the Cloudflare tunnel: that
  * device state landed every reload back on the login screen with no error, because
  * `App.tsx` gated the re-login on `isSetupDone()` — and closing the wizard with the X
  * only hid it, so the flag stayed unset. The proxy log confirmed the client never
- * dialled the proxy at all, which is why the assertion below is about the `connect`
- * being attempted, not only about what ends up painted.
+ * dialled the proxy at all, which is why the assertions below also check the `connect`
+ * being attempted, not only what ends up painted.
  *
  * Every other reload spec gets here through `startGame`, whose `login()` dismisses the
  * wizard with "skip" (which does set the flag), so the gate was invisible from the
@@ -86,16 +97,23 @@ test('recargar con sesión guardada y el asistente sin terminar reabre la partid
     // the device state of the bug: session stored, wizard never completed
     await page.evaluate(() => window.localStorage.removeItem('nexus_setup_v'))
     expect(await page.evaluate(() => window.localStorage.getItem('nexus_setup_v'))).toBeNull()
-    const sentBefore = session.sent.length
+    const connectsBefore = connectCount(page)
 
     await page.reload({ waitUntil: 'domcontentloaded' })
 
-    // the client must try: no attempt is the bug, a failed attempt would be another bug
-    await expect
-      .poll(() => parseSent(sentOf(page)).slice(sentBefore).some((f) => f.action === 'connect'), { timeout: 20_000 })
-      .toBe(true)
-    await expect(page.locator('.game-board')).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByTestId('setup-wizard')).toBeHidden({ timeout: 10_000 })
+    // The contract, waited on directly: the stored session comes back to its board on
+    // its own and the wizard stays away. 60 s because the dev-bundle boot, the /config
+    // probe and the WS handshake queue behind whatever else the CI host is running —
+    // the property under test is the app's behaviour, not the runner's speed (a fixed
+    // 20 s poll on a raw frame count was red in client CI run 519 when the reload
+    // landed late, with the board one poll away from being painted).
+    await expect(page.locator('.game-board')).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByTestId('setup-wizard')).toBeHidden({ timeout: 60_000 })
+
+    // Frame evidence, read after the contract instead of racing it: a painted board can
+    // only come from a GAME_INIT that followed this session's `connect`, so this is a
+    // seam assertion (no attempt at all is the bug), not a second wait on the wire.
+    expect(connectCount(page), 'connect frames sent after the reload').toBeGreaterThan(connectsBefore)
 
     expect(session.pageErrors, `pageerrors: ${session.pageErrors.map(String).join(' | ')}`).toEqual([])
   })

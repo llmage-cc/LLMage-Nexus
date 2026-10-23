@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// Control del stack de desarrollo del Mage.Proxy (servidor + proxy + vite).
-// Uso diagnóstico: node scripts/dev.mjs start|stop|status|restart [server|proxy|vite|all]
-// Uso recomendado para no bloquear la shell: node scripts/ctl.mjs start|stop|status|restart [server|proxy|vite|all]
+// Mage.Proxy dev stack control (server + proxy + vite).
+// Diagnostic: node scripts/dev.mjs start|stop|status|restart|check|reset-config [server|proxy|vite|all]
+// Non-blocking: node scripts/ctl.mjs start|stop|status|restart|check|reset-config [server|proxy|vite|all]
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { daemon, forkPath, isAlive, log, logError, logFileFor, PORTS, readPid, SERVER_ADD_OPENS, stopPid, tailFile, waitForPort, waitForPortDown, buildServerClasspath, XMAGE_VERSION } from './lib.mjs'
+import { auditConfigSeed, defaultSeedTargets, printAudit, readSeedStamp, STRICT_ENV, writeSeed } from './config-seed.mjs'
+import { copyPluginJars, daemon, forkDir, isAlive, log, logError, logFileFor, PORTS, readPid, SERVER_ADD_OPENS, stopPid, tailFile, waitForPort, waitForPortDown, buildServerClasspath, XMAGE_VERSION } from './lib.mjs'
 
 const arg = process.argv[2] ?? 'status'
 const target = process.argv[3] ?? 'all'
@@ -25,33 +26,66 @@ function targetsOf() {
   return list
 }
 
-/** local-server/ es runtime (gitignored): en CI o máquina nueva solo existe plugins/.
- *  Sin config/config.xml el servidor no arranca → sembrar desde el fork. */
+/** local-server/ is runtime state (gitignored): only plugins/ exists on CI or a new machine.
+ *  Without config/config.xml the server does not boot, so seed it from the resolved fork
+ *  and record where it came from in .seed-source.json. */
 function ensureLocalServerDirs() {
   const dir = `${import.meta.dirname}/../local-server`
   for (const sub of ['config', 'db', 'extensions', 'gamesHistory', 'plugins', 'saved']) {
     fs.mkdirSync(path.join(dir, sub), { recursive: true })
   }
-  const cfg = path.join(dir, 'config', 'config.xml')
-  if (fs.existsSync(cfg)) return
-  const pomXml = fs.readFileSync(forkPath('Mage.Server/pom.xml'), 'utf8')
-  const pomVer = pomXml.match(/<version>(\d+\.\d+[^<]*)<\/version>/)?.[1] ?? ''
-  const seed = fs.readFileSync(forkPath('Mage.Server/release/config/config.xml'), 'utf8')
-    .replaceAll('${project.version}', pomVer)
-    .replace('serverAddress="0.0.0.0"', 'serverAddress="127.0.0.1"')
-    .replace('maxGameThreads="10"', 'maxGameThreads="20"')
-  if (seed.includes('${project.version}')) {
-    logError('placeholders sin sustituir en el seed de config.xml del fork')
-    process.exit(1)
+  const { configPath, stampPath } = defaultSeedTargets()
+  if (fs.existsSync(configPath)) return
+  const { info } = writeSeed({ configPath, stampPath, fork: forkDir() })
+  log(
+    `config seed created: ${configPath} (engine ${info.version}, fork ${info.forkDir}, source ${info.sourceConfig}` +
+      `${info.sourceFallback ? ' — FALLBACK release config: the fork has no canonical Mage.Server/config/config.xml' : ''})`,
+  )
+  const { ok } = configAudit()
+  if (!ok) process.exit(1)
+}
+
+function configAudit({ strict = process.env[STRICT_ENV] === '1' } = {}) {
+  const { configPath, stampPath, pluginsDir } = defaultSeedTargets()
+  let fork = null
+  let forkError = null
+  try {
+    fork = forkDir()
+  } catch (e) {
+    forkError = e.message
   }
-  fs.writeFileSync(cfg, seed)
-  log(`config seed creada: ${cfg} (versión ${pomVer})`)
+  const report = auditConfigSeed({ configPath, stampPath, pluginsDir, fork, forkError })
+  const ok = printAudit(report, { strict })
+  return { report, ok, strict }
+}
+
+function resetConfig() {
+  const { configPath, stampPath } = defaultSeedTargets()
+  const { stamp: oldStamp } = readSeedStamp(stampPath)
+  const hadConfig = fs.existsSync(configPath)
+  let backup = null
+  if (hadConfig) {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-')
+    backup = `${configPath}.bak-${ts}`
+    fs.copyFileSync(configPath, backup)
+  }
+  const { info, stamp } = writeSeed({ configPath, stampPath, fork: forkDir() })
+  log(`config reset: ${configPath}`)
+  log(`  previous seed source: ${oldStamp?.forkDir ?? (hadConfig ? 'unknown (config predates the seed stamp)' : 'absent (no config.xml)')}`)
+  log(
+    `  new seed source:      ${stamp.sourceConfig} (engine ${info.version}, fork ${info.forkDir}${info.commit ? `, commit ${info.commit.slice(0, 12)}` : ''}, ` +
+      `${stamp.sourceKind === 'canonical' ? 'canonical config' : 'FALLBACK release config'})`,
+  )
+  log(`  previous file:        ${backup ?? '(none)'}`)
+  const { ok } = configAudit()
+  if (!ok) process.exit(1)
 }
 
 function startServer() {
   log('arrancando servidor XMage (headless, testMode)…')
   try {
     ensureLocalServerDirs()
+    copyPluginJars()
     const cp = buildServerClasspath()
     const args = [...SERVER_ADD_OPENS, '-cp', cp, 'mage.server.Main', '-testMode']
     daemon('server', 'java', args, { cwd: `${import.meta.dirname}/../local-server` })
@@ -63,17 +97,30 @@ function startServer() {
 }
 
 function startProxy() {
-  const jar = `${import.meta.dirname}/../Mage.Proxy/target/mage-proxy-${XMAGE_VERSION}.jar`
+  const repoRoot = path.join(import.meta.dirname, '..')
+  const jar = path.join(repoRoot, 'Mage.Proxy', 'target', `mage-proxy-${XMAGE_VERSION}.jar`)
   if (!fs.existsSync(jar)) {
     logError(`falta el jar del proxy — ejecuta: node scripts/build.mjs`)
     return false
   }
   log('arrancando proxy…')
-  // SIM bots are dev/test-harness only: the release artifacts (Docker, bundle, launcher)
-  // start the proxy without --sim, so no deployment ever runs a bot.
-  daemon('proxy', 'java', [...SERVER_ADD_OPENS, '-cp', jar, 'org.mage.proxy.Main', '--sim', 'on'], {
-    cwd: `${import.meta.dirname}/../Mage.Proxy`,
-  })
+  // SIM bots and the LLM relay are dev/test-harness only: the release artifacts (Docker,
+  // bundle, launcher) launch the proxy with neither, so no deployment runs a bot or exposes
+  // /llm-relay. The replay dir must be absolute: the proxy resolves a relative --replayDir
+  // against its own CWD (Mage.Proxy/), while the server saves under local-server/saved.
+  daemon(
+    'proxy',
+    'java',
+    [
+      ...SERVER_ADD_OPENS,
+      '-cp', jar,
+      'org.mage.proxy.Main',
+      '--sim', 'on',
+      '--llmRelayEnabled', 'true',
+      '--replayDir', path.join(repoRoot, 'local-server', 'saved'),
+    ],
+    { cwd: path.join(repoRoot, 'Mage.Proxy') },
+  )
   return true
 }
 
@@ -173,7 +220,17 @@ async function waitForRequiredPort(port, label, timeoutMs) {
   }
 }
 
+const ACTIONS = new Set(['start', 'stop', 'status', 'restart', 'check', 'reset-config'])
+
 async function main() {
+  if (!ACTIONS.has(arg)) {
+    console.error('uso: node scripts/dev.mjs start|stop|status|restart|check|reset-config [server|proxy|vite|all]')
+    process.exit(1)
+  }
+  if (arg !== 'stop' && arg !== 'reset-config') {
+    const { ok } = configAudit()
+    if (!ok) process.exit(1)
+  }
   switch (arg) {
     case 'start':
       await startAll()
@@ -191,9 +248,11 @@ async function main() {
     case 'status':
       status()
       break
-    default:
-      console.error('uso: node scripts/dev.mjs start|stop|status|restart [server|proxy|vite|all]')
-      process.exit(1)
+    case 'check':
+      break
+    case 'reset-config':
+      resetConfig()
+      break
   }
 }
 

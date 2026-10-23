@@ -893,6 +893,8 @@ export const pt: TranslationSchema = {
     game_over: 'Fim de Jogo',
     victory: 'Vitória!',
     defeat: 'Derrota',
+    victory_forfeit: 'Vitória (por desistência)',
+    end_forfeit_note: 'O provedor de LLM do seu oponente falhou, então a partida não foi jogada até o fim.',
     end_stat_turns: 'Turnos',
     end_stat_life_taken: 'Vida tirada',
     end_stat_life_lost: 'Vida perdida',

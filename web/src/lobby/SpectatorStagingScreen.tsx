@@ -149,6 +149,25 @@ export default function SpectatorStagingScreen({
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [dropIdx, setDropIdx] = useState<number | null>(null)
 
+  // Work that outlives the screen (a promise continuation, a highlight timer) must not dispatch
+  // into a root that no longer exists: after unmount React still walks the dispatch path
+  // (`resolveUpdatePriority` reads `window`), which throws once the environment is gone. Tests
+  // unmount mid-swap and vitest tears jsdom down while the timer is still armed, so the leak
+  // surfaces there as an uncaught `ReferenceError` even when every assertion passed.
+  const aliveRef = useRef(true)
+  const swapTimerRef = useRef<number | null>(null)
+  const joinedTimerRef = useRef<number | null>(null)
+  useEffect(() => {
+    aliveRef.current = true
+    return () => {
+      aliveRef.current = false
+      if (swapTimerRef.current !== null) window.clearTimeout(swapTimerRef.current)
+      if (joinedTimerRef.current !== null) window.clearTimeout(joinedTimerRef.current)
+      swapTimerRef.current = null
+      joinedTimerRef.current = null
+    }
+  }, [])
+
   const handleSwapPair = async (a: number, b: number) => {
     if (!activeTable || a === b) return
     const res = await cmds.swapSeats(activeTable.tableId, a, b)
@@ -157,8 +176,14 @@ export default function SpectatorStagingScreen({
       setState({ error: translateError(res.error || code || '', 'swapSeats', code) })
       return
     }
+    // The swap resolved after the screen went away: drop it instead of arming a timer on a dead root.
+    if (!aliveRef.current) return
     setLastSwap({ a, b })
-    window.setTimeout(() => setLastSwap(null), 700)
+    if (swapTimerRef.current !== null) window.clearTimeout(swapTimerRef.current)
+    swapTimerRef.current = window.setTimeout(() => {
+      swapTimerRef.current = null
+      setLastSwap(null)
+    }, 700)
   }
 
   const handleSwapSeats = async (idx: number, dir: -1 | 1) => {
@@ -236,7 +261,12 @@ export default function SpectatorStagingScreen({
     const joined = names.flatMap((n, i) => (n && !prev.includes(n) ? [i] : []))
     if (!joined.length) return
     setJoinedSeats(joined)
-    window.setTimeout(() => setJoinedSeats([]), 1400)
+    // Same teardown hazard as the swap highlight: the id lives in a ref so unmount can clear it.
+    if (joinedTimerRef.current !== null) window.clearTimeout(joinedTimerRef.current)
+    joinedTimerRef.current = window.setTimeout(() => {
+      joinedTimerRef.current = null
+      setJoinedSeats([])
+    }, 1400)
   }, [seats])
   const joinedClass = (idx: number) => (joinedSeats.includes(idx) ? ' seat-just-joined' : '')
   const is1v1 = (activeTable?.seats.length ?? 0) <= 2 && !activeTable?.gameType?.toLowerCase().includes('commander')
@@ -406,7 +436,7 @@ export default function SpectatorStagingScreen({
       if (!ok) return
     }
     setStarting(true)
-    void startStagedMatch().finally(() => setStarting(false))
+    void startStagedMatch().finally(() => { if (aliveRef.current) setStarting(false) })
   }
 
   const statusLabel = (readiness: Readiness, emptyLabel: string) =>

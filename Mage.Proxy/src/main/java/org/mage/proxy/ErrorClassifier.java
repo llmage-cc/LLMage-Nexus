@@ -28,6 +28,29 @@ final class ErrorClassifier {
         return ProxyProtocol.ERR_FAILED;
     }
 
+    /**
+     * The code for a refused login. A specific class wins when the reason matches one; a bare
+     * {@code FAILED} (the proxy captured no reason at all) stays {@code FAILED}; any other text
+     * is the server's own explanation, so it answers {@link ProxyProtocol#ERR_SERVER_MESSAGE} —
+     * that way the web keeps showing the text and can tell "refused, here is why" from
+     * "refused, no reason". The 14-character username limit
+     * ({@code User name may not be longer than 14 characters}) is the case that exposed it.
+     */
+    static String classifyLoginFailure(String detail) {
+        String code = classifyErrorCode(detail);
+        if (!ProxyProtocol.ERR_FAILED.equals(code)) return code;
+        return hasServerText(detail) ? ProxyProtocol.ERR_SERVER_MESSAGE : ProxyProtocol.ERR_FAILED;
+    }
+
+    /** True when the detail is a real message, not the proxy's own "nothing captured" sentinel. */
+    private static boolean hasServerText(String detail) {
+        if (detail == null) return false;
+        String text = detail.trim();
+        return !text.isEmpty()
+                && !text.equalsIgnoreCase(ProxyProtocol.ERR_FAILED)
+                && !text.equalsIgnoreCase("No message");
+    }
+
     static String stripServerErrorPrefix(String msg) {
         if (msg == null) return null;
         if (msg.startsWith("Server error: ")) return msg.substring("Server error: ".length());

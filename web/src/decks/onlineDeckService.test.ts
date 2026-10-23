@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { META_DECK_CATALOG } from './metaDeckCatalog'
+import { loadMetaDeckCatalog } from './metaDeckCatalog'
 import { archidektExcludedCategories, archidektFormat, fetchArchidektDeck, fetchMoxfieldDeck, loadDeckFromOnlineSource } from './onlineDeckService'
 import archidektRealDeck from './__fixtures__/archidekt-deck-15000794.json'
 import { fetchOnlineDeckJson } from '../net/commands'
@@ -19,7 +19,8 @@ afterEach(() => {
 })
 
 describe('DeckBrowser & OnlineDeckService', () => {
-  it('loads curated meta decks with complete cards and sideboards', () => {
+  it('loads curated meta decks with complete cards and sideboards', async () => {
+    const META_DECK_CATALOG = await loadMetaDeckCatalog()
     expect(META_DECK_CATALOG.length).toBeGreaterThan(5)
 
     const murktide = META_DECK_CATALOG.find((d) => d.name === 'Izzet Murktide')

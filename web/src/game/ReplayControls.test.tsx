@@ -4,6 +4,7 @@ import ReplayControls from './ReplayControls'
 import { replayHotkey, isTypingTarget } from './replayHotkeys'
 import { reset, getState } from '../state/store'
 import { setState } from '../state/state'
+import type { Capabilities } from '../state/slices/session'
 import { makeGameView, makePlayer } from '../__fixtures__/gameViews'
 import * as commands from '../net/commands'
 
@@ -31,9 +32,17 @@ const twoSeats = () => makeGameView({
   ],
 })
 
-function seedReplay(overrides: Record<string, unknown> = {}) {
+function seedReplay(overrides: Record<string, unknown> = {}, capabilities: Partial<Capabilities> = {}) {
   setState({
-    capabilities: { llm: true, p1: false, replayScrubber: true, replaySidecar: true, serverVersion: 'x', playerTypes: [] },
+    capabilities: {
+      llm: true,
+      p1: false,
+      replayScrubber: true,
+      replaySidecar: true,
+      serverVersion: 'x',
+      playerTypes: [],
+      ...capabilities,
+    },
     replay: {
       gameId: 'game-1',
       frame: view(),
@@ -88,11 +97,31 @@ describe('ReplayControls', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders nothing when the server lacks the llm capability', () => {
-    seedReplay()
-    setState({ capabilities: { llm: false, p1: false, replayScrubber: false, replaySidecar: false, serverVersion: 'x', playerTypes: [] } })
-    const { container } = render(<ReplayControls />)
-    expect(container.firstChild).toBeNull()
+  it('keeps playback and the scrubber when the server reports replayScrubber without llm', () => {
+    seedReplay({}, { llm: false, replayScrubber: true })
+    render(<ReplayControls />)
+
+    expect(screen.getByTestId('replay-controls')).toBeDefined()
+    expect(screen.getByTestId('replay-play')).toBeDefined()
+    const range = screen.getByTestId('replay-scrubber') as HTMLInputElement
+    fireEvent.change(range, { target: { value: '0' } })
+    expect(commands.replaySeek).toHaveBeenCalledWith('game-1', 0)
+  })
+
+  it('offers no seek when the server reports llm without replayScrubber, keeping play and stop', () => {
+    seedReplay({}, { llm: true, replayScrubber: false })
+    render(<ReplayControls />)
+
+    expect(screen.getByTestId('replay-controls')).toBeDefined()
+    expect(screen.queryByTestId('replay-scrubber')).toBeNull()
+    expect(screen.queryByTestId('replay-scrubber-label')).toBeNull()
+    expect(screen.getByTestId('replay-stop')).toBeDefined()
+
+    fireEvent.click(screen.getByText(/Siguiente/))
+    expect(commands.replayNext).toHaveBeenCalledWith('game-1')
+    fireEvent.click(screen.getByTestId('replay-play'))
+    expect(getState().replay?.playing).toBe(true)
+    expect(commands.replaySeek).not.toHaveBeenCalled()
   })
 
   it('shows the scrubber label as (index+1)/count and steps the server', () => {

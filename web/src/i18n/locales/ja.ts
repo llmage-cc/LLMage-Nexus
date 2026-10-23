@@ -896,6 +896,8 @@ export const ja: TranslationSchema = {
     game_over: 'ゲーム終了',
     victory: '勝利！',
     defeat: '敗北',
+    victory_forfeit: '勝利（不戦勝）',
+    end_forfeit_note: '対戦相手の LLM プロバイダーが失敗したため、ゲームは最後まで進行しませんでした。',
     end_stat_turns: 'ターン数',
     end_stat_life_taken: '奪ったライフ',
     end_stat_life_lost: '失ったライフ',

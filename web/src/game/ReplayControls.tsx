@@ -15,8 +15,9 @@ import './ReplayControls.css'
  * the server's REPLAY_UPDATE is what advances the board (never a local cursor),
  * so a slow frame cannot desync the viewer.
  *
- * Rendered only while `replay` is non-null AND the server reported the llm
- * capability (replayScrubber rides llm).
+ * Rendered whenever a replay is open. Only the position scrubber needs a
+ * capability: `replayScrubber` gates the fork-only seek RPC, while
+ * Prev / Play / Next / Skip / Stop work on any server that serves a replay.
  */
 export default function ReplayControls() {
   const { t } = useTranslation()
@@ -57,8 +58,9 @@ export default function ReplayControls() {
     return () => window.removeEventListener('keydown', onKeydown)
   }, [gameId, playing])
 
-  if (!replay || capabilities?.llm !== true) return null
+  if (!replay) return null
 
+  const canSeek = capabilities?.replayScrubber === true
   const lastIndex = stateCount > 0 ? stateCount - 1 : 0
   const sliderValue = Math.min(Math.max(stateIndex, 0), lastIndex)
   const disabled = !hasFrame
@@ -118,27 +120,29 @@ export default function ReplayControls() {
       {done?.reason === 'boundary' && (
         <span className="replay-boundary" data-testid="replay-boundary">{t('game', 'replay_boundary')}</span>
       )}
-      <div className="replay-scrubber">
-        <input
-          type="range"
-          className="replay-scrubber-range"
-          min={0}
-          max={lastIndex}
-          step={1}
-          value={sliderValue}
-          disabled={disabled || stateCount <= 0}
-          onChange={(e) => void cmds.replaySeek(replay.gameId, Number(e.currentTarget.value))}
-          aria-label={t('game', 'replay_position')}
-          data-testid="replay-scrubber"
-        />
-        <span className="replay-scrubber-label" data-testid="replay-scrubber-label">
-          {hasFrame
-            ? stateCount > 0
-              ? t('game', 'replay_position_label', { current: String(sliderValue + 1), total: String(stateCount) })
-              : t('game', 'replay_frame', { frame: String(frameCount) })
-            : ''}
-        </span>
-      </div>
+      {canSeek && (
+        <div className="replay-scrubber">
+          <input
+            type="range"
+            className="replay-scrubber-range"
+            min={0}
+            max={lastIndex}
+            step={1}
+            value={sliderValue}
+            disabled={disabled || stateCount <= 0}
+            onChange={(e) => void cmds.replaySeek(replay.gameId, Number(e.currentTarget.value))}
+            aria-label={t('game', 'replay_position')}
+            data-testid="replay-scrubber"
+          />
+          <span className="replay-scrubber-label" data-testid="replay-scrubber-label">
+            {hasFrame
+              ? stateCount > 0
+                ? t('game', 'replay_position_label', { current: String(sliderValue + 1), total: String(stateCount) })
+                : t('game', 'replay_frame', { frame: String(frameCount) })
+              : ''}
+          </span>
+        </div>
+      )}
       {!hasFrame && <span className="replay-loading" data-testid="replay-loading">{t('game', 'replay_loading')}</span>}
     </div>
   )

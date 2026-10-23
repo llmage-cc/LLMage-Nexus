@@ -123,6 +123,22 @@ export function onScryfallThrottle(listener: (untilMs: number) => void): () => v
   return () => throttleListeners.delete(listener)
 }
 
+/**
+ * The spacing is measured from the moment a request actually goes out, not from
+ * the moment its task leaves the queue. `run` does synchronous setup
+ * (AbortController, abort listener, destructuring) before calling `fetch`, and a
+ * GC pause or a thread preemption in that window used to eat into the next gap:
+ * with 50 ms configured, two sends could start 44 ms apart. Reserving on dequeue
+ * only keeps `pump` from dispatching twice in one turn; the refresh right before
+ * `fetch` is the anchor the spacing is really measured from. Monotone on
+ * purpose: a later slot announced by another tab is never pulled back.
+ */
+function claimSlot(at: number) {
+  if (at <= nextSlotAt) return
+  nextSlotAt = at
+  announce({ slotAt: at })
+}
+
 function pump() {
   if (timer) return
   while (active < pacing.maxConcurrent && queue.length > 0) {
@@ -140,8 +156,7 @@ function pump() {
       task.reject(abortError())
       continue
     }
-    nextSlotAt = now + pacing.spacingMs
-    announce({ slotAt: nextSlotAt })
+    claimSlot(now + pacing.spacingMs)
     active++
     void run(task)
   }
@@ -155,6 +170,9 @@ async function run(task: Task) {
   signal?.addEventListener('abort', onAbort)
   const timeout = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null
   try {
+    // Last instant before the wire: this is the anchor the next gap is measured
+    // from, so anything slow above (or a preemption) cannot shorten it.
+    claimSlot(Date.now() + pacing.spacingMs)
     const res = await fetch(task.url, {
       ...rest,
       headers: { Accept: 'application/json', ...headers },

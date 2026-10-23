@@ -1,5 +1,6 @@
 # Mage.Proxy — XMage WebSocket Bridge
 
+
 A thin bridge between the XMage Java server (jboss-serialization protocol) and
 any modern client (JSON over WebSocket). **Zero game logic** — the proxy only
 forwards state and actions. All rules engine logic lives in the XMage server.
@@ -698,6 +699,11 @@ limitation is what's implemented in TypeScript.
 ```bash
 # Start the stack
 node scripts/ctl.mjs start all
+
+# Build this jar: Mage.Proxy/target/mage-proxy-<mage.version>.jar
+# (currently mage-proxy-1.4.62.jar; mage.version defaults to ${project.version},
+#  see Mage.Proxy/AGENTS.md for why the stock 1.4.62 artifacts cannot be used)
+node scripts/build.mjs proxy
 
 # Run tests
 node scripts/test.mjs          # full suite

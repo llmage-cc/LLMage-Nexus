@@ -43,9 +43,10 @@ triage. See `web/INTERACTION_COVERAGE.md`.
 - Full build (server + plugins + proxy): `node scripts/build.mjs` (engine
   steps run inside the fork checkout; the proxy builds standalone in this repo)
 - XMage version: **1.4.62-V1** (upstream magefree/mage; merge of tag `xmage_1.4.62V1`).
-  Proxy jar: `Mage.Proxy/target/mage-proxy-1.4.62.jar` — the proxy compiles against
-  the LLMage `1.4.62` artifacts, which carry the fork-only `COMPUTER_LLM`/`LLMPlayerConfig`
-  symbols (`Mage.Proxy/pom.xml` `mage.version`; the stock `1.4.62` artifacts lack them).
+  Proxy jar: `Mage.Proxy/target/mage-proxy-1.4.62.jar` — `Mage.Proxy/pom.xml` sets
+  `<version>1.4.62</version>` with `mage.version` = `${project.version}`, so by default the proxy
+  compiles against the fork's own `1.4.62` artifacts, which carry the fork-only
+  `COMPUTER_LLM`/`LLMPlayerConfig` symbols (the stock `1.4.62` artifacts lack them).
   A second proxy flavor is built against the
   **XDHS fork** (xenohedron/mage, tag `1.5.8-XDHS-r1`) for `mage.xdhs.net`:
   `mage-proxy-1.5.8.jar` + `patches/xdhs/*.patch` + `-Dmage.version=1.5.8`

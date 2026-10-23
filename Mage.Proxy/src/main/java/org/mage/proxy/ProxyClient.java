@@ -780,6 +780,25 @@ public class ProxyClient implements MageClient, CommandContext {
         }
     }
 
+    /**
+     * How long a failed login waits for the detail message of its own attempt: the server's
+     * anti-bruteforce paths send {@code SHOW_USERMESSAGE} a few seconds after refusing.
+     */
+    static final long LOGIN_DETAIL_WAIT_MS = 4500;
+
+    /**
+     * Detail of a failed login: whatever the mailbox captured since {@code attemptStartedAt}
+     * (which MUST be sampled before {@code connectStart}, because a version refusal is delivered
+     * synchronously from inside it), else the session's last error; a bare/empty result becomes
+     * {@code FAILED}. Package-private so the window ordering is pinned by a test.
+     */
+    static String loginFailureDetail(ServerMessageMailbox mailbox, long attemptStartedAt, long timeoutMs, String lastError) {
+        String detail = mailbox.await(attemptStartedAt, timeoutMs);
+        if (detail == null) detail = ErrorClassifier.stripServerErrorPrefix(lastError);
+        if (detail == null || detail.isEmpty() || detail.equalsIgnoreCase("No message")) detail = ProxyProtocol.ERR_FAILED;
+        return detail;
+    }
+
     @Override
     public void showMessage(String message) {
         serverMessages.capture(message);
@@ -1348,6 +1367,15 @@ public class ProxyClient implements MageClient, CommandContext {
         // tab cannot take over after an IP change
         session.setRestoreSessionId(restoreIdFor(host, port, username));
         resetSessionState();
+        // The refusal detail of a login can arrive DURING connectStart: SessionImpl's
+        // MageVersionException catch calls client.showMessage() from inside it, and that is the
+        // only carrier of a version refusal (the server's connectUser throws instead of sending a
+        // SHOW_USERMESSAGE, so nothing arrives afterwards). The mailbox window must therefore open
+        // BEFORE the attempt — the same way every other command path samples its `start` before
+        // the RPC. Sampling it after connectStart returned put the message microseconds outside
+        // the window, the wait timed out with the mailbox empty and the login answered a bare
+        // FAILED (observed on 2 of 9 attempts on 2026-10-15, 10 of 10 at HEAD).
+        long attemptStartedAt = System.currentTimeMillis();
         boolean ok;
         expectDisconnect = true;
         try {
@@ -1388,15 +1416,10 @@ public class ProxyClient implements MageClient, CommandContext {
             }
         } else {
             connections.abandonLogin();
-            // the server sends the failure detail in a SHOW_USERMESSAGE callback
-            // (it arrives ~3 s later, after its anti-bruteforce sleep): poll for it so the
-            // reply is not an empty error
-            long start = System.currentTimeMillis();
-            String detail = serverMessages.await(start, 4500);
-            if (detail == null) detail = ErrorClassifier.stripServerErrorPrefix(session.getLastError());
-            if (detail == null || detail.isEmpty() || detail.equalsIgnoreCase("No message")) detail = ProxyProtocol.ERR_FAILED;
+            String detail = loginFailureDetail(serverMessages, attemptStartedAt,
+                    LOGIN_DETAIL_WAIT_MS, session.getLastError());
             Activity.login(username, gateway.ipOf(conn), host, port, false, detail, false);
-            gateway.send(conn, ProxyProtocol.resultJson("connect", requestId, false, ErrorClassifier.classifyErrorCode(detail), detail));
+            gateway.send(conn, ProxyProtocol.resultJson("connect", requestId, false, ErrorClassifier.classifyLoginFailure(detail), detail));
             if (lastConnection == null && !service) {
                 // never logged in: stop holding the account's slot for concurrent logins, and
                 // stop holding five non-daemon threads and their timers for a client that can

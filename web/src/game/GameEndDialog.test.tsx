@@ -88,6 +88,47 @@ describe('GameEndDialog', () => {
     expect(screen.getByText(/Marcador: 0–2/i)).toBeDefined()
   })
 
+  it('renders the forfeit title and note when a seated win came from an LLM failure (4 seats)', () => {
+    setState({
+      game: makeGameView({
+        players: [
+          makePlayer({ playerId: 'p-hero', name: 'Hero', controlled: true }),
+          makePlayer({ playerId: 'p-llm-a', name: 'llm-a', controlled: false }),
+          makePlayer({ playerId: 'p-llm-b', name: 'llm-b', controlled: false }),
+          makePlayer({ playerId: 'p-llm-c', name: 'llm-c', controlled: false }),
+        ],
+      }),
+      gameEnd: {
+        won: true,
+        endReason: 'llm_failure',
+        gameInfo: 'Hero has won the game',
+        matchView: { endTime: '2026-08-29T23:50:00Z' },
+      },
+    })
+
+    render(<GameEndDialog />)
+    expect(screen.getByText('Victoria (por abandono)')).toBeDefined()
+    expect(screen.getByTestId('end-forfeit-note').textContent).toMatch(/LLM/)
+  })
+
+  it('keeps the ordinary victory title when the seat conceded (no forfeit note)', () => {
+    setState({
+      game: makeGameView({
+        players: [makePlayer({ playerId: 'p-hero', name: 'Hero', controlled: true })],
+      }),
+      gameEnd: {
+        won: true,
+        endReason: 'concede',
+        gameInfo: 'Hero has won the game',
+        matchView: { endTime: '2026-08-29T23:50:00Z' },
+      },
+    })
+
+    render(<GameEndDialog />)
+    expect(screen.getByText('¡Victoria!')).toBeDefined()
+    expect(screen.queryByTestId('end-forfeit-note')).toBeNull()
+  })
+
   it('renders spectator notification with winner badge and return to lobby button', () => {
     setState({
       game: makeGameView({

@@ -11,8 +11,8 @@ vi.mock('./storage', () => ({
 describe('starter decks', () => {
   beforeEach(() => { stored.decks = [] })
 
-  it('are complete catalog decks: 60 cards for constructed, 100 for Commander', () => {
-    const items = starterDeckItems()
+  it('are complete catalog decks: 60 cards for constructed, 100 for Commander', async () => {
+    const items = await starterDeckItems()
     expect(items.map((d) => d.id)).toEqual([...STARTER_DECK_IDS])
     for (const d of items) expect(d.cards.reduce((n, c) => n + c.amount, 0)).toBe(d.format === 'Commander' ? 100 : 60)
   })
@@ -27,7 +27,7 @@ describe('starter decks', () => {
   it('are stored as editable copies of their own, not as the catalog entries', async () => {
     const added = await addStarterDecks()
     expect(stored.decks).toEqual(added)
-    expect(added.map((d) => d.name)).toEqual(starterDeckItems().map((d) => d.name))
+    expect(added.map((d) => d.name)).toEqual((await starterDeckItems()).map((d) => d.name))
     for (const d of added) {
       expect(d.source).toBe('custom')
       expect(STARTER_DECK_IDS as readonly string[]).not.toContain(d.id)

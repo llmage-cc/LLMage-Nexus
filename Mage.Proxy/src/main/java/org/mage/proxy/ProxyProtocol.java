@@ -15,6 +15,12 @@ final class ProxyProtocol {
     static final String ERR_INVALID_ARGUMENT = "INVALID_ARGUMENT";
     static final String ERR_UNKNOWN_ACTION = "UNKNOWN_ACTION";
     static final String ERR_FAILED = "FAILED";
+    /**
+     * A refused login whose reason is the server's own text and matches no specific class
+     * (e.g. {@code User name may not be longer than 14 characters}): the web shows that text,
+     * and this code tells it apart from a bare {@code FAILED} that carries no reason at all.
+     */
+    static final String ERR_SERVER_MESSAGE = "SERVER_MESSAGE";
     static final String ERR_QUIT_RATIO = "QUIT_RATIO";
     static final String ERR_RATING = "RATING";
     static final String ERR_INVALID_DECK = "INVALID_DECK";

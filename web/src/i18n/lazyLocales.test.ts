@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { ensureLocaleLoaded, getLanguage, setLanguage, t, switchLanguage } from './index'
+import { ensureLocaleLoaded, getLanguage, preloadInitialLocale, setLanguage, t, switchLanguage } from './index'
 
 /**
- * The nine locales load as their own chunks, English stays eager as the fallback. A test has no
- * grace period to wait for a chunk, so the switch-and-read tests use `switchLanguage`; these check the
- * loading contract itself, including the fallback that keeps the UI readable in the meantime.
+ * The nine locales load as their own chunks — English included, with only the pre-login slice of
+ * it eager as the fallback (`enFallback.ts`). A test has no grace period to wait for a chunk, so
+ * the switch-and-read tests use `switchLanguage`; these check the loading contract itself,
+ * including the fallback that keeps the UI readable in the meantime.
  */
 describe('lazy locales', () => {
   beforeEach(async () => {
@@ -44,5 +45,21 @@ describe('lazy locales', () => {
   it('falls back to the key when neither the language nor English has it', async () => {
     await switchLanguage('ja')
     expect(t('nope.not.a.key')).toBe('nope.not.a.key')
+  })
+
+  it('serves the full English catalog once its chunk lands, not the eager slice', async () => {
+    // Only the pre-login categories are eager in `enFallback.ts`; the store must swap the whole
+    // catalog in for `en` as soon as the chunk arrives, or English players would read key paths
+    // for everything past the login screen.
+    await switchLanguage('en')
+    expect(t('game.concede')).toBe('Concede')
+    expect(t('decks.my_decks')).not.toBe('decks.my_decks')
+    expect(t('keywords', 'flying_summary')).not.toBe('keywords.flying_summary')
+  })
+
+  it('preloads English at boot, so a player whose language is Spanish still gets the fallback', async () => {
+    preloadInitialLocale()
+    await Promise.all([ensureLocaleLoaded('en'), ensureLocaleLoaded('es')])
+    expect(t('game.concede')).toBe('Conceder')
   })
 })

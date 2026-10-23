@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import { spawn, spawnSync } from 'node:child_process'
 import net from 'node:net'
 
@@ -105,12 +106,18 @@ export const MODULE_CLASSES = [
   'Mage.Server.Plugins/Mage.Player.AI/target/classes',
 ]
 
-/** Módulos plugin del servidor que se compilan e instalan en local-server/plugins/. */
+/** Plugin modules built and installed into local-server/plugins/. It lists every
+ *  player plugin the canonical config declares (including LLM, P1 and MCTS):
+ *  without them a clean build produces no mage-player-llm.jar / mage-player-p1.jar
+ *  and the server boots without the COMPUTER_LLM / COMPUTER_P1 seats. */
 export const PLUGIN_MODULES = [
   'Mage.Server.Plugins/Mage.Player.AI',
   'Mage.Server.Plugins/Mage.Player.AI.MAD',
   'Mage.Server.Plugins/Mage.Player.AI.DraftBot',
+  'Mage.Server.Plugins/Mage.Player.AIMCTS',
   'Mage.Server.Plugins/Mage.Player.Human',
+  'Mage.Server.Plugins/Mage.Player.LLM',
+  'Mage.Server.Plugins/Mage.Player.P1',
   'Mage.Server.Plugins/Mage.Game.TwoPlayerDuel',
   'Mage.Server.Plugins/Mage.Deck.Constructed',
 ]
@@ -417,12 +424,103 @@ export function buildServerClasspath() {
   return classes.concat(deps).join(path.delimiter)
 }
 
-/** Copia los jars de los módulos plugin (del fork) a local-server/plugins/. */
+export const PLUGIN_CONFIG_SECTIONS = ['playerTypes', 'gameTypes', 'deckTypes', 'tournamentTypes']
+
+/** Name of a plugin jar without its version suffix: mage-player-p1-1.4.62.jar -> mage-player-p1. */
+export function pluginStem(jarName) {
+  return String(jarName)
+    .replace(/\.jar$/i, '')
+    .replace(/-\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*$/, '')
+}
+
+function jarVersion(jarName) {
+  return String(jarName).match(/-(\d+(?:\.\d+)+(?:[-.][A-Za-z0-9]+)*)\.jar$/i)?.[1] ?? ''
+}
+
+function compareJarVersion(a, b) {
+  const pa = jarVersion(a).split(/[.-]/).filter(Boolean)
+  const pb = jarVersion(b).split(/[.-]/).filter(Boolean)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const va = pa[i]
+    const vb = pb[i]
+    if (va === undefined) return -1
+    if (vb === undefined) return 1
+    const na = Number(va)
+    const nb = Number(vb)
+    if (Number.isFinite(na) && Number.isFinite(nb)) {
+      if (na !== nb) return na - nb
+    } else if (va !== vb) {
+      return va < vb ? -1 : 1
+    }
+  }
+  return 0
+}
+
+/** Every plugin the config declares: [{ section, name, jar, className }] for playerTypes,
+ *  gameTypes, deckTypes and tournamentTypes. */
+export function parseDeclaredPlugins(xml) {
+  const plugins = []
+  for (const section of PLUGIN_CONFIG_SECTIONS) {
+    const block = String(xml).match(new RegExp(`<${section}>([\\s\\S]*?)</${section}>`))?.[1] ?? ''
+    for (const tag of block.match(/<[A-Za-z]+Type\b[^>]*>/g) ?? []) {
+      const jar = tag.match(/\bjar="([^"]*)"/)?.[1]
+      if (!jar) continue
+      plugins.push({
+        section,
+        name: tag.match(/\bname="([^"]*)"/)?.[1] ?? jar,
+        jar,
+        className: tag.match(/\bclassName="([^"]*)"/)?.[1] ?? null,
+      })
+    }
+  }
+  return plugins
+}
+
+/** Declared plugin jars grouped one entry per (section, jar): [{ section, jar, names }]. */
+export function declaredPluginJars(xml) {
+  const byKey = new Map()
+  for (const plugin of parseDeclaredPlugins(xml)) {
+    const key = `${plugin.section}|${plugin.jar}`
+    const entry = byKey.get(key)
+    if (entry) entry.names.push(plugin.name)
+    else byKey.set(key, { section: plugin.section, jar: plugin.jar, names: [plugin.name] })
+  }
+  return [...byKey.values()]
+}
+
+export function pluginConfigPath() {
+  const candidates = [path.join(repoRoot, 'local-server', 'config', 'config.xml')]
+  try {
+    candidates.push(forkPath('Mage.Server/config/config.xml'))
+  } catch {
+    /* no fork: nothing else to check against */
+  }
+  return candidates.find((file) => fs.existsSync(file)) ?? null
+}
+
+function groupByStem(files) {
+  const byStem = new Map()
+  for (const file of files) {
+    const stem = pluginStem(file)
+    if (!byStem.has(stem)) byStem.set(stem, [])
+    byStem.get(stem).push(file)
+  }
+  return byStem
+}
+
+/**
+ * Copies the plugin target jars into local-server/plugins/ and then guarantees the set the
+ * config declares: PluginUtil resolves new File(pluginFolder, plugin.getJar()) literally, so a
+ * jar whose name differs from the config's jar="..." attribute (versioned dev build vs
+ * unversioned canonical config, or a pom that overrides <finalName>) never loads and the server
+ * silently boots without that type. For every declared jar missing from the folder it installs
+ * the same-stem build under the declared name, and reports what no build produces at all.
+ */
 export function copyPluginJars() {
   const pluginsDir = path.join(repoRoot, 'local-server', 'plugins')
   fs.mkdirSync(pluginsDir, { recursive: true })
   const root = forkPath('Mage.Server.Plugins')
-  let count = 0
+  let copied = 0
   for (const moduleDir of fs.readdirSync(root)) {
     const target = path.join(root, moduleDir, 'target')
     if (!fs.existsSync(target)) continue
@@ -430,11 +528,64 @@ export function copyPluginJars() {
       if (!file.endsWith('.jar')) continue
       if (/(sources|javadoc|original-)/.test(file)) continue
       fs.copyFileSync(path.join(target, file), path.join(pluginsDir, file))
-      count++
+      copied++
     }
   }
-  log(`plugins copiados a local-server/plugins/ (${count} jars)`)
-  return count
+  log(`plugins copied to local-server/plugins/ (${copied} jars)`)
+
+  const configPath = pluginConfigPath()
+  if (!configPath) {
+    const wanted = [path.join(repoRoot, 'local-server', 'config', 'config.xml'), 'Mage.Server/config/config.xml'].join(' or ')
+    logError(
+      `cannot guarantee the declared plugin set: no config.xml at ${wanted}. ` +
+        'The config is seeded when the stack starts, so run node scripts/ctl.mjs reset-config and build again.',
+    )
+    return { copied, installed: 0, unresolved: 0, duplicates: 0, configPath: null }
+  }
+
+  const declared = declaredPluginJars(fs.readFileSync(configPath, 'utf8'))
+  let files = fs.readdirSync(pluginsDir).filter((file) => file.endsWith('.jar'))
+  const present = new Set(files)
+  let installed = 0
+  let unresolved = 0
+  for (const { section, jar, names } of declared) {
+    if (present.has(jar)) continue
+    const label = `"${names[0]}"${names.length > 1 ? ` (+${names.length - 1} more)` : ''} in <${section}>`
+    const source = (groupByStem(files).get(pluginStem(jar)) ?? []).sort(compareJarVersion).at(-1)
+    if (!source) {
+      unresolved++
+      logError(
+        `declared plugin ${label} needs ${jar}, but no plugin build produces it ` +
+          `(${path.join(pluginsDir, jar)} is missing). The server logs "Can't load plugin" and boots without it.`,
+      )
+      continue
+    }
+    fs.copyFileSync(path.join(pluginsDir, source), path.join(pluginsDir, jar))
+    present.add(jar)
+    installed++
+    log(`declared plugin name installed: ${source} -> ${jar} (${label})`)
+  }
+
+  files = fs.readdirSync(pluginsDir).filter((file) => file.endsWith('.jar'))
+  let duplicates = 0
+  for (const [stem, group] of groupByStem(files)) {
+    if (group.length < 2) continue
+    const builds = new Set(
+      group.map((file) => crypto.createHash('sha256').update(fs.readFileSync(path.join(pluginsDir, file))).digest('hex')),
+    )
+    if (builds.size < 2) continue
+    duplicates++
+    console.warn(
+      `[plugins] WARN duplicate plugin jars for "${stem}": ${group.sort().join(', ')} are different builds. ` +
+        'The server loads the name config.xml declares, but classes already loaded from the other copy win by ' +
+        'classpath order. Remove the stale version from local-server/plugins/.',
+    )
+  }
+  log(
+    `declared plugin set checked against ${configPath}: ${declared.length} jars declared, ` +
+      `${installed} installed under the declared name, ${unresolved} unresolved, ${duplicates} duplicate stems`,
+  )
+  return { copied, installed, unresolved, duplicates, configPath }
 }
 
 /** Cola (tail) de un fichero con formato de cabecera. */

@@ -1,7 +1,7 @@
 # Project Roadmap: XMage Nexus
 
 > **A Modern, Web-Based Digital Card Game Client for XMage**  
-> *Last updated: 2026-10-15*
+> *Last updated: 2026-10-20*  
 
 ---
 
@@ -32,10 +32,10 @@ The project has successfully conquered the most difficult engineering hurdles (p
 | **Phase 0: Proxy Bridge** | Java 17 proxy (`Mage.Proxy`), WebSocket gateway, cycle-safe JSON serializer. | ✅ **Completed** | Connect + real game flow works against `beta.xmage.today:17171` AND local `localhost:17171` (same 1.4.62-V1 fork). NOTE (corrected 2026-09-20): beta's anonymous login is **stable** (17/17 measured). The former "intermittently fatal handshake" was a misdiagnosis — `Can't receive server state before other data` is logged on *any* failed login (the client fetches the server state only after login succeeds), and the real cause was generated usernames exceeding `maxUserNameLength` (**14**). CI's real-protocol oracle stays the local server for determinism. The proxy is now **multi-tenant** (one process serves many independent users), which already enables zero-install server-side play today (see `AGENTS.md`). |
 | **Phase 1: Web Foundation** | React 19 + TS + Vite. Lobby, room chat, real-time tables/users, Scryfall HD card cache (IndexedDB), full 1v1 board rendering & spectator mode. | ✅ **Completed** | 100% typecheck clean, live AI vs AI spectator matches working end-to-end. |
 | **Phase 2: Interaction Engine** | London mulligan, priority loops (`GAME_SELECT`), visual targeting (animated dotted lines & pulsing glows), mana tapping & pool payment (`sendPlayerManaType`), floating non-blocking combat UI (attack/block & alpha strike), advanced spell interactions (X-costs, multi-target, modal choices, +1/+1 counters). | ✅ **Completed** | Validated via `human-test.mjs` (83 checks PASS) and Playwright E2E suites (*Blaze*, *Arc Trail*, *Boros Charm*, *Walking Ballista*). |
-| **Quality & QA Foundation** | 1,900+ unit tests (vitest, ~13 s), Java→TS JSON Schema codegen (`gen-types.mjs`), dual-mode Playwright E2E (deterministic FakeServer + Real XMage Stack; bot seats use the server-native Mad AI since 2026-10-10 — the proxy `SimPlayer` bot is dev-only behind `--sim on`, see `docs/plans/2026-10-10-sim-dev-only-design.md`). | ✅ **Completed** | Zero-flake local iteration loop + continuous anti-drift contract testing (3 guards: `callbackCoverage`, `mechanicsCoverage` server→client, `engineViewCoverage` engine→view). |
+| **Quality & QA Foundation** | the vitest suite (411 test files at 2026-10-20, run by `node scripts/test.mjs unit`), Java→TS JSON Schema codegen (`gen-types.mjs`), dual-mode Playwright E2E (deterministic FakeServer + Real XMage Stack; bot seats use the server-native Mad AI since 2026-10-10 — the proxy `SimPlayer` bot is dev-only behind `--sim on`, see `docs/plans/2026-10-10-sim-dev-only-design.md`). | ✅ **Completed** | Zero-flake local iteration loop + continuous anti-drift contract testing (4 guards: `callbackCoverage`, `mechanicsCoverage` server→client, `engineViewCoverage` engine→view, `serverStateCoverage` create-table formats). |
 | **Phase 2.5: 1v1 Competitive Parity** | Match Chess Clocks (+buffer `F4`/`F9`), DFC/MDFC back-face + Saga `lore`, HD `CardGrid` for card selection (tutors, scry/surveil, hand reveal), **interactive discard from a revealed hand** (Thoughtseize: `GAME_CHOOSE_CARDS`/`GAME_SELECT_TARGETS` with the opponent's hand as `cardsView1` → `CardGrid` → `sendPlayerUUID`), **Bo3/Bo5 sideboarding** (`SIDEBOARD` → `SideboardScreen`) and **multi-blocker damage assignment order** (`GAME_GET_MULTI_AMOUNT`). Phase stops F4/F9 (already completed in Phase 2). | ✅ **Completed** | `e2e/reveal.spec.ts` (`@reveal`), `best-of.spec.ts`, `combat-multiblock.spec.ts`, `FeedbackDialog.test.tsx`, `PlayerInfoBar.test.tsx`, `INTERACTION_COVERAGE.md` updated. |
 | **Phase 3: Visual Polish, Audio & Deck Builder** | Web Audio engine (22 sfx, 4 buses), VFX (floating damage, shake, mana donut), in-app deck builder (Scryfall full syntax, curve, sample hand, Arena/DCK/Plain import/export), card sleeves and avatars, design system (tokens, primitives, style ratchet). | ✅ **Completed** (selectable playmats delivered 2026-09-23) | Visual-regression gallery (`#/gallery`, 3 resolutions × chromium + webkit) and the gallery/recorded E2E specs. |
-| **Phase 4: Desktop Packaging (Tauri)** | Tauri launcher with embedded proxy + trimmed JRE, signed auto-updater. | ✅ **Published** (v0.1.0 2026-09-10, v0.2.0 2026-09-19, v0.2.1 2026-09-22, v0.2.2 2026-09-22, v0.2.3 2026-09-22, v0.2.4 2026-09-24, v0.2.6 2026-09-24, v0.2.7 2026-09-24, v0.3.0 2026-09-27, v0.4.0 2026-09-30, v0.4.1 2026-10-01, v0.4.2 2026-10-02, v0.4.3 2026-10-04) | `release.yml`, signed bundles + `latest.json`. Clean-machine validation still open (§4.1 V7). |
+| **Phase 4: Desktop Packaging (Tauri)** | Tauri launcher with embedded proxy + trimmed JRE, signed auto-updater. | ✅ **Published** (v0.1.0 2026-09-10, v0.2.0 2026-09-19, v0.2.1 2026-09-22, v0.2.2 2026-09-22, v0.2.3 2026-09-22, v0.2.4 2026-09-24, v0.2.6 2026-09-24, v0.2.7 2026-09-24, v0.3.0 2026-09-27, v0.4.0 2026-09-30, v0.4.1 2026-10-01, v0.4.2 2026-10-02, v0.4.3 2026-10-04, v0.4.4 2026-10-06, v0.4.5 2026-10-07, v0.4.6 2026-10-09, v0.4.7 2026-10-14) | `release.yml`, signed bundles + `latest.json`. Clean-machine validation still open (§4.1 V7). |
 | **Phase 5: Advanced Modes & Tournaments** | Commander / FFA pod board (2×2 clamp 4; server FFA 3-10), Booster Draft & Sealed (8P `DraftScreen`/`ConstructScreen`), Swiss and elimination brackets, spectating of tournament matches. | ✅ **Completed** | `verify-swiss.mjs`, `verify-spectator-end.mjs`, e2e `draft`/`tournament` specs. |
 
 ---
@@ -75,7 +75,7 @@ The project has successfully conquered the most difficult engineering hurdles (p
 | | Multi-blocker Damage Assignment Order | ✅ Yes | ✅ Yes | Completed |
 | **Presentation & Audio** | Sound Effects (Turn bell, life loss, spell cast, combat) | ✅ Basic | ✅ Yes (Web Audio 22 sfx, 4 buses incl. adaptive music, JIT unlock) | Completed (Surpasses Swing) |
 | | VFX & Animations (Spell cast arcs, screen shake, damage) | ❌ No | ✅ Yes (donut color pie, bars, shake, floating damage, spell-weight slam, hit sparks, destroy/exile/token deaths, low-life vignette, foil + tilt preview, playmats, cinematic end screen) | Completed (Surpasses Swing) |
-| **Distribution** | Desktop & Web Deployment | ❌ Heavy JRE required | ✅ Web + Tauri launcher (v0.2.3, signed updater and decoupled components) | Completed |
+| **Distribution** | Desktop & Web Deployment | ❌ Heavy JRE required | ✅ Web + Tauri launcher (v0.4.7, signed updater and decoupled components) | Completed |
 | **Distribution** | Interactive Web Demo (GitHub Pages, no install) | ❌ None | ✅ `site/demo/`: the real client on scripted scenarios, ELO ranking, deck builder + EDHREC, 12 playable scenes (§4.10) | Completed |
 | **Advanced Formats** | 4-Player Commander / EDH (Command zone, tax, damage) | ✅ Yes | ✅ Yes (PodBoard 2×2 clamp 4; server FFA 3-10) | Completed |
 | | Booster Draft & Sealed Tournaments (Pick timer, packs) | ✅ Yes | ✅ Yes (8P DraftScreen/ConstructScreen) | Completed |
@@ -90,14 +90,13 @@ The project has successfully conquered the most difficult engineering hurdles (p
 
 - Clean-machine validation of the signed bundles (V7) is still open.
 
-### 4.2 Product ideas not built yet
+### 4.2 Product ideas (shipped; each row carries what is still open)
 
 | Area | Idea | Impact / effort | State |
 |---|---|---|---|
 | Attract | Draft pick helper: pool-aware ranking | Done 2026-10-15 | `game/draftAdvisor.ts` (pure scoring: rarity, colour fit once committed, creature curve, creature count) + `game/DraftHelper.tsx` in `DraftScreen`: top 3 suggestions with reasons and an outline on the first. Never picks for the player, labelled as a guess, hide/show remembered. Open: format-specific card ratings (17Lands-style data) need an external source |
 | Attract | Waiting room (`SpectatorStagingScreen`) polish | Done 2026-10-16 (P0/P1/P2): the bottom status banner no longer clips under the sticky action bar (the table area scrolls, banner and actions stay put); the step label no longer overlaps on phones; "Change deck" is secondary so Ready/Start lead; the chat column is narrower; the format's table art backdrops the arena; a seat that just got a player pops; empty seats breathe; the arena flashes once when everyone is ready. Open: the chat hint "Table chat unavailable — using global" reads like an error and needs copy in all 9 locales; the header chips (up to 7) could group; the "3-1" seat badge needs a W-L label after its meaning is confirmed; "Preparing…" appears in three places and could be one. A pre-start countdown was left out on purpose: it would delay the real start |
 | Game UI | Board rewind: shareable moment as an image/GIF, and a replay that carries chat and the decklist | Low / ~1-2 d | Rewind and the replay file shipped 2026-10-15: opt-in `boardRewind`, one in-memory snapshot per step (max 40, `game/rewind.ts`), `RewindBar` (slider, arrows, Esc), a read mode that swaps the displayed `GameView` in `GameScreen`; **Save replay** writes `nexus-replay_*.json.gz` (`game/replayFile.ts`, gzip via `CompressionStream`, plain JSON fallback) and **Open replay file** in Lobby → History plays it with no server connection (read-only, validated: format/version, ≤ 40 unique snapshots). Tests: `rewind.test.ts`, `replayFile.test.ts`, `RewindBar.test.tsx`, `e2e/rewind.spec.ts`. Limits: a long game is a large file (each snapshot is a full `GameView`, 200-800 KB raw) and the demo does not load replays yet |
-
 | Game UI | Opponent-turn recap: highlight new/changed/died permanents when priority returns + one-line summary ("played X, attacked with Y, you lost 4") | Very high / ~1-2 d | Done 2026-09-23 (non-blocking strip at my turn start: summary + departed-card chips by destination; NEW/CHANGED marks on the board) |
 | Game UI | Smart stops (Arena-style): only stop when the server reports something playable | High / ~1 d | Done 2026-09-23 (opt-in toggle, off by default; ignores mana-only `canPlayObjects`; answers each `GAME_SELECT` once; validated against the local server by `e2e/smart-stops-real.spec.ts`) |
 | Game UI | P/T tinted vs base (green up / red down), summoning-sickness marker, "entered this turn" glow | Medium / ~1 d | Done 2026-09-23 (per-component tint vs printed value with base in the tooltip; client-tracked entered-this-turn glow; sickness badge already existed) |
@@ -117,7 +116,6 @@ The project has successfully conquered the most difficult engineering hurdles (p
 | Game UI | Non-modal decision prompts: plain yes/no asks (pay life, optional costs, ward/cascade) answer from a dock bar; picks from your own hand (discards) resolve by clicking the highlighted hand with the grid as explicit fallback; any remaining dialog can be made transparent (Appearance) or peeked with Alt | High / ~1 d | Done 2026-09-29 (`feedbackModes/AskBar.tsx`, `game/handPick.ts`, `TargetBar` expand + `DialogShell`/`Modal` peek; `AskBar.test.tsx`, `handPick.test.ts`, `FeedbackDialog.test.tsx`, `selectors.test.ts`, `Modal.test.tsx`; fake e2e 281 passed, gallery entries `prompt:ask` / `prompt:discard-hand`) |
 | Game UI | Trigger order, second pass: pick in resolution order with drag & drop, auto-chain the remaining one-at-a-time prompts, show the accumulated stack and the targets/related objects that distinguish duplicate triggers, decouple "pick" from "remember first/last" and manage saved rules per row | High / ~1-2 d | Done 2026-09-29 (`TriggerOrderDialog` + `triggerOrderPlan.ts`: drag/▲▼ resolution order, "Apply order" chains the bottom-up prompts, sent/next rows + "Sending n/N", manual pick kept, pins only remember, target/related labels, hover preview; `TriggerOrderDialog.test.tsx` 13, `trigger-order.spec.ts` 3 fake). Consciously out: non-modal dock and 1..9 shortcuts (Alt-peek already exists); per-row rule management is impossible server-side (only RESET_ALL and add) |
 | Attract | Personal match history + per-deck stats (win rate by deck/format/opponent, IndexedDB) | Very high / ~2 d | Done 2026-09-23 ("My stats" sub-tab in the History tab; one record per finished game recorded on `GAME_OVER`, only when the player was seated and a winner is reported; deck name comes from the last equipped deck and format from the lobby table, so both can be missing; capped at 500 records) |
-| Attract | Draft pick helper | High / ~2 d | Not started |
 
 Dropped on purpose (2026-10-07, data does not reach the client): the response window, the blocked-action explainer and the layer / derived P-T inspector. Reopening any of them needs a fork change that puts the missing data on the wire (a per-player playable list, effect sources). Reasons: `docs/history/roadmap-resolved-2026-10.md` §4.2.
 
@@ -148,7 +146,9 @@ Shipped 2026-10-13 behind `settings.gameUi` (`v1` = the interface as it was; `v2
 
 ### 4.4 Test-infrastructure risk
 
-- The nightly real-mode job covers 5 of 312 specs plus the `verify` layer; a ~15-spec protocol-sensitive set would shrink drift risk.
+- The nightly real-mode job covers 5 of the 125 `web/e2e/*.spec.ts` files (`REAL_E2E_SPECS` in `scripts/integration-report.mjs`) plus the `verify` and `verify-restart` layers; a ~15-spec protocol-sensitive set would shrink drift risk.
+- The gallery's visual baselines still owe a regeneration after the v0.4.7 rendering changes (`scripts/gallery-visual.mjs --update` blesses whatever it sees, so the changed PNGs have to be reviewed, not regenerated blind).
+- `useNewsBadge`/`App.boot` has a teardown race that can fail a run whose every test passed; not diagnosed yet.
 - `verify` scripts are order-sensitive (`verify-player-leave` is the most sensitive and runs second); isolating each with a fresh proxy would remove that class of flake.
 - Replay files exist (§4.2); loading one in the GitHub Pages demo is still open.
 - Mobile layout: the full board stays desktop-only on purpose. Since 2026-10-15 a phone-width window (≤ 600 px) has a compact spectator view (`game/MobileSpectator.tsx`: scoreboard, turn/phase, stack, feed and chat, "Full board" button), the lobby and chat already fit, and dialogs no longer overflow (`ui/DialogShell.css` caps the panel at the window minus the backdrop padding; the create-table wizard hides inactive step labels and stacks its type cards). Guard: `e2e/mobile.spec.ts` at 390 px (verified red with the dialog fix removed). The draft header fits since the same day (same guard, verified red without its CSS). Still open: playing a seat on a phone and the deck builder editor at 390 px.
@@ -161,6 +161,13 @@ Emblem cards in Create Table (experimental `.dck` feature of the desktop client;
 
 - Compare the `commander_damage` / `commander_hidden` journal lines with what the web showed, in production.
 - Measure the starter-deck funnel in the journal: users with `getGameTypes` that reach `createTable`, and logged-in users that reach `joinGame`.
+
+### 4.7 Open client defects (need a decision)
+
+| What | State |
+|---|---|
+| Rollback/undo errors show raw server text | `requestRollback`, `voteRollback` and `requestUndo` (`web/src/state/actions.ts`) put `res.error` straight into `setState({ error })` with no `translateError`, and the `FAILED` arm list in `web/src/i18n/index.ts` has no `swapSeats`/`leaveTable` arm, so a refused staging action can read "Could not create table". Options and cost are weighed up; the decision is pending |
+| Proxy login intermittency | One bare `FAILED` without the version detail was seen against `beta.xmage.today` on 2026-10-14 and did not reproduce on 2026-10-15 (8/8 detailed); a repro needs an instrumented login path and a mismatched pairing |
 
 ### 4.9 Report pipeline
 

@@ -3,7 +3,7 @@
 // (and therefore the proxy) is built from. The public server moves to every new
 // release and refuses any other version, so a newer tag means the proxy is about
 // to stop logging anyone in: merge it into the fork and rebuild.
-// Usage: node scripts/check-upstream-release.mjs [fork version, e.g. 1.4.61-V1]
+// Usage: node scripts/check-upstream-release.mjs [fork version, e.g. 1.4.62-V1]
 
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'

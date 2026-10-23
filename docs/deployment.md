@@ -85,7 +85,7 @@ Deploy/update with `ops/status/deploy.sh` (never restarts the proxy). Details: `
 
 ## Dashboard (GitHub Pages, zero-build static `site/`)
 
-- `site/content.json` — canonical dashboard copy (project, phases, features, guards). Keep in sync with `ROADMAP.md`.
+- `site/content.json` — canonical dashboard copy (project, phases, features, guards). Keep in sync with `ROADMAP.md`. `release.date`/`tag`/`notes`/`highlights` describe the newest published tag; the generator takes `release.version` from `launcher/src-tauri/Cargo.toml`, so bumping the launcher version is what moves the dashboard's version badge.
 - `scripts/gen-dashboard.mjs` — merges `content.json` + test artefacts → `site/status.json`.
 - `scripts/dashboard-ci.mjs` — lightweight dashboard layers (unit+coverage, typecheck, build, fake-e2e, proxy java); run it locally.
 - `scripts/integration-report.mjs` — real-stack run (self-test/human-test/e2e-real) → `reports/integration-result.json`; run it on demand.

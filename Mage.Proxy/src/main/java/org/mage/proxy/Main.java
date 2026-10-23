@@ -172,10 +172,22 @@ public class Main {
      * form. ALWAYS served (never admin-gated; the pre-connect probe has no
      * token), {@code Cache-Control: no-store}. Body:
      * {@code {"authRequired", "hideServerTarget", "pinnedTarget"|null, "deploymentName", "llmRelay"}}.
-     * Only GET is accepted.
+     * Only GET is accepted, plus the CORS preflight that lets a cross-origin (vite dev) UI read it.
      */
     static void serveConfig(HttpExchange exchange, DeploymentConfig deployment) {
         try {
+            // The body is public deployment info — the same class as /llm-relay and the P1 deck
+            // list, both of which already answer ACAO: *. Without it a browser at
+            // http://localhost:5173 (vite) hides the response of http://localhost:8788/config,
+            // the web silently keeps its proxyConfig defaults (authRequired/hideServerTarget/
+            // llmRelay all wrong) and the console logs one CORS error per page load.
+            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().add("Vary", "Origin");
+            exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, OPTIONS");
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(204, -1);
+                return;
+            }
             if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(405, -1);
                 exchange.close();

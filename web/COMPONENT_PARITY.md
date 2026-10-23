@@ -1,5 +1,6 @@
 # Component Parity — Desktop Swing ↔ Web
 
+
 Comparativa de funcionalidades por **módulo** entre el cliente desktop oficial
 (`Mage.Client`, Swing) y el web (`web/src`, React). Es el tracker que responde
 "¿qué tiene el desktop que el web no tiene?".
@@ -17,7 +18,7 @@ Leyenda: ✅ = paridad evidenciada (guard/E2E/doc) · ⚠️ = gap conocido ·
 
 Inventario base (2026-09-05): desktop 292 `.java` (~65 componentes comparables;
 resto MDI/Swing/DnD/RMI/descargador — ver § Exclusiones) · web 179 `.tsx`
-(9 pantallas + 27 `*Dialog|*Modal`). Recuento de hoy (2026-10-09): 293 `.tsx` en
+(9 pantallas + 27 `*Dialog|*Modal`). Recuento de hoy (2026-10-20): 398 `.tsx` en
 `web/src`; el detalle por pantalla sigue siendo válido, el número de ficheros no.
 
 ## Tabla madre

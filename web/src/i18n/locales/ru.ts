@@ -893,6 +893,8 @@ export const ru: TranslationSchema = {
     game_over: 'Игра окончена',
     victory: 'Победа!',
     defeat: 'Поражение',
+    victory_forfeit: 'Победа (за отказ от игры)',
+    end_forfeit_note: 'Провайдер LLM соперника дал сбой, поэтому партия не была доиграна.',
     end_stat_turns: 'Ходы',
     end_stat_life_taken: 'Отнято жизней',
     end_stat_life_lost: 'Потеряно жизней',

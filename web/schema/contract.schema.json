@@ -590,6 +590,10 @@
         "winsNeeded": { "type": "number" },
         "startTime": { "type": "string" },
         "endTime": { "type": "string" },
+        "endReason": {
+          "type": "string",
+          "description": "Why the game ended for the viewer's seat (mage.game.GameEndReason): 'llm_failure' | 'concede' | 'timeout' | 'idle' | 'quit' | 'unknown'. Absent on a watcher's view and on a server older than the endReason field (additive 2026-10-20), where the client must fall back to the plain result."
+        },
         "matchView": {
           "type": "object",
           "properties": {

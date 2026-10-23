@@ -1,8 +1,9 @@
 # Mage.Proxy — XMage bridge (Java)
 
 Java WebSocket proxy that joins a real XMage session (`SessionImpl`) and
-re-exposes it as JSON over WebSocket for the web client. Maven module; depends
-on the XMage fork (`mage` + `mage-common`) via the parent pom.
+re-exposes it as JSON over WebSocket for the web client. Standalone Maven module
+(no parent pom); compiles against the `org.mage` artifacts of the LLMage fork
+(`1.4.62`) that `~/.m2` holds.
 
 ## Scope
 
@@ -21,8 +22,13 @@ on the XMage fork (`mage` + `mage-common`) via the parent pom.
   resolved by `scripts/lib.mjs` `forkDir()`); it is NOT part of this repo.
 - The pom is **standalone**: `mvn -f Mage.Proxy/pom.xml test` against the
   `org.mage` artifacts in `~/.m2` (`ensureMageArtifacts()` installs them from
-  the fork checkout when missing). A XMage release bump is a one-line version
-  change + recompile, not a code edit.
+  the fork checkout when missing). `<version>` is `1.4.62` and
+  `mage.version` defaults to `${project.version}`, i.e. the fork's own 1.4.62
+  release, which carries the fork-only symbols the proxy references
+  (`PlayerType.COMPUTER_LLM`, `LLMPlayerConfig`, `P1DeckPool`). The **stock**
+  upstream 1.4.62 artifacts lack them, so never point the build at those; a
+  XMage release bump is that one version line + recompile, not a code edit.
+  Override for another server release with `-Dmage.version=` (XDHS: `1.5.8`).
 - The only fork-side code we carry is the test-mode propagation in
   `Mage.Server/src/main/java/mage/server/TableController.java`
   (`skipInitShuffling` / `skipStartingPlayerChoice`) plus the P1 cheat channel

@@ -31,10 +31,42 @@ import type { LlmPromptFrame } from '../net/types.generated'
 import type { LogChannel } from '../state/slices/lobby'
 import { getSeatKey, hasSeatKey, seatEndpointOf } from '../lobby/CreateTable/llmSeatKeys'
 import { isRelayEndpoint } from '../lobby/CreateTable/llmConfig'
+import { peekProxyConfig } from '../net/proxyConfig'
 import { t } from '../i18n'
 
 /** Same-origin CORS relay path on the proxy. */
 export const RELAY_PATH = '/llm-relay'
+
+/**
+ * Whether the deployment's `GET /config` says the proxy did not register
+ * `/llm-relay` (stock proxy, or `--llmRelayEnabled` left off). `null` — no probe
+ * has settled yet — stays optimistic: the call is attempted and a missing route
+ * surfaces as the provider's HTTP 404. A settled probe is guaranteed before any
+ * `llm_prompt` can arrive (the boot probe precedes login).
+ */
+export function isRelayRouteMissing(): boolean {
+  return peekProxyConfig()?.llmRelay === false
+}
+
+/**
+ * Raised instead of fetching when a relay-only provider meets a deployment
+ * without `/llm-relay`: the request would 404 at the proxy with no explanation,
+ * so the seat is told the actual cause and that a direct provider works.
+ */
+export class LlmRelayUnavailableError extends Error {
+  readonly apiEndpoint: string
+
+  constructor(apiEndpoint: string) {
+    super(
+      `LLM relay unavailable: this deployment does not expose ${RELAY_PATH}, so the relay-only ` +
+        `provider "${apiEndpoint}" cannot be called. Choose a provider the browser can reach ` +
+        'directly (OpenAI, OpenRouter, Groq or a local Ollama), or start the proxy with ' +
+        '--llmRelayEnabled.',
+    )
+    this.name = 'LlmRelayUnavailableError'
+    this.apiEndpoint = apiEndpoint
+  }
+}
 
 /** Cap on the provider body echoed in a failure message. */
 const ERROR_BODY_CHARS = 400
@@ -243,9 +275,10 @@ export interface ProviderCallResult {
 /**
  * POST the server-built body to the provider with the seat's stored key.
  *
- * Throws on a missing key (the key throws before any request is made) and on
- * any fetch/abort failure; a non-2xx HTTP status is NOT a throw — the status
- * and body come back so the caller can classify it.
+ * Throws on a missing key (the key throws before any request is made), on a
+ * relay route the deployment does not expose, and on any fetch/abort failure; a
+ * non-2xx HTTP status is NOT a throw — the status and body come back so the
+ * caller can classify it.
  */
 export async function callProvider(
   apiEndpoint: string,
@@ -254,6 +287,7 @@ export async function callProvider(
   timeoutSeconds: number,
 ): Promise<ProviderCallResult> {
   const viaRelay = isRelayEndpoint(apiEndpoint)
+  if (viaRelay && isRelayRouteMissing()) throw new LlmRelayUnavailableError(apiEndpoint)
   const key = keyFor(clientKeyTag)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), clampTimeoutSeconds(timeoutSeconds) * 1000)
@@ -369,6 +403,13 @@ export function handleLlmPrompt(msg: LlmPromptFrame, transport: LlmBridgeTranspo
       }
     })
     .catch((e: unknown) => {
+      if (e instanceof LlmRelayUnavailableError) {
+        transport.log?.('error', e.message, 'system')
+        deliverAnswer(msg.requestId, () =>
+          transport.sendError({ requestId: msg.requestId, message: e.message, retryable: false }),
+        )
+        return
+      }
       transport.log?.(
         'error',
         t('game', 'llm_provider_not_delivered', { detail: e instanceof Error ? e.message : String(e) }),

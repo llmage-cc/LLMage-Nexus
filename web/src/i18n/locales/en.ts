@@ -891,6 +891,8 @@ export const en = {
     game_over: 'Game Over',
     victory: 'Victory!',
     defeat: 'Defeat',
+    victory_forfeit: 'Victory (by forfeit)',
+    end_forfeit_note: "Your opponent's LLM provider failed, so the game did not play out.",
     end_stat_turns: 'Turns',
     end_stat_life_taken: 'Life taken',
     end_stat_life_lost: 'Life lost',

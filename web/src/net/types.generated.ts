@@ -420,6 +420,7 @@ export interface GameEndInfo {
   winsNeeded?: number
   startTime?: string
   endTime?: string
+  endReason?: string
   matchView?: {
     matchId?: string
     result?: string
